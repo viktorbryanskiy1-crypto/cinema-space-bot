@@ -1,1 +1,38 @@
-.
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🌌 КиноВселенная</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <!-- Навигация -->
+        <nav class="navbar">
+            <div class="nav-brand">
+                <h1>🌌 КиноВселенная</h1>
+            </div>
+            <div class="nav-tabs">
+                <button class="tab-btn active" data-tab="moments">🎬 Моменты из кино</button>
+                <button class="tab-btn" data-tab="trailers">🎥 Трейлеры</button>
+                <button class="tab-btn" data-tab="news">📰 Новости</button>
+            </div>
+            <div class="search-container">
+                <input type="text" id="search-input" class="search-input" placeholder="Поиск по названиям...">
+                <button id="search-btn" class="search-btn">🔍</button>
+            </div>
+        </nav>
+        
+        <!-- Основной контент -->
+        <div id="content-area">
+            <div style="text-align: center; padding: 50px; color: var(--accent);">
+                <h2>🚀 Добро пожаловать в КиноВселенную!</h2>
+                <p>Здесь скоро появится космическое приложение с фильмами, трейлерами и новостями</p>
+            </div>
+        </div>
+    </div>
+    
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
