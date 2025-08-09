@@ -4,12 +4,13 @@ import os
 
 TOKEN = "8068755685:AAFYSxThQyPOKIpccmEeX4DoJvxD-AGNzCk
 "  # Замени на токен от @BotFather
+WEBHOOK_URL = os.environ.get('WEBHOOK_URL', 'https://cinema-space-bot.onrender.com')
 
 def start(update, context):
     keyboard = [[
         InlineKeyboardButton(
             "🌌 КиноВселенная", 
-            web_app=WebAppInfo(url="https://cinema-space-bot.onrender.com")
+            web_app=WebAppInfo(url=WEBHOOK_URL)
         )
     ]]
     
@@ -30,7 +31,14 @@ def main():
     
     dp.add_handler(CommandHandler("start", start))
     
-    updater.start_polling()
+    # Используем webhook для Render
+    PORT = int(os.environ.get('PORT', 8443))
+    updater.start_webhook(
+        listen="0.0.0.0",
+        port=PORT,
+        url_path=TOKEN,
+        webhook_url=f"{WEBHOOK_URL}/{TOKEN}"
+    )
     updater.idle()
 
 if __name__ == '__main__':
