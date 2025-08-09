@@ -1,7 +1,43 @@
 <div class="content-section">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
         <h2 style="background: linear-gradient(45deg, #00f3ff, #ff00c8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size: 2em;">📰 Новости</h2>
-        <button onclick="addNewItem('news')" class="tab-btn" style="padding: 12px 25px;">➕ Добавить новость</button>
+        <button onclick="showAddNewsModal()" class="tab-btn" style="padding: 12px 25px;">➕ Добавить новость</button>
+    </div>
+    
+    <!-- Модальное окно для добавления новости -->
+    <div id="add-news-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <h3>📰 Добавить новость</h3>
+            <form id="add-news-form" enctype="multipart/form-data">
+                <input type="text" name="title" placeholder="Заголовок новости" required style="width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid var(--accent); border-radius: 10px; background: rgba(255,255,255,0.1); color: white;"><br>
+                
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 10px;">Выберите способ добавления изображения:</label>
+                    <div>
+                        <input type="radio" name="image_type" value="upload" id="news_image_upload" checked>
+                        <label for="news_image_upload">Загрузить файл</label>
+                    </div>
+                    <div>
+                        <input type="radio" name="image_type" value="url" id="news_image_url">
+                        <label for="news_image_url">Ссылка на изображение</label>
+                    </div>
+                </div>
+                
+                <div id="news-file-section">
+                    <input type="file" name="image_file" accept="image/*" style="width: 100%; margin-bottom: 15px; color: white;">
+                    <small style="color: var(--text-secondary);">Макс. размер: 16MB. Форматы: PNG, JPG, JPEG, GIF, WEBP</small>
+                </div>
+                
+                <div id="news-url-section" style="display: none;">
+                    <input type="text" name="image_url" placeholder="URL изображения" style="width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid var(--accent); border-radius: 10px; background: rgba(255,255,255,0.1); color: white;">
+                </div>
+                
+                <textarea name="text" placeholder="Текст новости" required style="width: 100%; padding: 12px; margin-bottom: 15px; height: 150px; border: 1px solid var(--accent); border-radius: 10px; background: rgba(255,255,255,0.1); color: white;"></textarea><br>
+                
+                <button type="submit" class="submit-btn" style="width: 100%;">Добавить новость</button>
+                <button type="button" onclick="closeModal('add-news-modal')" class="tab-btn" style="width: 100%; margin-top: 10px;">Отмена</button>
+            </form>
+        </div>
     </div>
     
     <div class="card-grid">
@@ -10,7 +46,13 @@
             <div class="card">
                 <h3 class="card-title">{{ news_item.title }}</h3>
                 {% if news_item.image_url %}
-                <img class="card-media" src="{{ news_item.image_url }}" alt="{{ news_item.title }}" onerror="this.style.display='none'">
+                    {% if news_item.image_url.startswith('/uploads/') %}
+                        <!-- Загруженное изображение -->
+                        <img class="card-media" src="{{ news_item.image_url }}" alt="{{ news_item.title }}" onerror="this.style.display='none'">
+                    {% else %}
+                        <!-- Изображение по URL -->
+                        <img class="card-media" src="{{ news_item.image_url }}" alt="{{ news_item.title }}" onerror="this.style.display='none'">
+                    {% endif %}
                 {% endif %}
                 <div class="card-text">{{ news_item.text }}</div>
                 
@@ -45,8 +87,62 @@
             <div style="text-align: center; padding: 50px; color: var(--accent);">
                 <h2>📰 Новости</h2>
                 <p>Пока нет добавленных новостей</p>
-                <button onclick="addNewItem('news')" class="tab-btn" style="margin-top: 20px;">➕ Добавить первую новость</button>
+                <button onclick="showAddNewsModal()" class="tab-btn" style="margin-top: 20px;">➕ Добавить первую новость</button>
             </div>
         {% endif %}
     </div>
 </div>
+
+<script>
+// Переключение между загрузкой и URL для новостей
+document.addEventListener('change', function(e) {
+    if (e.target.name === 'image_type' && e.target.closest('#add-news-modal')) {
+        if (e.target.value === 'upload') {
+            document.getElementById('news-file-section').style.display = 'block';
+            document.getElementById('news-url-section').style.display = 'none';
+        } else {
+            document.getElementById('news-file-section').style.display = 'none';
+            document.getElementById('news-url-section').style.display = 'block';
+        }
+    }
+});
+
+// Обработчик формы добавления новости
+document.getElementById('add-news-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    
+    try {
+        const response = await fetch('/api/add_news', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        if (result.success) {
+            closeModal('add-news-modal');
+            location.reload();
+        } else {
+            alert('Ошибка: ' + (result.error || 'Не удалось добавить новость'));
+        }
+    } catch (error) {
+        alert('Ошибка загрузки: ' + error.message);
+    }
+});
+
+// Функции для модальных окон
+function showAddNewsModal() {
+    document.getElementById('add-news-modal').style.display = 'flex';
+}
+
+// Закрытие модального окна при клике вне его
+window.addEventListener('click', function(e) {
+    const modals = document.querySelectorAll('.modal');
+    modals.forEach(modal => {
+        if (e.target === modal) {
+            modal.style.display = 'none';
+        }
+    });
+});
+</script>
