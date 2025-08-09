@@ -1,10 +1,14 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import Updater, CommandHandler
+from flask import Flask, request
 import os
 
-TOKEN = "8068755685:AAFYSxThQyPOKIpccmEeX4DoJvxD-AGNzCk
-"  # Замени на токен от @BotFather
+# Получаем токен и URL из переменных окружения
+TOKEN = os.environ.get('TELEGRAM_TOKEN')
 WEBHOOK_URL = os.environ.get('WEBHOOK_URL', 'https://cinema-space-bot.onrender.com')
+
+# Создаем Flask приложение для обработки webhook
+app = Flask(__name__)
 
 def start(update, context):
     keyboard = [[
@@ -16,7 +20,7 @@ def start(update, context):
     
     reply_markup = InlineKeyboardMarkup(keyboard)
     update.message.reply_text(
-        "🚀 Добро пожаловать в КиноВселенную!\n"
+        "🚀 Добро пожаловать в КиноВселенная!\n"
         "✨ Исследуй космос кино\n"
         "🎬 Лучшие моменты из фильмов\n"
         "🎥 Свежие трейлеры\n"
@@ -25,21 +29,26 @@ def start(update, context):
         reply_markup=reply_markup
     )
 
-def main():
+# Обработчик webhook
+@app.route(f'/{TOKEN}', methods=['POST'])
+def webhook():
+    from telegram import Update
+    update = Update.de_json(request.get_json(force=True), updater.bot)
+    updater.dispatcher.process_update(update)
+    return 'ok'
+
+# Главная страница
+@app.route('/')
+def index():
+    return "<h1>🌌 КиноВселенная работает!</h1><p>Бот готов принимать сообщения</p>"
+
+if __name__ == '__main__':
+    # Инициализируем бота
     updater = Updater(TOKEN, use_context=True)
     dp = updater.dispatcher
     
     dp.add_handler(CommandHandler("start", start))
     
-    # Используем webhook для Render
-    PORT = int(os.environ.get('PORT', 8443))
-    updater.start_webhook(
-        listen="0.0.0.0",
-        port=PORT,
-        url_path=TOKEN,
-        webhook_url=f"{WEBHOOK_URL}/{TOKEN}"
-    )
-    updater.idle()
-
-if __name__ == '__main__':
-    main()
+    # Запускаем Flask сервер
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
