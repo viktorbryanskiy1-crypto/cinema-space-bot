@@ -242,3 +242,192 @@ document.addEventListener('DOMContentLoaded', function() {
 function addNewItem(type) {
     alert(`Функция добавления ${type} будет доступна позже!`);
 }
+// Функции для работы с модальными окнами
+function showAddMomentModal() {
+    document.getElementById('add-moment-modal').style.display = 'flex';
+}
+
+function showAddTrailerModal() {
+    document.getElementById('add-trailer-modal').style.display = 'flex';
+}
+
+function showAddNewsModal() {
+    document.getElementById('add-news-modal').style.display = 'flex';
+}
+
+function closeModal(modalId) {
+    document.getElementById(modalId).style.display = 'none';
+}
+
+// Закрытие модального окна при клике вне его
+window.addEventListener('click', function(e) {
+    const modals = document.querySelectorAll('.modal');
+    modals.forEach(modal => {
+        if (e.target === modal) {
+            modal.style.display = 'none';
+        }
+    });
+});
+
+// Переключение между загрузкой и URL для моментов
+document.addEventListener('change', function(e) {
+    if (e.target.name === 'video_type' && e.target.closest('#add-moment-modal')) {
+        const fileSection = document.getElementById('moment-file-section');
+        const urlSection = document.getElementById('moment-url-section');
+        if (e.target.value === 'upload') {
+            fileSection.style.display = 'block';
+            urlSection.style.display = 'none';
+        } else {
+            fileSection.style.display = 'none';
+            urlSection.style.display = 'block';
+        }
+    }
+    
+    // Переключение между загрузкой и URL для трейлеров
+    if (e.target.name === 'video_type' && e.target.closest('#add-trailer-modal')) {
+        const fileSection = document.getElementById('trailer-file-section');
+        const urlSection = document.getElementById('trailer-url-section');
+        if (e.target.value === 'upload') {
+            fileSection.style.display = 'block';
+            urlSection.style.display = 'none';
+        } else {
+            fileSection.style.display = 'none';
+            urlSection.style.display = 'block';
+        }
+    }
+    
+    // Переключение между загрузкой и URL для новостей
+    if (e.target.name === 'image_type' && e.target.closest('#add-news-modal')) {
+        const fileSection = document.getElementById('news-file-section');
+        const urlSection = document.getElementById('news-url-section');
+        if (e.target.value === 'upload') {
+            fileSection.style.display = 'block';
+            urlSection.style.display = 'none';
+        } else {
+            fileSection.style.display = 'none';
+            urlSection.style.display = 'block';
+        }
+    }
+});
+
+// Обработчики форм добавления контента
+document.addEventListener('DOMContentLoaded', function() {
+    // Обработчик формы добавления момента
+    const momentForm = document.getElementById('add-moment-form');
+    if (momentForm) {
+        momentForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            const videoType = this.querySelector('input[name="video_type"]:checked').value;
+            
+            try {
+                let response;
+                if (videoType === 'upload' && this.querySelector('input[name="video_file"]').files[0]) {
+                    // Загрузка файла
+                    response = await fetch('/api/add_moment', {
+                        method: 'POST',
+                        body: formData
+                    });
+                } else {
+                    // Отправка URL
+                    const jsonData = {
+                        title: formData.get('title'),
+                        description: formData.get('description'),
+                        video_url: formData.get('video_url') || ''
+                    };
+                    response = await fetch('/api/add_moment', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(jsonData)
+                    });
+                }
+                
+                const result = await response.json();
+                if (result.success) {
+                    closeModal('add-moment-modal');
+                    location.reload();
+                } else {
+                    alert('Ошибка: ' + (result.error || 'Не удалось добавить момент'));
+                }
+            } catch (error) {
+                alert('Ошибка загрузки: ' + error.message);
+            }
+        });
+    }
+    
+    // Обработчик формы добавления трейлера
+    const trailerForm = document.getElementById('add-trailer-form');
+    if (trailerForm) {
+        trailerForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            const videoType = this.querySelector('input[name="video_type"]:checked').value;
+            
+            try {
+                let response;
+                if (videoType === 'upload' && this.querySelector('input[name="video_file"]').files[0]) {
+                    // Загрузка файла
+                    response = await fetch('/api/add_trailer', {
+                        method: 'POST',
+                        body: formData
+                    });
+                } else {
+                    // Отправка URL
+                    const jsonData = {
+                        title: formData.get('title'),
+                        description: formData.get('description'),
+                        video_url: formData.get('video_url') || ''
+                    };
+                    response = await fetch('/api/add_trailer', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(jsonData)
+                    });
+                }
+                
+                const result = await response.json();
+                if (result.success) {
+                    closeModal('add-trailer-modal');
+                    location.reload();
+                } else {
+                    alert('Ошибка: ' + (result.error || 'Не удалось добавить трейлер'));
+                }
+            } catch (error) {
+                alert('Ошибка загрузки: ' + error.message);
+            }
+        });
+    }
+    
+    // Обработчик формы добавления новости
+    const newsForm = document.getElementById('add-news-form');
+    if (newsForm) {
+        newsForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            
+            try {
+                const response = await fetch('/api/add_news', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    closeModal('add-news-modal');
+                    location.reload();
+                } else {
+                    alert('Ошибка: ' + (result.error || 'Не удалось добавить новость'));
+                }
+            } catch (error) {
+                alert('Ошибка загрузки: ' + error.message);
+            }
+        });
+    }
+});
