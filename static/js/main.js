@@ -481,3 +481,30 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+// ТЕСТ: Проверка выполнения main.js
+console.log('main.js загружен и выполняется!');
+
+// ТЕСТ: Простое добавление обработчиков событий
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM полностью загружен!');
+    
+    // Простое добавление обработчика для кнопки add-moment-btn
+    const testBtn = document.getElementById('add-moment-btn');
+    if (testBtn) {
+        testBtn.addEventListener('click', function() {
+            console.log('Тестовая кнопка 1 нажата!');
+            showAddMomentModal();
+        });
+        console.log('Тестовый обработчик для кнопки 1 добавлен');
+    }
+    
+    // Простое добавление обработчика для кнопки add-moment-btn-alt
+    const testBtnAlt = document.getElementById('add-moment-btn-alt');
+    if (testBtnAlt) {
+        testBtnAlt.addEventListener('click', function() {
+            console.log('Тестовая кнопка 2 нажата!');
+            showAddMomentModal();
+        });
+        console.log('Тестовый обработчик для кнопки 2 добавлен');
+    }
+});
