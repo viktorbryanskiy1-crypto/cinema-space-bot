@@ -1,10 +1,12 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, redirect, url_for, send_from_directory
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, Update
 from telegram.ext import Updater, CommandHandler
 import os
 import threading
 import json
 from database import *
+from werkzeug.utils import secure_filename
+import uuid
 
 # Получаем токен и URL из переменных окружения
 TOKEN = os.environ.get('TELEGRAM_TOKEN')
@@ -12,6 +14,19 @@ WEBHOOK_URL = os.environ.get('WEBHOOK_URL', 'https://cinema-space-bot.onrender.c
 
 # Создаем Flask приложение
 app = Flask(__name__)
+
+# Конфигурация для загрузки файлов
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # Максимальный размер файла 50MB
+app.config['UPLOAD_FOLDER'] = 'uploads'
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+
+# Поддерживаемые форматы файлов
+ALLOWED_VIDEO_EXTENSIONS = {'mp4', 'avi', 'mov', 'wmv', 'flv', 'webm'}
+ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+
+def allowed_file(filename, allowed_extensions):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in allowed_extensions
 
 # Инициализируем бота
 updater = Updater(TOKEN, use_context=True)
@@ -123,21 +138,80 @@ def search():
 # API endpoints для добавления контента
 @app.route('/api/add_moment', methods=['POST'])
 def api_add_moment():
-    data = request.json
-    add_moment(data['title'], data['description'], data['video_url'])
-    return jsonify({"success": True})
+    try:
+        data = request.get_json()
+        # Проверяем, есть ли видео файл
+        video_url = ''
+        if 'video_file' in request.files:
+            file = request.files['video_file']
+            if file and file.filename != '' and allowed_file(file.filename, ALLOWED_VIDEO_EXTENSIONS):
+                filename = secure_filename(file.filename)
+                unique_filename = str(uuid.uuid4()) + '_' + filename
+                filepath = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
+                file.save(filepath)
+                video_url = f"/uploads/{unique_filename}"
+        else:
+            video_url = data.get('video_url', '')
+        
+        add_moment(data['title'], data['description'], video_url)
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
 
 @app.route('/api/add_trailer', methods=['POST'])
 def api_add_trailer():
-    data = request.json
-    add_trailer(data['title'], data['description'], data['video_url'])
-    return jsonify({"success": True})
+    try:
+        data = request.get_json()
+        # Проверяем, есть ли видео файл
+        video_url = ''
+        if 'video_file' in request.files:
+            file = request.files['video_file']
+            if file and file.filename != '' and allowed_file(file.filename, ALLOWED_VIDEO_EXTENSIONS):
+                filename = secure_filename(file.filename)
+                unique_filename = str(uuid.uuid4()) + '_' + filename
+                filepath = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
+                file.save(filepath)
+                video_url = f"/uploads/{unique_filename}"
+        else:
+            video_url = data.get('video_url', '')
+        
+        add_trailer(data['title'], data['description'], video_url)
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
 
 @app.route('/api/add_news', methods=['POST'])
 def api_add_news():
-    data = request.json
-    add_news(data['title'], data['text'], data.get('image_url', ''))
-    return jsonify({"success": True})
+    try:
+        # Получаем текстовые данные
+        title = request.form.get('title', '')
+        text = request.form.get('text', '')
+        image_url = ''
+        
+        # Проверяем, есть ли файл изображения
+        if 'image_file' in request.files:
+            file = request.files['image_file']
+            if file and file.filename != '' and allowed_file(file.filename, ALLOWED_IMAGE_EXTENSIONS):
+                filename = secure_filename(file.filename)
+                unique_filename = str(uuid.uuid4()) + '_' + filename
+                filepath = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
+                file.save(filepath)
+                image_url = f"/uploads/{unique_filename}"
+        
+        # Если нет файла, проверяем URL изображения
+        if not image_url and 'image_url' in request.form:
+            image_url = request.form['image_url']
+        
+        # Добавляем новость в базу данных
+        add_news(title, text, image_url)
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+# Endpoint для отдачи загруженных файлов
+@app.route('/uploads/<filename>')
+def uploaded_file(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 # API endpoints для реакций и комментариев
 @app.route('/api/reaction', methods=['POST'])
@@ -168,6 +242,12 @@ def api_add_comment():
         data['text']
     )
     return jsonify({"success": True})
+
+# Админ-панель
+@app.route('/admin')
+def admin():
+    # Здесь будет логика админ-панели
+    return "<h1>Админ-панель</h1><p>Скоро здесь появится управление контентом</p>"
 
 # Запуск бота в отдельном потоке
 def start_bot():
