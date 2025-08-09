@@ -433,78 +433,47 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 // Добавляем обработчики событий после загрузки DOM
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM загружен, добавляем обработчики событий');
+    
     // Обработчик для кнопки добавления момента
     const addMomentBtn = document.getElementById('add-moment-btn');
     if (addMomentBtn) {
-        addMomentBtn.addEventListener('click', function() {
-            showAddMomentModal();
-        });
+        addMomentBtn.addEventListener('click', showAddMomentModal);
+        console.log('Обработчик для add-moment-btn добавлен');
     }
     
     // Обработчик для альтернативной кнопки добавления момента
     const addMomentBtnAlt = document.getElementById('add-moment-btn-alt');
     if (addMomentBtnAlt) {
-        addMomentBtnAlt.addEventListener('click', function() {
-            showAddMomentModal();
-        });
+        addMomentBtnAlt.addEventListener('click', showAddMomentModal);
+        console.log('Обработчик для add-moment-btn-alt добавлен');
     }
     
     // Обработчик для кнопки добавления трейлера
     const addTrailerBtn = document.getElementById('add-trailer-btn');
     if (addTrailerBtn) {
-        addTrailerBtn.addEventListener('click', function() {
-            showAddTrailerModal();
-        });
+        addTrailerBtn.addEventListener('click', showAddTrailerModal);
+        console.log('Обработчик для add-trailer-btn добавлен');
     }
     
     // Обработчик для альтернативной кнопки добавления трейлера
     const addTrailerBtnAlt = document.getElementById('add-trailer-btn-alt');
     if (addTrailerBtnAlt) {
-        addTrailerBtnAlt.addEventListener('click', function() {
-            showAddTrailerModal();
-        });
+        addTrailerBtnAlt.addEventListener('click', showAddTrailerModal);
+        console.log('Обработчик для add-trailer-btn-alt добавлен');
     }
     
     // Обработчик для кнопки добавления новости
     const addNewsBtn = document.getElementById('add-news-btn');
     if (addNewsBtn) {
-        addNewsBtn.addEventListener('click', function() {
-            showAddNewsModal();
-        });
+        addNewsBtn.addEventListener('click', showAddNewsModal);
+        console.log('Обработчик для add-news-btn добавлен');
     }
     
     // Обработчик для альтернативной кнопки добавления новости
     const addNewsBtnAlt = document.getElementById('add-news-btn-alt');
     if (addNewsBtnAlt) {
-        addNewsBtnAlt.addEventListener('click', function() {
-            showAddNewsModal();
-        });
-    }
-});
-// ТЕСТ: Проверка выполнения main.js
-console.log('main.js загружен и выполняется!');
-
-// ТЕСТ: Простое добавление обработчиков событий
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('DOM полностью загружен!');
-    
-    // Простое добавление обработчика для кнопки add-moment-btn
-    const testBtn = document.getElementById('add-moment-btn');
-    if (testBtn) {
-        testBtn.addEventListener('click', function() {
-            console.log('Тестовая кнопка 1 нажата!');
-            showAddMomentModal();
-        });
-        console.log('Тестовый обработчик для кнопки 1 добавлен');
-    }
-    
-    // Простое добавление обработчика для кнопки add-moment-btn-alt
-    const testBtnAlt = document.getElementById('add-moment-btn-alt');
-    if (testBtnAlt) {
-        testBtnAlt.addEventListener('click', function() {
-            console.log('Тестовая кнопка 2 нажата!');
-            showAddMomentModal();
-        });
-        console.log('Тестовый обработчик для кнопки 2 добавлен');
+        addNewsBtnAlt.addEventListener('click', showAddNewsModal);
+        console.log('Обработчик для add-news-btn-alt добавлен');
     }
 });
