@@ -431,3 +431,53 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+// Добавляем обработчики событий после загрузки DOM
+document.addEventListener('DOMContentLoaded', function() {
+    // Обработчик для кнопки добавления момента
+    const addMomentBtn = document.getElementById('add-moment-btn');
+    if (addMomentBtn) {
+        addMomentBtn.addEventListener('click', function() {
+            showAddMomentModal();
+        });
+    }
+    
+    // Обработчик для альтернативной кнопки добавления момента
+    const addMomentBtnAlt = document.getElementById('add-moment-btn-alt');
+    if (addMomentBtnAlt) {
+        addMomentBtnAlt.addEventListener('click', function() {
+            showAddMomentModal();
+        });
+    }
+    
+    // Обработчик для кнопки добавления трейлера
+    const addTrailerBtn = document.getElementById('add-trailer-btn');
+    if (addTrailerBtn) {
+        addTrailerBtn.addEventListener('click', function() {
+            showAddTrailerModal();
+        });
+    }
+    
+    // Обработчик для альтернативной кнопки добавления трейлера
+    const addTrailerBtnAlt = document.getElementById('add-trailer-btn-alt');
+    if (addTrailerBtnAlt) {
+        addTrailerBtnAlt.addEventListener('click', function() {
+            showAddTrailerModal();
+        });
+    }
+    
+    // Обработчик для кнопки добавления новости
+    const addNewsBtn = document.getElementById('add-news-btn');
+    if (addNewsBtn) {
+        addNewsBtn.addEventListener('click', function() {
+            showAddNewsModal();
+        });
+    }
+    
+    // Обработчик для альтернативной кнопки добавления новости
+    const addNewsBtnAlt = document.getElementById('add-news-btn-alt');
+    if (addNewsBtnAlt) {
+        addNewsBtnAlt.addEventListener('click', function() {
+            showAddNewsModal();
+        });
+    }
+});
