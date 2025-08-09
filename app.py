@@ -47,7 +47,28 @@ def webhook():
 # Главная страница
 @app.route('/')
 def index():
-    return "<h1>🌌 КиноВселенная работает!</h1><p>Бот готов принимать сообщения</p>"
+    return render_template('index.html')
+
+# Вкладка: Моменты из кино
+@app.route('/moments')
+def moments():
+    return render_template('moments.html')
+
+# Вкладка: Трейлеры
+@app.route('/trailers')
+def trailers():
+    return render_template('trailers.html')
+
+# Вкладка: Новости
+@app.route('/news')
+def news():
+    return render_template('news.html')
+
+# Поиск
+@app.route('/search')
+def search():
+    query = request.args.get('q', '')
+    return render_template('search.html', query=query)
 
 # Запуск бота в отдельном потоке
 def start_bot():
