@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔐 Вход в админ-панель - КиноВселенная</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container" style="display: flex; align-items: center; justify-content: center; min-height: 100vh;">
+        <div class="card" style="max-width: 400px; width: 100%;">
+            <h2 style="text-align: center; margin-bottom: 30px; color: var(--accent);">🔐 Вход в админ-панель</h2>
+            
+            {% if error %}
+            <div style="background: rgba(255, 107, 107, 0.2); border: 1px solid var(--warning); border-radius: 10px; padding: 15px; margin-bottom: 20px; color: var(--warning);">
+                {{ error }}
+            </div>
+            {% endif %}
+            
+            <form method="POST">
+                <input type="text" name="username" placeholder="Логин" required style="width: 100%; padding: 15px; margin-bottom: 15px; border: 1px solid var(--accent); border-radius: 10px; background: rgba(255,255,255,0.1); color: white;">
+                <input type="password" name="password" placeholder="Пароль" required style="width: 100%; padding: 15px; margin-bottom: 20px; border: 1px solid var(--accent); border-radius: 10px; background: rgba(255,255,255,0.1); color: white;">
+                <button type="submit" class="submit-btn" style="width: 100%; padding: 15px; font-size: 1.1em;">Войти</button>
+            </form>
+            
+            <div style="text-align: center; margin-top: 20px; color: var(--text-secondary);">
+                <small>По умолчанию: admin / admin</small>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
