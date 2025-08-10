@@ -331,13 +331,20 @@ def admin_update_access(content_type):
     if 'admin' not in session:
         return redirect(url_for('admin_login'))
     
+    print(f"!!! ADMIN_UPDATE_ACCESS called with content_type={content_type} !!!")
     roles = request.form.getlist('roles')
+    print(f"!!! Received roles: {roles} !!!")
     update_access_settings(content_type, roles)
     
     return redirect(url_for('admin_access_settings'))
 
 # Запуск бота в отдельном потоке
 def start_bot():
+    # Устанавливаем webhook
+    WEBHOOK_URL_FULL = f"https://cinema-space-bot.onrender.com/{TOKEN}"
+    updater.bot.set_webhook(url=WEBHOOK_URL_FULL)
+    print(f"Webhook установлен: {WEBHOOK_URL_FULL}")
+    
     updater.start_polling()
 
 if __name__ == '__main__':
@@ -347,5 +354,5 @@ if __name__ == '__main__':
     bot_thread.start()
     
     # Запускаем Flask сервер
-    port = int(os.environ.get('PORT', 5000))
+    port = int(os.environ.get('PORT', 10000))
     app.run(host='0.0.0.0', port=port)
