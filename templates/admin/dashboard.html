@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📊 Админ-панель - КиноВселенная</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <nav class="navbar" style="margin-bottom: 30px;">
+            <h1>📊 Админ-панель</h1>
+            <div>
+                <a href="{{ url_for('admin_content') }}" class="tab-btn" style="margin-right: 10px;">Управление контентом</a>
+                <a href="{{ url_for('admin_logout') }}" class="tab-btn" style="background: linear-gradient(45deg, #ff6b6b, #ff4757);">Выйти</a>
+            </div>
+        </nav>
+        
+        <h2 style="text-align: center; margin-bottom: 30px; background: linear-gradient(45deg, var(--accent), var(--accent-secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">📈 Статистика</h2>
+        
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-number">{{ moments_count }}</div>
+                <div class="stat-label">Моментов из кино</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{{ trailers_count }}</div>
+                <div class="stat-label">Трейлеров</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{{ news_count }}</div>
+                <div class="stat-label">Новостей</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{{ comments_count }}</div>
+                <div class="stat-label">Комментариев</div>
+            </div>
+        </div>
+        
+        <div style="text-align: center; margin-top: 50px;">
+            <a href="{{ url_for('index') }}" class="tab-btn">🏠 Вернуться к приложению</a>
+        </div>
+    </div>
+</body>
+</html>
