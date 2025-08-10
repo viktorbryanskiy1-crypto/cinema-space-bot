@@ -1,6 +1,7 @@
 import sqlite3
 import os
 from datetime import datetime
+import bcrypt
 
 def init_db():
     """Инициализация базы данных"""
@@ -49,6 +50,21 @@ def init_db():
                   reaction TEXT NOT NULL,
                   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                   UNIQUE(item_type, item_id, user_id, reaction))''')
+    
+    # Таблица для администраторов
+    c.execute('''CREATE TABLE IF NOT EXISTS admins
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  username TEXT UNIQUE NOT NULL,
+                  password_hash TEXT NOT NULL,
+                  created_at DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+    
+    # Создаем админа по умолчанию (admin/admin)
+    try:
+        password_hash = bcrypt.hashpw('admin'.encode('utf-8'), bcrypt.gensalt())
+        c.execute("INSERT INTO admins (username, password_hash) VALUES (?, ?)",
+                 ('admin', password_hash))
+    except sqlite3.IntegrityError:
+        pass  # Админ уже существует
     
     conn.commit()
     conn.close()
@@ -104,6 +120,36 @@ def add_news(title, text, image_url):
     c = conn.cursor()
     c.execute("INSERT INTO news (title, text, image_url) VALUES (?, ?, ?)",
               (title, text, image_url))
+    conn.commit()
+    conn.close()
+
+def delete_moment(moment_id):
+    """Удалить момент из кино"""
+    conn = sqlite3.connect('cinema.db')
+    c = conn.cursor()
+    c.execute("DELETE FROM moments WHERE id = ?", (moment_id,))
+    c.execute("DELETE FROM comments WHERE item_type = 'moment' AND item_id = ?", (moment_id,))
+    c.execute("DELETE FROM reactions WHERE item_type = 'moment' AND item_id = ?", (moment_id,))
+    conn.commit()
+    conn.close()
+
+def delete_trailer(trailer_id):
+    """Удалить трейлер"""
+    conn = sqlite3.connect('cinema.db')
+    c = conn.cursor()
+    c.execute("DELETE FROM trailers WHERE id = ?", (trailer_id,))
+    c.execute("DELETE FROM comments WHERE item_type = 'trailer' AND item_id = ?", (trailer_id,))
+    c.execute("DELETE FROM reactions WHERE item_type = 'trailer' AND item_id = ?", (trailer_id,))
+    conn.commit()
+    conn.close()
+
+def delete_news(news_id):
+    """Удалить новость"""
+    conn = sqlite3.connect('cinema.db')
+    c = conn.cursor()
+    c.execute("DELETE FROM news WHERE id = ?", (news_id,))
+    c.execute("DELETE FROM comments WHERE item_type = 'news' AND item_id = ?", (news_id,))
+    c.execute("DELETE FROM reactions WHERE item_type = 'news' AND item_id = ?", (news_id,))
     conn.commit()
     conn.close()
 
@@ -168,6 +214,45 @@ def add_comment(item_type, item_id, user_name, text):
               (item_type, item_id, user_name, text))
     conn.commit()
     conn.close()
+
+def authenticate_admin(username, password):
+    """Проверка авторизации администратора"""
+    conn = sqlite3.connect('cinema.db')
+    c = conn.cursor()
+    c.execute("SELECT password_hash FROM admins WHERE username = ?", (username,))
+    result = c.fetchone()
+    conn.close()
+    
+    if result:
+        stored_hash = result[0]
+        return bcrypt.checkpw(password.encode('utf-8'), stored_hash)
+    return False
+
+def get_stats():
+    """Получить статистику"""
+    conn = sqlite3.connect('cinema.db')
+    c = conn.cursor()
+    
+    c.execute("SELECT COUNT(*) FROM moments")
+    moments_count = c.fetchone()[0]
+    
+    c.execute("SELECT COUNT(*) FROM trailers")
+    trailers_count = c.fetchone()[0]
+    
+    c.execute("SELECT COUNT(*) FROM news")
+    news_count = c.fetchone()[0]
+    
+    c.execute("SELECT COUNT(*) FROM comments")
+    comments_count = c.fetchone()[0]
+    
+    conn.close()
+    
+    return {
+        'moments': moments_count,
+        'trailers': trailers_count,
+        'news': news_count,
+        'comments': comments_count
+    }
 
 # Инициализация базы данных при импорте
 init_db()
