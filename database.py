@@ -58,6 +58,23 @@ def init_db():
                   password_hash TEXT NOT NULL,
                   created_at DATETIME DEFAULT CURRENT_TIMESTAMP)''')
     
+    # Таблица для пользователей Telegram
+    c.execute('''CREATE TABLE IF NOT EXISTS users
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  telegram_id TEXT UNIQUE NOT NULL,
+                  username TEXT,
+                  first_name TEXT,
+                  last_name TEXT,
+                  role TEXT DEFAULT 'user', -- 'owner', 'admin', 'user', 'guest'
+                  created_at DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+    
+    # Таблица для настроек доступа
+    c.execute('''CREATE TABLE IF NOT EXISTS access_settings
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  content_type TEXT UNIQUE NOT NULL, -- 'moment', 'trailer', 'news'
+                  allowed_roles TEXT NOT NULL, -- JSON строка с разрешенными ролями
+                  created_at DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+    
     # Создаем админа по умолчанию (admin/admin)
     try:
         password_hash = bcrypt.hashpw('admin'.encode('utf-8'), bcrypt.gensalt())
@@ -65,6 +82,24 @@ def init_db():
                  ('admin', password_hash))
     except sqlite3.IntegrityError:
         pass  # Админ уже существует
+    
+    # Создаем владельца (тебя) - замени 'YOUR_TELEGRAM_ID' на свой ID
+    try:
+        c.execute("INSERT INTO users (telegram_id, username, first_name, last_name, role) VALUES (?, ?, ?, ?, ?)",
+                 ('YOUR_TELEGRAM_ID', 'owner', 'Owner', 'User', 'owner'))
+    except sqlite3.IntegrityError:
+        pass  # Владелец уже существует
+    
+    # Создаем настройки доступа по умолчанию
+    try:
+        c.execute("INSERT INTO access_settings (content_type, allowed_roles) VALUES (?, ?)",
+                 ('moment', '["owner"]'))  # Только владелец
+        c.execute("INSERT INTO access_settings (content_type, allowed_roles) VALUES (?, ?)",
+                 ('trailer', '["owner", "admin"]'))  # Владелец и админы
+        c.execute("INSERT INTO access_settings (content_type, allowed_roles) VALUES (?, ?)",
+                 ('news', '["owner", "admin", "user"]'))  # Все авторизованные
+    except sqlite3.IntegrityError:
+        pass  # Настройки уже существуют
     
     conn.commit()
     conn.close()
@@ -253,6 +288,102 @@ def get_stats():
         'news': news_count,
         'comments': comments_count
     }
+
+def get_or_create_user(telegram_id, username=None, first_name=None, last_name=None):
+    """Получить или создать пользователя по Telegram ID"""
+    conn = sqlite3.connect('cinema.db')
+    c = conn.cursor()
+    
+    # Проверяем, существует ли пользователь
+    c.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_id,))
+    user = c.fetchone()
+    
+    if user:
+        # Обновляем информацию о пользователе
+        c.execute("""UPDATE users 
+                     SET username = ?, first_name = ?, last_name = ? 
+                     WHERE telegram_id = ?""",
+                  (username, first_name, last_name, telegram_id))
+    else:
+        # Создаем нового пользователя с ролью 'user' по умолчанию
+        c.execute("""INSERT INTO users (telegram_id, username, first_name, last_name, role) 
+                     VALUES (?, ?, ?, ?, ?)""",
+                  (telegram_id, username, first_name, last_name, 'user'))
+        # Получаем созданного пользователя
+        c.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_id,))
+        user = c.fetchone()
+    
+    conn.commit()
+    conn.close()
+    return user
+
+def get_user_by_telegram_id(telegram_id):
+    """Получить пользователя по Telegram ID"""
+    conn = sqlite3.connect('cinema.db')
+    c = conn.cursor()
+    c.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_id,))
+    user = c.fetchone()
+    conn.close()
+    return user
+
+def get_user_role(telegram_id):
+    """Получить роль пользователя по Telegram ID"""
+    user = get_user_by_telegram_id(telegram_id)
+    if user:
+        return user[5]  # role column
+    return 'guest'  # По умолчанию гость
+
+def get_access_settings(content_type):
+    """Получить настройки доступа для типа контента"""
+    conn = sqlite3.connect('cinema.db')
+    c = conn.cursor()
+    c.execute("SELECT allowed_roles FROM access_settings WHERE content_type = ?", (content_type,))
+    result = c.fetchone()
+    conn.close()
+    
+    if result:
+        import json
+        return json.loads(result[0])
+    return ['owner']  # По умолчанию только владелец
+
+def can_user_add_content(telegram_id, content_type):
+    """Проверить, может ли пользователь добавлять контент определенного типа"""
+    user_role = get_user_role(telegram_id)
+    allowed_roles = get_access_settings(content_type)
+    
+    # Владелец может всё
+    if user_role == 'owner':
+        return True
+    
+    # Проверяем, есть ли роль пользователя в списке разрешенных
+    return user_role in allowed_roles
+
+def get_all_users():
+    """Получить всех пользователей"""
+    conn = sqlite3.connect('cinema.db')
+    c = conn.cursor()
+    c.execute("SELECT * FROM users ORDER BY created_at DESC")
+    users = c.fetchall()
+    conn.close()
+    return users
+
+def update_user_role(telegram_id, new_role):
+    """Обновить роль пользователя"""
+    conn = sqlite3.connect('cinema.db')
+    c = conn.cursor()
+    c.execute("UPDATE users SET role = ? WHERE telegram_id = ?", (new_role, telegram_id))
+    conn.commit()
+    conn.close()
+
+def update_access_settings(content_type, allowed_roles):
+    """Обновить настройки доступа"""
+    import json
+    conn = sqlite3.connect('cinema.db')
+    c = conn.cursor()
+    c.execute("UPDATE access_settings SET allowed_roles = ? WHERE content_type = ?", 
+              (json.dumps(allowed_roles), content_type))
+    conn.commit()
+    conn.close()
 
 # Инициализация базы данных при импорте
 init_db()
