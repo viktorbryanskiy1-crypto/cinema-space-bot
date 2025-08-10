@@ -1,16 +1,20 @@
+<!-- templates/moments.html -->
 <div class="content-section">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
         <h2 style="background: linear-gradient(45deg, #00f3ff, #ff00c8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size: 2em;">🎬 Моменты из кино</h2>
+        <!-- Кнопка без onclick, обработчик добавляется в JS -->
         <button id="add-moment-btn" class="tab-btn" style="padding: 12px 25px;">➕ Добавить момент</button>
     </div>
-    
+
     <!-- Модальное окно для добавления момента -->
     <div id="add-moment-modal" class="modal" style="display: none;">
         <div class="modal-content">
             <h3>🎬 Добавить момент из кино</h3>
-            <form id="add-moment-form">
-                <input type="text" name="title" placeholder="Название момента" required style="width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid var(--accent); border-radius: 10px; background: rgba(255,255,255,0.1); color: white;"><br>
-                
+            <!-- Важно: enctype="multipart/form-data" для загрузки файлов -->
+            <form id="add-moment-form" enctype="multipart/form-data">
+                <input type="text" name="title" placeholder="Название момента" required
+                    style="width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid var(--accent); border-radius: 10px; background: rgba(255,255,255,0.1); color: white;"><br>
+
                 <div style="margin-bottom: 15px;">
                     <label style="display: block; margin-bottom: 10px;">Выберите способ добавления видео:</label>
                     <div>
@@ -22,82 +26,91 @@
                         <label for="moment_video_url">Ссылка на видео</label>
                     </div>
                 </div>
-                
+
                 <div id="moment-file-section">
-                    <input type="file" name="video_file" accept="video/*" style="width: 100%; margin-bottom: 15px; color: white;">
-                    <small style="color: var(--text-secondary);">Макс. размер: 50MB. Форматы: MP4, AVI, MOV</small>
+                    <input type="file" name="video_file" accept="video/*"
+                        style="width: 100%; margin-bottom: 15px; color: white;">
+                    <small style="color: var(--text-secondary);">Макс. размер: 50MB. Форматы: MP4, AVI, MOV, WEBM</small>
                 </div>
-                
+
                 <div id="moment-url-section" style="display: none;">
-                    <input type="text" name="video_url" placeholder="URL видео (YouTube, Vimeo, прямая ссылка)" style="width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid var(--accent); border-radius: 10px; background: rgba(255,255,255,0.1); color: white;">
+                    <input type="text" name="video_url" placeholder="URL видео (YouTube, Vimeo, прямая ссылка)"
+                        style="width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid var(--accent); border-radius: 10px; background: rgba(255,255,255,0.1); color: white;">
                 </div>
-                
-                <textarea name="description" placeholder="Описание момента" required style="width: 100%; padding: 12px; margin-bottom: 15px; height: 100px; border: 1px solid var(--accent); border-radius: 10px; background: rgba(255,255,255,0.1); color: white;"></textarea><br>
-                
+
+                <textarea name="description" placeholder="Описание момента" required
+                    style="width: 100%; padding: 12px; margin-bottom: 15px; height: 100px; border: 1px solid var(--accent); border-radius: 10px; background: rgba(255,255,255,0.1); color: white;"></textarea><br>
+
                 <button type="submit" class="submit-btn" style="width: 100%;">Добавить момент</button>
-                <button type="button" onclick="closeModal('add-moment-modal')" class="tab-btn" style="width: 100%; margin-top: 10px;">Отмена</button>
+                <button type="button" onclick="closeModal('add-moment-modal')" class="tab-btn"
+                    style="width: 100%; margin-top: 10px;">Отмена</button>
             </form>
         </div>
     </div>
-    
+
     <div class="card-grid">
         {% if moments %}
-            {% for moment in moments %}
-            <div class="card">
-                <h3 class="card-title">{{ moment.title }}</h3>
-                <p class="card-description">{{ moment.description }}</p>
-                {% if moment.video_url %}
-                    {% if moment.video_url.startswith('/uploads/') %}
-                        <!-- Загруженное видео -->
-                        <video class="card-media" controls preload="metadata">
-                            <source src="{{ moment.video_url }}" type="video/mp4">
-                            Ваш браузер не поддерживает видео.
-                        </video>
-                    {% elif 'youtube.com' in moment.video_url or 'youtu.be' in moment.video_url %}
-                        <iframe class="card-media" src="{{ moment.video_url.replace('watch?v=', 'embed/').replace('youtu.be/', 'youtube.com/embed/') }}" frameborder="0" allowfullscreen></iframe>
-                    {% elif 'vimeo.com' in moment.video_url %}
-                        <iframe class="card-media" src="{{ moment.video_url.replace('vimeo.com/', 'player.vimeo.com/video/') }}" frameborder="0" allowfullscreen></iframe>
-                    {% else %}
-                        <video class="card-media" controls preload="metadata">
-                            <source src="{{ moment.video_url }}" type="video/mp4">
-                            Ваш браузер не поддерживает видео.
-                        </video>
-                    {% endif %}
-                {% endif %}
-                
-                <div class="reactions">
-                    <button class="reaction-btn" data-id="{{ moment.id }}" data-type="moment" data-reaction="like">
-                        👍 <span class="reaction-count">{{ moment.reactions.like }}</span>
-                    </button>
-                    <button class="reaction-btn" data-id="{{ moment.id }}" data-type="moment" data-reaction="dislike">
-                        👎 <span class="reaction-count">{{ moment.reactions.dislike }}</span>
-                    </button>
-                    <button class="reaction-btn" data-id="{{ moment.id }}" data-type="moment" data-reaction="star">
-                        ⭐ <span class="reaction-count">{{ moment.reactions.star }}</span>
-                    </button>
-                    <button class="reaction-btn" data-id="{{ moment.id }}" data-type="moment" data-reaction="fire">
-                        🔥 <span class="reaction-count">{{ moment.reactions.fire }}</span>
-                    </button>
-                </div>
-                
-                <div class="comments-section">
-                    <button class="load-comments tab-btn" data-id="{{ moment.id }}" data-type="moment" style="margin-bottom: 15px; padding: 8px 15px;">
-                        💬 Показать комментарии ({{ moment.comments_count }})
-                    </button>
-                    <div class="comments-list"></div>
-                    <form class="comment-form" data-id="{{ moment.id }}" data-type="moment">
-                        <textarea class="comment-input" placeholder="Написать комментарий..."></textarea>
-                        <button type="submit" class="submit-btn">Отправить</button>
-                    </form>
-                </div>
+        {% for moment in moments %}
+        <div class="card">
+            <h3 class="card-title">{{ moment.title }}</h3>
+            <p class="card-description">{{ moment.description }}</p>
+            {% if moment.video_url %}
+            {% if moment.video_url.startswith('/uploads/') %}
+            <!-- Загруженное видео -->
+            <video class="card-media" controls preload="metadata" controlsList="nodownload">
+                <source src="{{ moment.video_url }}" type="video/mp4">
+                Ваш браузер не поддерживает видео.
+            </video>
+            {% elif 'youtube.com' in moment.video_url or 'youtu.be' in moment.video_url %}
+            <iframe class="card-media" src="{{ moment.video_url.replace('watch?v=', 'embed/').replace('youtu.be/', 'youtube.com/embed/') }}"
+                frameborder="0" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>
+            {% elif 'vimeo.com' in moment.video_url %}
+            <iframe class="card-media" src="{{ moment.video_url.replace('vimeo.com/', 'player.vimeo.com/video/') }}"
+                frameborder="0" allowfullscreen allow="autoplay; fullscreen; picture-in-picture"></iframe>
+            {% else %}
+            <!-- Прямая ссылка на видео файл -->
+            <video class="card-media" controls preload="metadata" controlsList="nodownload">
+                <source src="{{ moment.video_url }}" type="video/mp4">
+                Ваш браузер не поддерживает видео.
+            </video>
+            {% endif %}
+            {% endif %}
+
+            <div class="reactions">
+                <button class="reaction-btn" data-id="{{ moment.id }}" data-type="moment" data-reaction="like">
+                    👍 <span class="reaction-count">{{ moment.reactions.like }}</span>
+                </button>
+                <button class="reaction-btn" data-id="{{ moment.id }}" data-type="moment" data-reaction="dislike">
+                    👎 <span class="reaction-count">{{ moment.reactions.dislike }}</span>
+                </button>
+                <button class="reaction-btn" data-id="{{ moment.id }}" data-type="moment" data-reaction="star">
+                    ⭐ <span class="reaction-count">{{ moment.reactions.star }}</span>
+                </button>
+                <button class="reaction-btn" data-id="{{ moment.id }}" data-type="moment" data-reaction="fire">
+                    🔥 <span class="reaction-count">{{ moment.reactions.fire }}</span>
+                </button>
             </div>
-            {% endfor %}
+
+            <div class="comments-section">
+                <button class="load-comments tab-btn" data-id="{{ moment.id }}" data-type="moment"
+                    style="margin-bottom: 15px; padding: 8px 15px;">
+                    💬 Показать комментарии ({{ moment.comments_count }})
+                </button>
+                <div class="comments-list"></div>
+                <form class="comment-form" data-id="{{ moment.id }}" data-type="moment">
+                    <textarea class="comment-input" placeholder="Написать комментарий..."></textarea>
+                    <button type="submit" class="submit-btn">Отправить</button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
         {% else %}
-            <div style="text-align: center; padding: 50px; color: var(--accent);">
-                <h2>🎬 Моменты из кино</h2>
-                <p>Пока нет добавленных моментов из фильмов</p>
-                <button id="add-moment-btn-alt" class="tab-btn" style="margin-top: 20px;">➕ Добавить первый момент</button>
-            </div>
+        <div style="text-align: center; padding: 50px; color: var(--accent);">
+            <h2>🎬 Моменты из кино</h2>
+            <p>Пока нет добавленных моментов из фильмов</p>
+            <!-- Кнопка без onclick, обработчик добавляется в JS -->
+            <button id="add-moment-btn-alt" class="tab-btn" style="margin-top: 20px;">➕ Добавить первый момент</button>
+        </div>
         {% endif %}
     </div>
 </div>
