@@ -35,6 +35,18 @@ updater = Updater(TOKEN, use_context=True)
 dp = updater.dispatcher
 
 def start(update, context):
+    # Получаем информацию о пользователе
+    user = update.message.from_user
+    telegram_id = str(user.id)
+    
+    # Получаем или создаем пользователя в базе данных
+    get_or_create_user(
+        telegram_id=telegram_id,
+        username=user.username,
+        first_name=user.first_name,
+        last_name=user.last_name
+    )
+    
     keyboard = [[
         InlineKeyboardButton(
             "🌌 КиноВселенная", 
