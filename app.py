@@ -318,6 +318,24 @@ def admin_delete(content_type, content_id):
     
     return redirect(url_for('admin_content'))
 
+# Управление доступом
+@app.route('/admin/access')
+def admin_access_settings():
+    if 'admin' not in session:
+        return redirect(url_for('admin_login'))
+    
+    return render_template('admin/access/settings.html')
+
+@app.route('/admin/access/update/<content_type>', methods=['POST'])
+def admin_update_access(content_type):
+    if 'admin' not in session:
+        return redirect(url_for('admin_login'))
+    
+    roles = request.form.getlist('roles')
+    update_access_settings(content_type, roles)
+    
+    return redirect(url_for('admin_access_settings'))
+
 # Запуск бота в отдельном потоке
 def start_bot():
     updater.start_polling()
