@@ -335,15 +335,20 @@ def get_user_role(telegram_id):
 
 def get_access_settings(content_type):
     """Получить настройки доступа для типа контента"""
+    print(f"!!! DB: get_access_settings called with content_type={content_type} !!!")
     conn = sqlite3.connect('cinema.db')
     c = conn.cursor()
     c.execute("SELECT allowed_roles FROM access_settings WHERE content_type = ?", (content_type,))
     result = c.fetchone()
     conn.close()
+    print(f"!!! DB: get_access_settings query result={result} !!!")
     
     if result:
         import json
-        return json.loads(result[0])
+        roles_list = json.loads(result[0])
+        print(f"!!! DB: get_access_settings returning parsed list: {roles_list} !!!")
+        return roles_list
+    print("!!! DB: get_access_settings returning default ['owner'] !!!")
     return ['owner']  # По умолчанию только владелец
 
 def can_user_add_content(telegram_id, content_type):
@@ -377,13 +382,23 @@ def update_user_role(telegram_id, new_role):
 
 def update_access_settings(content_type, allowed_roles):
     """Обновить настройки доступа"""
+    print(f"!!! DB: update_access_settings called with content_type={content_type}, allowed_roles={allowed_roles} !!!")
     import json
     conn = sqlite3.connect('cinema.db')
     c = conn.cursor()
-    c.execute("UPDATE access_settings SET allowed_roles = ? WHERE content_type = ?", 
-              (json.dumps(allowed_roles), content_type))
-    conn.commit()
-    conn.close()
+    roles_json = json.dumps(allowed_roles)
+    print(f"!!! DB: Trying to update with roles_json={roles_json} !!!")
+    try:
+        c.execute("UPDATE access_settings SET allowed_roles = ? WHERE content_type = ?", 
+                  (roles_json, content_type))
+        print(f"!!! DB: UPDATE executed, rowcount={c.rowcount} !!!")
+        conn.commit()
+        print("!!! DB: Commit successful !!!")
+    except Exception as e:
+        print(f"!!! DB: Error during UPDATE/commit: {e} !!!")
+    finally:
+        conn.close()
+        print("!!! DB: Connection closed !!!")
 
 # Инициализация базы данных при импорте
 init_db()
