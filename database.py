@@ -100,7 +100,15 @@ def init_db():
                  ('news', '["owner", "admin", "user"]'))  # Все авторизованные
     except sqlite3.IntegrityError:
         pass  # Настройки уже существуют
-    
+        # Таблица для хранения ссылок на Telegram
+c.execute('''CREATE TABLE IF NOT EXISTS telegram_links
+             (id INTEGER PRIMARY KEY AUTOINCREMENT,
+              content_type TEXT NOT NULL, -- 'moment', 'trailer'
+              content_id INTEGER NOT NULL, -- ID из соответствующей таблицы (moments, trailers)
+              telegram_channel TEXT NOT NULL,
+              telegram_message_id TEXT NOT NULL,
+              created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+              UNIQUE(content_type, content_id))''')    
     conn.commit()
     conn.close()
 
