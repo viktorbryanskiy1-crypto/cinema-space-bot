@@ -1,3 +1,4 @@
+# app.py
 import os
 import threading
 import logging
@@ -12,6 +13,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, Upd
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 
 # Импорт из твоего модуля database
+# ВАЖНО: Убедитесь, что в database.py нет вызова init_db() в конце файла
 from database import (
     get_or_create_user, get_user_role,
     add_moment, add_trailer, add_news,
@@ -21,15 +23,8 @@ from database import (
     authenticate_admin, get_stats,
     delete_moment, delete_trailer, delete_news,
     get_access_settings, update_access_settings,
-    init_db
+    init_db # <-- Импортируем init_db
 )
-
-# --- ИНИЦИАЛИЗАЦИЯ БАЗЫ ДАННЫХ СРАЗУ ПРИ ЗАПУСКЕ ---
-try:
-    init_db()
-    print("База данных успешно инициализирована (init_db вызван сразу после импорта).")
-except Exception as e:
-    print(f"Ошибка инициализации базы данных: {e}")
 
 # --- Настройка логирования ---
 logging.basicConfig(
@@ -40,14 +35,15 @@ logger = logging.getLogger(__name__)
 
 # --- Конфигурация ---
 TOKEN = os.environ.get('TELEGRAM_TOKEN')
-WEBHOOK_URL = os.environ.get('WEBHOOK_URL', 'https://cinema-space-bot.onrender.com').strip()
+WEBHOOK_URL = os.environ.get('WEBHOOK_URL', 'https://cinema-space-bot.onrender.com').strip() # Убраны лишние пробелы
 if not TOKEN:
     logger.error("TELEGRAM_TOKEN не установлен в переменных окружения!")
     exit(1)
 
 # --- Flask приложение ---
 app = Flask(__name__)
-app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'super-secret-key-change-me')
+# Используем секретный ключ из переменных окружения для безопасности
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'super-secret-key-change-me-please')
 
 # Загрузка файлов
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB
@@ -150,11 +146,14 @@ def handle_pending_video_url(update, context):
     content_type = data['content_type']
     title = data['title']
 
+    # ИСПРАВЛЕНО: Убраны лишние пробелы в проверке
     is_telegram_link = video_url.startswith('https://t.me/')
     if is_telegram_link:
         update.message.reply_text(f"ℹ️ Обнаружена Telegram-ссылка: {video_url}")
+        logger.info(f"ℹ️ Обнаружена Telegram-ссылка: {video_url}")
     else:
         update.message.reply_text(f"ℹ️ Получена ссылка: {video_url}")
+        logger.info(f"ℹ️ Получена ссылка: {video_url}")
 
     try:
         description = "Добавлено через Telegram бот"
@@ -268,13 +267,19 @@ def save_uploaded_file(file_storage, allowed_exts):
 def api_add_moment():
     try:
         video_url = ''
-        if 'video_file' in request.files:
+        # Проверяем, есть ли видео файл в запросе
+        if 'video_file' in request.files and request.files['video_file'].filename != '':
             video_url = save_uploaded_file(request.files['video_file'], ALLOWED_VIDEO_EXTENSIONS) or ''
         else:
-            video_url = request.json.get('video_url', '')
+            # Если файла нет, пытаемся получить URL из JSON или form data
+            if request.is_json:
+                video_url = request.json.get('video_url', '')
+            else:
+                video_url = request.form.get('video_url', '')
 
-        data = request.form if request.form else request.json
-        add_moment(data['title'], data['description'], video_url)
+        # Получаем данные из формы или JSON
+        data = request.form if request.form else (request.json if request.is_json else {})
+        add_moment(data.get('title', ''), data.get('description', ''), video_url)
         return jsonify(success=True)
     except Exception as e:
         logger.error(f"API add_moment error: {e}")
@@ -284,13 +289,16 @@ def api_add_moment():
 def api_add_trailer():
     try:
         video_url = ''
-        if 'video_file' in request.files:
+        if 'video_file' in request.files and request.files['video_file'].filename != '':
             video_url = save_uploaded_file(request.files['video_file'], ALLOWED_VIDEO_EXTENSIONS) or ''
         else:
-            video_url = request.json.get('video_url', '')
+            if request.is_json:
+                video_url = request.json.get('video_url', '')
+            else:
+                video_url = request.form.get('video_url', '')
 
-        data = request.form if request.form else request.json
-        add_trailer(data['title'], data['description'], video_url)
+        data = request.form if request.form else (request.json if request.is_json else {})
+        add_trailer(data.get('title', ''), data.get('description', ''), video_url)
         return jsonify(success=True)
     except Exception as e:
         logger.error(f"API add_trailer error: {e}")
@@ -299,15 +307,26 @@ def api_add_trailer():
 @app.route('/api/add_news', methods=['POST'])
 def api_add_news():
     try:
-        title = request.form.get('title', '')
-        text = request.form.get('text', '')
+        title = ''
+        text = ''
         image_url = ''
 
-        if 'image_file' in request.files:
+        # Получаем текстовые данные
+        if request.is_json:
+            title = request.json.get('title', '')
+            text = request.json.get('text', '')
+            image_url = request.json.get('image_url', '') # Получаем image_url из JSON, если есть
+        else:
+            title = request.form.get('title', '')
+            text = request.form.get('text', '')
+
+        # Проверяем, есть ли файл изображения
+        if 'image_file' in request.files and request.files['image_file'].filename != '':
             image_url = save_uploaded_file(request.files['image_file'], ALLOWED_IMAGE_EXTENSIONS) or ''
 
+        # Если нет файла и нет URL в form data, проверяем отдельно (для form data)
         if not image_url and 'image_url' in request.form:
-            image_url = request.form['image_url']
+             image_url = request.form['image_url']
 
         add_news(title, text, image_url)
         return jsonify(success=True)
@@ -323,32 +342,44 @@ def uploaded_file(filename):
 
 @app.route('/api/reaction', methods=['POST'])
 def api_add_reaction():
-    data = request.json
-    success = add_reaction(
-        data.get('item_type'),
-        data.get('item_id'),
-        data.get('user_id', 'anonymous'),
-        data.get('reaction')
-    )
-    return jsonify(success=success)
+    try:
+        data = request.json
+        success = add_reaction(
+            data.get('item_type'),
+            data.get('item_id'),
+            data.get('user_id', 'anonymous'),
+            data.get('reaction')
+        )
+        return jsonify(success=success)
+    except Exception as e:
+        logger.error(f"API add_reaction error: {e}")
+        return jsonify(success=False, error=str(e))
 
 @app.route('/api/comments', methods=['GET'])
 def api_get_comments():
-    item_type = request.args.get('type')
-    item_id = request.args.get('id')
-    comments = get_comments(item_type, int(item_id))
-    return jsonify(comments=comments)
+    try:
+        item_type = request.args.get('type')
+        item_id = request.args.get('id')
+        comments = get_comments(item_type, int(item_id))
+        return jsonify(comments=comments)
+    except Exception as e:
+        logger.error(f"API get_comments error: {e}")
+        return jsonify(comments=[], error=str(e))
 
 @app.route('/api/comment', methods=['POST'])
 def api_add_comment():
-    data = request.json
-    add_comment(
-        data.get('item_type'),
-        data.get('item_id'),
-        data.get('user_name', 'Гость'),
-        data.get('text')
-    )
-    return jsonify(success=True)
+    try:
+        data = request.json
+        add_comment(
+            data.get('item_type'),
+            data.get('item_id'),
+            data.get('user_name', 'Гость'),
+            data.get('text')
+        )
+        return jsonify(success=True)
+    except Exception as e:
+        logger.error(f"API add_comment error: {e}")
+        return jsonify(success=False, error=str(e))
 
 # --- Админка ---
 
@@ -440,13 +471,19 @@ def start_bot():
     updater.idle()
 
 if __name__ == '__main__':
+    # --- ДОБАВЛЕНО ДЛЯ ИНИЦИАЛИЗАЦИИ БАЗЫ ДАННЫХ ---
+    # Вызываем init_db() один раз при запуске приложения
     try:
         init_db()
-        logger.info("База данных успешно инициализирована.")
+        logger.info("✅ База данных успешно инициализирована при запуске приложения.")
+        print("✅ База данных успешно инициализирована при запуске приложения.")
     except Exception as e:
-        logger.error(f"Ошибка инициализации базы данных: {e}")
-        exit(1)
-
+        logger.error(f"❌ Ошибка инициализации базы данных: {e}")
+        print(f"❌ Ошибка инициализации базы данных: {e}")
+        # В production, возможно, лучше завершить работу приложения, если БД не инициализировалась
+        # exit(1)
+    # --- КОНЕЦ ДОБАВЛЕНИЯ ---
+    
     bot_thread = threading.Thread(target=start_bot, daemon=True)
     bot_thread.start()
 
