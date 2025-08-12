@@ -4,13 +4,13 @@
         <button onclick="showAddNewsModal()" class="tab-btn" style="padding: 12px 25px;">➕ Добавить новость</button>
     </div>
 
-    <!-- Модальное окно для добавления новости -->
-    <div id="add-news-modal" class="modal" style="display: none;">
-        <div class="modal-content">
+    <!-- Модальное окно -->
+    <div id="add-news-modal" class="modal" style="display: none; justify-content: center; align-items: center;">
+        <div class="modal-content" style="max-width: 500px; width: 90%; background: #222; padding: 20px; border-radius: 12px; position: relative;">
             <h3>📰 Добавить новость</h3>
             <form id="add-news-form" enctype="multipart/form-data">
                 <input type="text" name="title" placeholder="Заголовок новости" required
-                    style="width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid var(--accent); border-radius: 10px; background: rgba(255,255,255,0.1); color: white;"><br>
+                    style="width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid var(--accent); border-radius: 10px; background: rgba(255,255,255,0.1); color: white;">
 
                 <div style="margin-bottom: 15px;">
                     <label style="display: block; margin-bottom: 10px;">Выберите способ добавления изображения:</label>
@@ -35,7 +35,7 @@
                 </div>
 
                 <textarea name="text" placeholder="Текст новости" required
-                    style="width: 100%; padding: 12px; margin-bottom: 15px; height: 150px; border: 1px solid var(--accent); border-radius: 10px; background: rgba(255,255,255,0.1); color: white;"></textarea><br>
+                    style="width: 100%; padding: 12px; margin-bottom: 15px; height: 150px; border: 1px solid var(--accent); border-radius: 10px; background: rgba(255,255,255,0.1); color: white;"></textarea>
 
                 <button type="submit" class="submit-btn" style="width: 100%;">Добавить новость</button>
                 <button type="button" onclick="closeModal('add-news-modal')" class="tab-btn" style="width: 100%; margin-top: 10px;">Отмена</button>
@@ -91,46 +91,58 @@
 </div>
 
 <script>
-// Переключение между загрузкой и URL для новостей
-document.addEventListener('change', function(e) {
+  // Показ и скрытие модального окна
+  function showAddNewsModal() {
+    const modal = document.getElementById('add-news-modal');
+    modal.style.display = 'flex';
+  }
+  function closeModal(id) {
+    const modal = document.getElementById(id);
+    modal.style.display = 'none';
+  }
+
+  // Переключение между загрузкой файла и URL изображения
+  document.addEventListener('change', (e) => {
     if (e.target.name === 'image_type' && e.target.closest('#add-news-modal')) {
-        if (e.target.value === 'upload') {
-            document.getElementById('news-file-section').style.display = 'block';
-            document.getElementById('news-url-section').style.display = 'none';
-        } else {
-            document.getElementById('news-file-section').style.display = 'none';
-            document.getElementById('news-url-section').style.display = 'block';
-        }
+      if (e.target.value === 'upload') {
+        document.getElementById('news-file-section').style.display = 'block';
+        document.getElementById('news-url-section').style.display = 'none';
+      } else {
+        document.getElementById('news-file-section').style.display = 'none';
+        document.getElementById('news-url-section').style.display = 'block';
+      }
     }
-});
+  });
 
-// Обработчик формы добавления новости
-document.getElementById('add-news-form').addEventListener('submit', async function(e) {
+  // Инициализация отображения при загрузке страницы
+  document.addEventListener('DOMContentLoaded', () => {
+    const checkedRadio = document.querySelector('input[name="image_type"]:checked');
+    if (checkedRadio) {
+      checkedRadio.dispatchEvent(new Event('change'));
+    }
+  });
+
+  // Обработка отправки формы добавления новости через fetch
+  document.getElementById('add-news-form').addEventListener('submit', async (e) => {
     e.preventDefault();
-
-    const formData = new FormData(this);
+    const form = e.target;
+    const formData = new FormData(form);
 
     try {
-        const response = await fetch('/api/add_news', {
-            method: 'POST',
-            body: formData
-        });
+      const response = await fetch('/api/add_news', {
+        method: 'POST',
+        body: formData
+      });
+      const result = await response.json();
 
-        const result = await response.json();
-        if (result.success) {
-            closeModal('add-news-modal');
-            location.reload();
-        } else {
-            alert('Ошибка: ' + (result.error || 'Не удалось добавить новость'));
-        }
-    } catch (error) {
-        alert('Ошибка загрузки: ' + error.message);
+      if (result.success) {
+        closeModal('add-news-modal');
+        location.reload();
+      } else {
+        alert('Ошибка: ' + (result.error || 'Не удалось добавить новость'));
+      }
+    } catch (err) {
+      alert('Ошибка загрузки: ' + err.message);
     }
-});
-
-// Функции для модальных окон
-function showAddNewsModal() {
-    document.getElementById('add-news-modal').style.display = 'flex';
-}
-
-//
+  });
+</script>
