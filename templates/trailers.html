@@ -3,14 +3,15 @@
         <h2 style="background: linear-gradient(45deg, #00f3ff, #ff00c8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size: 2em;">🎥 Трейлеры</h2>
         <button onclick="showAddTrailerModal()" class="tab-btn" style="padding: 12px 25px;">➕ Добавить трейлер</button>
     </div>
-    
+
     <!-- Модальное окно для добавления трейлера -->
     <div id="add-trailer-modal" class="modal" style="display: none;">
         <div class="modal-content">
             <h3>🎥 Добавить трейлер</h3>
             <form id="add-trailer-form">
-                <input type="text" name="title" placeholder="Название трейлера" required style="width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid var(--accent); border-radius: 10px; background: rgba(255,255,255,0.1); color: white;"><br>
-                
+                <input type="text" name="title" placeholder="Название трейлера" required
+                    style="width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid var(--accent); border-radius: 10px; background: rgba(255,255,255,0.1); color: white;"><br>
+
                 <div style="margin-bottom: 15px;">
                     <label style="display: block; margin-bottom: 10px;">Выберите способ добавления видео:</label>
                     <div>
@@ -22,49 +23,80 @@
                         <label for="trailer_video_url">Ссылка на видео</label>
                     </div>
                 </div>
-                
+
                 <div id="trailer-file-section">
                     <input type="file" name="video_file" accept="video/*" style="width: 100%; margin-bottom: 15px; color: white;">
                     <small style="color: var(--text-secondary);">Макс. размер: 50MB. Форматы: MP4, AVI, MOV</small>
                 </div>
-                
+
                 <div id="trailer-url-section" style="display: none;">
-                    <input type="text" name="video_url" placeholder="URL видео (YouTube, Vimeo, прямая ссылка)" style="width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid var(--accent); border-radius: 10px; background: rgba(255,255,255,0.1); color: white;">
+                    <input type="text" name="video_url" placeholder="URL видео (YouTube, Vimeo, Telegram, прямая ссылка)"
+                        style="width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid var(--accent); border-radius: 10px; background: rgba(255,255,255,0.1); color: white;">
                 </div>
-                
-                <textarea name="description" placeholder="Описание трейлера" required style="width: 100%; padding: 12px; margin-bottom: 15px; height: 100px; border: 1px solid var(--accent); border-radius: 10px; background: rgba(255,255,255,0.1); color: white;"></textarea><br>
-                
+
+                <textarea name="description" placeholder="Описание трейлера" required
+                    style="width: 100%; padding: 12px; margin-bottom: 15px; height: 100px; border: 1px solid var(--accent); border-radius: 10px; background: rgba(255,255,255,0.1); color: white;"></textarea><br>
+
                 <button type="submit" class="submit-btn" style="width: 100%;">Добавить трейлер</button>
                 <button type="button" onclick="closeModal('add-trailer-modal')" class="tab-btn" style="width: 100%; margin-top: 10px;">Отмена</button>
             </form>
         </div>
     </div>
-    
+
     <div class="card-grid">
         {% if trailers %}
             {% for trailer in trailers %}
             <div class="card">
                 <h3 class="card-title">{{ trailer.title }}</h3>
                 <p class="card-description">{{ trailer.description }}</p>
+
                 {% if trailer.video_url %}
-                    {% if trailer.video_url.startswith('/uploads/') %}
-                        <!-- Загруженное видео -->
-                        <video class="card-media" controls preload="metadata">
+                    {% if trailer.video_url.startswith('https://t.me/') %}
+                        <!-- Telegram Widget -->
+                        <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 10px; margin-bottom: 15px;">
+                            <script async src="https://telegram.org/js/telegram-widget.js?22"
+                                    data-telegram-post="{{ trailer.video_url.replace('https://t.me/', '') }}"
+                                    data-width="100%" data-height="100%"
+                                    style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none;">
+                            </script>
+                        </div>
+
+                    {% elif trailer.video_url.startswith('/uploads/') %}
+                        <!-- Локальное видео -->
+                        <video class="card-media" controls preload="metadata" controlsList="nodownload" style="border-radius: 10px; max-width: 100%;">
                             <source src="{{ trailer.video_url }}" type="video/mp4">
                             Ваш браузер не поддерживает видео.
                         </video>
+
                     {% elif 'youtube.com' in trailer.video_url or 'youtu.be' in trailer.video_url %}
-                        <iframe class="card-media" src="{{ trailer.video_url.replace('watch?v=', 'embed/').replace('youtu.be/', 'youtube.com/embed/') }}" frameborder="0" allowfullscreen></iframe>
+                        <!-- YouTube iframe -->
+                        <iframe class="card-media" style="width: 100%; height: 315px; border-radius: 10px;"
+                            src="{{ trailer.video_url
+                                |replace('watch?v=', 'embed/')
+                                |replace('youtu.be/', 'youtube.com/embed/') }}"
+                            frameborder="0" allowfullscreen
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture">
+                        </iframe>
+
                     {% elif 'vimeo.com' in trailer.video_url %}
-                        <iframe class="card-media" src="{{ trailer.video_url.replace('vimeo.com/', 'player.vimeo.com/video/') }}" frameborder="0" allowfullscreen></iframe>
+                        <!-- Vimeo iframe -->
+                        <iframe class="card-media" style="width: 100%; height: 315px; border-radius: 10px;"
+                            src="{{ trailer.video_url.replace('vimeo.com/', 'player.vimeo.com/video/') }}"
+                            frameborder="0" allowfullscreen
+                            allow="autoplay; fullscreen; picture-in-picture">
+                        </iframe>
+
                     {% else %}
-                        <video class="card-media" controls preload="metadata">
+                        <!-- Прямая ссылка на видео -->
+                        <video class="card-media" controls preload="metadata" controlsList="nodownload" style="border-radius: 10px; max-width: 100%;">
                             <source src="{{ trailer.video_url }}" type="video/mp4">
                             Ваш браузер не поддерживает видео.
                         </video>
                     {% endif %}
+                {% else %}
+                    <p style="color: var(--text-secondary); text-align: center;">Видео недоступно</p>
                 {% endif %}
-                
+
                 <div class="reactions">
                     <button class="reaction-btn" data-id="{{ trailer.id }}" data-type="trailer" data-reaction="like">
                         👍 <span class="reaction-count">{{ trailer.reactions.like }}</span>
@@ -79,7 +111,7 @@
                         🔥 <span class="reaction-count">{{ trailer.reactions.fire }}</span>
                     </button>
                 </div>
-                
+
                 <div class="comments-section">
                     <button class="load-comments tab-btn" data-id="{{ trailer.id }}" data-type="trailer" style="margin-bottom: 15px; padding: 8px 15px;">
                         💬 Показать комментарии ({{ trailer.comments_count }})
@@ -119,10 +151,10 @@ document.addEventListener('change', function(e) {
 // Обработчик формы добавления трейлера
 document.getElementById('add-trailer-form').addEventListener('submit', async function(e) {
     e.preventDefault();
-    
+
     const formData = new FormData(this);
     const videoType = this.querySelector('input[name="video_type"]:checked').value;
-    
+
     try {
         let response;
         if (videoType === 'upload' && this.querySelector('input[name="video_file"]').files[0]) {
@@ -146,7 +178,7 @@ document.getElementById('add-trailer-form').addEventListener('submit', async fun
                 body: JSON.stringify(jsonData)
             });
         }
-        
+
         const result = await response.json();
         if (result.success) {
             closeModal('add-trailer-modal');
