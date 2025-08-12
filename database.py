@@ -156,6 +156,7 @@ def init_db():
     except Exception as e:
         print(f"❌ Ошибка при инициализации базы данных: {e}")
         conn.rollback()
+        raise # Перебрасываем исключение, чтобы оно могло быть обработано выше
     finally:
         conn.close()
 
