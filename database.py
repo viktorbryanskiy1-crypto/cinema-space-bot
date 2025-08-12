@@ -1,3 +1,4 @@
+# database.py
 import sqlite3
 import os
 from datetime import datetime
@@ -93,14 +94,14 @@ def init_db():
                  ('admin', password_hash))
     except sqlite3.IntegrityError:
         pass  # Админ уже существует
-    
-    # Создаем владельца (тебя) - замени 'YOUR_TELEGRAM_ID' на свой ID
+
+    # Создаем владельца (тебя) - заменено на реальный ID
     try:
         c.execute("INSERT INTO users (telegram_id, username, first_name, last_name, role) VALUES (?, ?, ?, ?, ?)",
-                 ('YOUR_TELEGRAM_ID', 'owner', 'Owner', 'User', 'owner'))
+                 ('993856446', 'owner_user', 'App', 'Owner', 'owner'))
     except sqlite3.IntegrityError:
         pass  # Владелец уже существует
-    
+
     # Создаем настройки доступа по умолчанию
     try:
         c.execute("INSERT INTO access_settings (content_type, allowed_roles) VALUES (?, ?)",
@@ -111,7 +112,7 @@ def init_db():
                  ('news', '["owner", "admin", "user"]'))  # Все авторизованные
     except sqlite3.IntegrityError:
         pass  # Настройки уже существуют
-    
+
     conn.commit()
     conn.close()
 
@@ -209,23 +210,19 @@ def get_reactions_count(item_type, item_id):
                  GROUP BY reaction""", (item_type, item_id))
     results = c.fetchall()
     conn.close()
-    
     reactions = {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}
     for reaction, count in results:
         reactions[reaction] = count
-    
     return reactions
 
 def add_reaction(item_type, item_id, user_id, reaction):
     """Добавить реакцию"""
     conn = sqlite3.connect('cinema.db')
     c = conn.cursor()
-    
     # Удаляем существующую реакцию того же типа от этого пользователя
     c.execute("""DELETE FROM reactions 
                  WHERE item_type = ? AND item_id = ? AND user_id = ? AND reaction = ?""",
               (item_type, item_id, user_id, reaction))
-    
     # Добавляем новую реакцию
     try:
         c.execute("""INSERT INTO reactions (item_type, item_id, user_id, reaction) 
@@ -235,7 +232,6 @@ def add_reaction(item_type, item_id, user_id, reaction):
         success = True
     except sqlite3.IntegrityError:
         success = False
-    
     conn.close()
     return success
 
@@ -268,7 +264,6 @@ def authenticate_admin(username, password):
     c.execute("SELECT password_hash FROM admins WHERE username = ?", (username,))
     result = c.fetchone()
     conn.close()
-    
     if result:
         stored_hash = result[0]
         return bcrypt.checkpw(password.encode('utf-8'), stored_hash)
@@ -278,21 +273,15 @@ def get_stats():
     """Получить статистику"""
     conn = sqlite3.connect('cinema.db')
     c = conn.cursor()
-    
     c.execute("SELECT COUNT(*) FROM moments")
     moments_count = c.fetchone()[0]
-    
     c.execute("SELECT COUNT(*) FROM trailers")
     trailers_count = c.fetchone()[0]
-    
     c.execute("SELECT COUNT(*) FROM news")
     news_count = c.fetchone()[0]
-    
     c.execute("SELECT COUNT(*) FROM comments")
     comments_count = c.fetchone()[0]
-    
     conn.close()
-    
     return {
         'moments': moments_count,
         'trailers': trailers_count,
@@ -304,11 +293,9 @@ def get_or_create_user(telegram_id, username=None, first_name=None, last_name=No
     """Получить или создать пользователя по Telegram ID"""
     conn = sqlite3.connect('cinema.db')
     c = conn.cursor()
-    
     # Проверяем, существует ли пользователь
     c.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_id,))
     user = c.fetchone()
-    
     if user:
         # Обновляем информацию о пользователе
         c.execute("""UPDATE users 
@@ -323,7 +310,6 @@ def get_or_create_user(telegram_id, username=None, first_name=None, last_name=No
         # Получаем созданного пользователя
         c.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_id,))
         user = c.fetchone()
-    
     conn.commit()
     conn.close()
     return user
@@ -353,7 +339,6 @@ def get_access_settings(content_type):
     result = c.fetchone()
     conn.close()
     print(f"!!! DB: get_access_settings query result={result} !!!")
-    
     if result:
         try:
             roles_list = json.loads(result[0])
@@ -369,11 +354,9 @@ def can_user_add_content(telegram_id, content_type):
     """Проверить, может ли пользователь добавлять контент определенного типа"""
     user_role = get_user_role(telegram_id)
     allowed_roles = get_access_settings(content_type)
-    
     # Владелец может всё
     if user_role == 'owner':
         return True
-    
     # Проверяем, есть ли роль пользователя в списке разрешенных
     return user_role in allowed_roles
 
@@ -403,7 +386,6 @@ def update_access_settings(content_type, allowed_roles):
         # Преобразуем список ролей в JSON строку
         roles_json = json.dumps(allowed_roles)
         print(f"!!! DB: Trying to update with roles_json={roles_json} !!!")
-        
         # Обновляем настройки доступа
         c.execute("UPDATE access_settings SET allowed_roles = ? WHERE content_type = ?", 
                   (roles_json, content_type))
