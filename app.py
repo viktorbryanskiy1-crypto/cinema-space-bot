@@ -8,10 +8,15 @@ from database import *
 from werkzeug.utils import secure_filename
 import uuid
 from datetime import datetime
+import logging
+
+# Настройка логирования
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 # Получаем токен и URL из переменных окружения
 TOKEN = os.environ.get('TELEGRAM_TOKEN')
-WEBHOOK_URL = os.environ.get('WEBHOOK_URL', 'https://cinema-space-bot.onrender.com')
+WEBHOOK_URL = os.environ.get('WEBHOOK_URL', 'https://cinema-space-bot.onrender.com').strip()
 
 # Создаем Flask приложение
 app = Flask(__name__)
@@ -67,6 +72,7 @@ def start(update, context):
 
 def add_video_command(update, context):
     """Команда для добавления видео по ссылке"""
+    logger.info("Вызвана команда /add_video БЕЗ аргументов или с неподходящим форматом.")
     user = update.message.from_user
     telegram_id = str(user.id)
     
@@ -93,6 +99,8 @@ def add_video_command(update, context):
 
 def add_video_handler(update, context):
     """Обработчик добавления видео по ссылке"""
+    logger.info("Сработал обработчик add_video_handler")
+    
     user = update.message.from_user
     telegram_id = str(user.id)
     
@@ -104,6 +112,7 @@ def add_video_handler(update, context):
     
     # Получаем текст сообщения
     text = update.message.text
+    logger.info(f"Получено сообщение для add_video_handler: {repr(text)}")
     
     # Проверяем формат команды
     if not text.startswith('/add_video '):
@@ -111,13 +120,14 @@ def add_video_handler(update, context):
         return
     
     lines = text.split('\n')
+    logger.info(f"Строки после split('\\n'): {lines}")
     if len(lines) < 2:
         update.message.reply_text("❌ Неверный формат команды! Введите название и ссылку на видео.")
         return
     
     # Разбираем команду
     command_line = lines[0]
-    video_url = lines[1].strip()
+    video_url = lines[1].strip() if len(lines) > 1 else ""
     
     parts = command_line.split(' ', 3)
     if len(parts) < 3:
@@ -143,9 +153,11 @@ def add_video_handler(update, context):
 
     if is_telegram_link:
         update.message.reply_text(f"ℹ️ Обнаружена ссылка на Telegram: {video_url}")
+        logger.info(f"ℹ️ Обнаружена ссылка на Telegram: {video_url}")
         # TODO: Здесь будет логика извлечения данных из Telegram
     else:
         update.message.reply_text(f"ℹ️ Обычная ссылка: {video_url}")
+        logger.info(f"ℹ️ Обычная ссылка: {video_url}")
     # --> КОНЕЦ НОВОГО КОДА <--
 
     try:
@@ -161,6 +173,7 @@ def add_video_handler(update, context):
             update.message.reply_text(f"✅ Новость '{title}' успешно добавлена!")
             
     except Exception as e:
+        logger.error(f"❌ Ошибка при добавлении видео: {str(e)}")
         update.message.reply_text(f"❌ Ошибка при добавлении видео: {str(e)}")
 
 # Регистрируем обработчики команд
