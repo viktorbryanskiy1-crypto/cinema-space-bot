@@ -34,8 +34,9 @@
                 </div>
 
                 <div id="moment-url-section" style="display: none;">
-                    <input type="text" name="video_url" placeholder="URL видео (YouTube, Vimeo, прямая ссылка)"
+                    <input type="text" name="video_url" placeholder="URL видео (YouTube, Vimeo, Telegram, прямая ссылка)"
                         style="width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid var(--accent); border-radius: 10px; background: rgba(255,255,255,0.1); color: white;">
+                    <small style="color: var(--text-secondary);">Поддерживаются ссылки на YouTube, Vimeo, Telegram и прямые ссылки на видеофайлы.</small>
                 </div>
 
                 <textarea name="description" placeholder="Описание момента" required
@@ -54,26 +55,40 @@
         <div class="card">
             <h3 class="card-title">{{ moment.title }}</h3>
             <p class="card-description">{{ moment.description }}</p>
+            
             {% if moment.video_url %}
-            {% if moment.video_url.startswith('/uploads/') %}
-            <!-- Загруженное видео -->
-            <video class="card-media" controls preload="metadata" controlsList="nodownload">
-                <source src="{{ moment.video_url }}" type="video/mp4">
-                Ваш браузер не поддерживает видео.
-            </video>
-            {% elif 'youtube.com' in moment.video_url or 'youtu.be' in moment.video_url %}
-            <iframe class="card-media" src="{{ moment.video_url.replace('watch?v=', 'embed/').replace('youtu.be/', 'youtube.com/embed/') }}"
-                frameborder="0" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>
-            {% elif 'vimeo.com' in moment.video_url %}
-            <iframe class="card-media" src="{{ moment.video_url.replace('vimeo.com/', 'player.vimeo.com/video/') }}"
-                frameborder="0" allowfullscreen allow="autoplay; fullscreen; picture-in-picture"></iframe>
+                <!-- Проверяем, является ли ссылка Telegram-ссылкой -->
+                {% if moment.video_url.startswith('https://t.me/') %}
+                    <!-- Отображаем Telegram Widget -->
+                    <div style="position: relative; padding-bottom: 56.25%; /* 16:9 Aspect Ratio */ height: 0; overflow: hidden; border-radius: 10px; margin-bottom: 15px;">
+                        <script async src="https://telegram.org/js/telegram-widget.js?22" 
+                                data-telegram-post="{{ moment.video_url.replace('https://t.me/', '') }}" 
+                                data-width="100%" 
+                                data-height="100%"
+                                style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none;">
+                        </script>
+                    </div>
+                {% elif moment.video_url.startswith('/uploads/') %}
+                    <!-- Загруженное видео -->
+                    <video class="card-media" controls preload="metadata" controlsList="nodownload">
+                        <source src="{{ moment.video_url }}" type="video/mp4">
+                        Ваш браузер не поддерживает видео.
+                    </video>
+                {% elif 'youtube.com' in moment.video_url or 'youtu.be' in moment.video_url %}
+                    <iframe class="card-media" src="{{ moment.video_url.replace('watch?v=', 'embed/').replace('youtu.be/', 'youtube.com/embed/') }}"
+                        frameborder="0" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>
+                {% elif 'vimeo.com' in moment.video_url %}
+                    <iframe class="card-media" src="{{ moment.video_url.replace('vimeo.com/', 'player.vimeo.com/video/') }}"
+                        frameborder="0" allowfullscreen allow="autoplay; fullscreen; picture-in-picture"></iframe>
+                {% else %}
+                    <!-- Прямая ссылка на видео файл -->
+                    <video class="card-media" controls preload="metadata" controlsList="nodownload">
+                        <source src="{{ moment.video_url }}" type="video/mp4">
+                        Ваш браузер не поддерживает видео.
+                    </video>
+                {% endif %}
             {% else %}
-            <!-- Прямая ссылка на видео файл -->
-            <video class="card-media" controls preload="metadata" controlsList="nodownload">
-                <source src="{{ moment.video_url }}" type="video/mp4">
-                Ваш браузер не поддерживает видео.
-            </video>
-            {% endif %}
+                <p style="color: var(--text-secondary); text-align: center;">Видео недоступно</p>
             {% endif %}
 
             <div class="reactions">
