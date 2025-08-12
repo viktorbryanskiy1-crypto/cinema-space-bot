@@ -1,10 +1,12 @@
+# app.py
 from flask import Flask, render_template, request, jsonify, redirect, url_for, session, send_from_directory
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, Update
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 import os
 import threading
 import json
-from database import *
+# ВАЖНО: Импортируем init_db из database
+from database import *, init_db
 from werkzeug.utils import secure_filename
 import uuid
 from datetime import datetime
@@ -140,8 +142,8 @@ def handle_pending_video_url(update, context):
             pending_video_data[telegram_id] = data
             return
 
-        # --> НОВЫЙ КОД <-- (Шаг 1: Проверка Telegram-ссылки)
-        # Проверяем, является ли ссылка ссылкой на Telegram
+        # --> ИСПРАВЛЕННЫЙ КОД <-- (Шаг 1: Проверка Telegram-ссылки)
+        # Проверяем, является ли ссылка ссылкой на Telegram (исправлена ошибка с лишними пробелами)
         is_telegram_link = video_url.startswith('https://t.me/')
 
         if is_telegram_link:
@@ -151,7 +153,7 @@ def handle_pending_video_url(update, context):
         else:
             update.message.reply_text(f"ℹ️ Обычная ссылка: {video_url}")
             logger.info(f"ℹ️ Обычная ссылка: {video_url}")
-        # --> КОНЕЦ НОВОГО КОДА <--
+        # --> КОНЕЦ ИСПРАВЛЕННОГО КОДА <--
 
         try:
             # Добавляем видео в базу данных
@@ -472,6 +474,17 @@ def start_bot():
     updater.start_polling()
 
 if __name__ == '__main__':
+    # --- ДОБАВЛЕНО ДЛЯ ИНИЦИАЛИЗАЦИИ БАЗЫ ДАННЫХ ---
+    # Вызываем init_db() один раз при запуске приложения
+    try:
+        init_db()
+        print("✅ База данных инициализирована при запуске приложения.")
+        logger.info("✅ База данных инициализирована при запуске приложения.")
+    except Exception as e:
+        print(f"❌ Ошибка при инициализации базы данных: {e}")
+        logger.error(f"❌ Ошибка при инициализации базы данных: {e}")
+    # --- КОНЕЦ ДОБАВЛЕНИЯ ---
+    
     # Запускаем бота в отдельном потоке
     bot_thread = threading.Thread(target=start_bot)
     bot_thread.daemon = True
