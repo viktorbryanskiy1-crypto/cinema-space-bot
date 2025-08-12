@@ -24,6 +24,13 @@ from database import (
     init_db
 )
 
+# --- ИНИЦИАЛИЗАЦИЯ БАЗЫ ДАННЫХ СРАЗУ ПРИ ЗАПУСКЕ ---
+try:
+    init_db()
+    print("База данных успешно инициализирована (init_db вызван сразу после импорта).")
+except Exception as e:
+    print(f"Ошибка инициализации базы данных: {e}")
+
 # --- Настройка логирования ---
 logging.basicConfig(
     level=logging.INFO,
