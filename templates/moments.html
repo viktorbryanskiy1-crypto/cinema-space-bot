@@ -55,6 +55,7 @@
             <p class="card-description">{{ moment.description }}</p>
             
             {% if moment.video_url %}
+                <!-- ИСПРАВЛЕНО: Убраны лишние пробелы в проверке и замене для Telegram -->
                 {% if moment.video_url.startswith('https://t.me/') %}
                     <!-- Telegram Widget -->
                     <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 10px; margin-bottom: 15px;">
