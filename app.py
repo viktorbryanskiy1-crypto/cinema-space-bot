@@ -31,6 +31,10 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 ALLOWED_VIDEO_EXTENSIONS = {'mp4', 'avi', 'mov', 'wmv', 'flv', 'webm'}
 ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 
+# Словарь для хранения состояния ожидания URL от пользователей
+# Ключ: telegram_id, Значение: {'content_type': str, 'title': str}
+pending_video_data = {}
+
 def allowed_file(filename, allowed_extensions):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in allowed_extensions
@@ -71,8 +75,8 @@ def start(update, context):
     )
 
 def add_video_command(update, context):
-    """Команда для добавления видео по ссылке"""
-    logger.info("Вызвана команда /add_video БЕЗ аргументов или с неподходящим форматом.")
+    """Команда для добавления видео по ссылке. Начинает пошаговый процесс."""
+    logger.info("Вызвана команда /add_video. Начинаем пошаговый процесс.")
     user = update.message.from_user
     telegram_id = str(user.id)
     
@@ -81,55 +85,16 @@ def add_video_command(update, context):
     if user_role not in ['owner', 'admin']:
         update.message.reply_text("❌ У вас нет прав для добавления видео!")
         return
-    
-    # Отправляем инструкцию
-    update.message.reply_text(
-        "🎬 Добавление видео по ссылке\n\n"
-        "Введите данные в формате:\n"
-        "/add_video [тип] [название]\n"
-        "[ссылка на видео]\n\n"
-        "Пример:\n"
-        "/add_video moment Эпичная сцена из Матрицы\n"
-        "https://youtu.be/example_video\n\n"
-        "Типы:\n"
-        "- moment (Моменты из кино)\n"
-        "- trailer (Трейлеры)\n"
-        "- news (Новости)"
-    )
 
-def add_video_handler(update, context):
-    """Обработчик добавления видео по ссылке"""
-    logger.info("Сработал обработчик add_video_handler")
-    
-    user = update.message.from_user
-    telegram_id = str(user.id)
-    
-    # Проверяем, является ли пользователь владельцем или админом
-    user_role = get_user_role(telegram_id)
-    if user_role not in ['owner', 'admin']:
-        update.message.reply_text("❌ У вас нет прав для добавления видео!")
-        return
-    
     # Получаем текст сообщения
-    text = update.message.text
-    logger.info(f"Получено сообщение для add_video_handler: {repr(text)}")
+    text = update.message.text.strip()
     
     # Проверяем формат команды
     if not text.startswith('/add_video '):
-        update.message.reply_text("❌ Неверный формат команды! Используйте: /add_video [тип] [название]")
+        update.message.reply_text("❌ Неверный формат команды!")
         return
     
-    lines = text.split('\n')
-    logger.info(f"Строки после split('\\n'): {lines}")
-    if len(lines) < 2:
-        update.message.reply_text("❌ Неверный формат команды! Введите название и ссылку на видео.")
-        return
-    
-    # Разбираем команду
-    command_line = lines[0]
-    video_url = lines[1].strip() if len(lines) > 1 else ""
-    
-    parts = command_line.split(' ', 3)
+    parts = text.split(' ', 3)
     if len(parts) < 3:
         update.message.reply_text("❌ Неверный формат команды! Используйте: /add_video [тип] [название]")
         return
@@ -141,45 +106,84 @@ def add_video_handler(update, context):
     if content_type not in ['moment', 'trailer', 'news']:
         update.message.reply_text("❌ Неверный тип контента! Доступные типы: moment, trailer, news")
         return
+
+    # Сохраняем промежуточные данные
+    pending_video_data[telegram_id] = {
+        'content_type': content_type,
+        'title': title
+    }
     
-    # Проверяем URL видео
-    if not video_url:
-        update.message.reply_text("❌ Укажите ссылку на видео!")
-        return
+    # Просим прислать ссылку
+    update.message.reply_text(
+        f"🎬 Вы хотите добавить {content_type} с названием '{title}'.\n"
+        f"Теперь пришлите ссылку на видео (например, с YouTube или Telegram)."
+    )
 
-    # --> НОВЫЙ КОД <-- (Шаг 1)
-    # Проверяем, является ли ссылка ссылкой на Telegram
-    is_telegram_link = video_url.startswith('https://t.me/')
+def handle_pending_video_url(update, context):
+    """Обработчик для получения URL видео от пользователя, который ранее вызвал /add_video"""
+    user = update.message.from_user
+    telegram_id = str(user.id)
+    
+    # Проверяем, ждем ли мы от этого пользователя URL
+    if telegram_id in pending_video_data:
+        video_url = update.message.text.strip()
+        
+        # Получаем сохраненные данные
+        data = pending_video_data.pop(telegram_id) # Удаляем из ожидания
+        content_type = data['content_type']
+        title = data['title']
+        
+        # Проверяем URL видео
+        if not video_url:
+            update.message.reply_text("❌ Укажите ссылку на видео!")
+            # Возвращаем данные обратно, чтобы пользователь мог попробовать снова
+            pending_video_data[telegram_id] = data
+            return
 
-    if is_telegram_link:
-        update.message.reply_text(f"ℹ️ Обнаружена ссылка на Telegram: {video_url}")
-        logger.info(f"ℹ️ Обнаружена ссылка на Telegram: {video_url}")
-        # TODO: Здесь будет логика извлечения данных из Telegram
+        # --> НОВЫЙ КОД <-- (Шаг 1: Проверка Telegram-ссылки)
+        # Проверяем, является ли ссылка ссылкой на Telegram
+        is_telegram_link = video_url.startswith('https://t.me/')
+
+        if is_telegram_link:
+            update.message.reply_text(f"ℹ️ Обнаружена ссылка на Telegram: {video_url}")
+            logger.info(f"ℹ️ Обнаружена ссылка на Telegram: {video_url}")
+            # TODO: Здесь будет логика извлечения данных из Telegram
+        else:
+            update.message.reply_text(f"ℹ️ Обычная ссылка: {video_url}")
+            logger.info(f"ℹ️ Обычная ссылка: {video_url}")
+        # --> КОНЕЦ НОВОГО КОДА <--
+
+        try:
+            # Добавляем видео в базу данных
+            description = "Добавлено через Telegram" # Можно сделать это настраиваемым позже
+            if content_type == 'moment':
+                add_moment(title, description, video_url)
+                update.message.reply_text(f"✅ Момент '{title}' успешно добавлен!")
+            elif content_type == 'trailer':
+                add_trailer(title, description, video_url)
+                update.message.reply_text(f"✅ Трейлер '{title}' успешно добавлен!")
+            elif content_type == 'news':
+                # Для новостей video_url будет использоваться как image_url, если это ссылка на изображение
+                # Или можно добавить отдельную логику для новостей
+                add_news(title, description, video_url) 
+                update.message.reply_text(f"✅ Новость '{title}' успешно добавлена!")
+                
+        except Exception as e:
+            logger.error(f"❌ Ошибка при добавлении видео: {str(e)}")
+            update.message.reply_text(f"❌ Ошибка при добавлении видео: {str(e)}")
+            # Возвращаем данные обратно в случае ошибки, чтобы можно было повторить
+            pending_video_data[telegram_id] = data
     else:
-        update.message.reply_text(f"ℹ️ Обычная ссылка: {video_url}")
-        logger.info(f"ℹ️ Обычная ссылка: {video_url}")
-    # --> КОНЕЦ НОВОГО КОДА <--
-
-    try:
-        # Добавляем видео в базу данных
-        if content_type == 'moment':
-            add_moment(title, "Добавлено через Telegram", video_url)
-            update.message.reply_text(f"✅ Момент '{title}' успешно добавлен!")
-        elif content_type == 'trailer':
-            add_trailer(title, "Добавлено через Telegram", video_url)
-            update.message.reply_text(f"✅ Трейлер '{title}' успешно добавлен!")
-        elif content_type == 'news':
-            add_news(title, "Добавлено через Telegram", video_url)
-            update.message.reply_text(f"✅ Новость '{title}' успешно добавлена!")
-            
-    except Exception as e:
-        logger.error(f"❌ Ошибка при добавлении видео: {str(e)}")
-        update.message.reply_text(f"❌ Ошибка при добавлении видео: {str(e)}")
+        # Если пользователь не ожидался, просто игнорируем сообщение
+        # Можно добавить стандартный обработчик для других сообщений здесь, если нужно
+        pass
 
 # Регистрируем обработчики команд
 dp.add_handler(CommandHandler("start", start))
 dp.add_handler(CommandHandler("add_video", add_video_command))
-dp.add_handler(MessageHandler(Filters.text & Filters.regex(r'^/add_video '), add_video_handler))
+# Обработчик для получения URL после команды /add_video
+# Должен идти после CommandHandler, чтобы не перехватывать команды
+dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_pending_video_url))
 
 # Обработчик webhook
 @app.route(f'/{TOKEN}', methods=['POST'])
