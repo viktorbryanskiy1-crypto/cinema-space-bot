@@ -10,7 +10,6 @@
     <div id="add-moment-modal" class="modal" style="display: none;">
         <div class="modal-content">
             <h3>🎬 Добавить момент из кино</h3>
-            <!-- Важно: enctype="multipart/form-data" для загрузки файлов -->
             <form id="add-moment-form" enctype="multipart/form-data">
                 <input type="text" name="title" placeholder="Название момента" required
                     style="width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid var(--accent); border-radius: 10px; background: rgba(255,255,255,0.1); color: white;"><br>
@@ -125,7 +124,6 @@
         <div style="text-align: center; padding: 50px; color: var(--accent);">
             <h2>🎬 Моменты из кино</h2>
             <p>Пока нет добавленных моментов из фильмов</p>
-            <!-- Кнопка без onclick, обработчик добавляется в JS -->
             <button id="add-moment-btn-alt" class="tab-btn" style="margin-top: 20px;">➕ Добавить первый момент</button>
         </div>
         {% endif %}
