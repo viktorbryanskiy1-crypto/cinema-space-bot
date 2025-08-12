@@ -2,15 +2,12 @@
 <div class="content-section">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
         <h2 style="background: linear-gradient(45deg, #00f3ff, #ff00c8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size: 2em;">🎬 Моменты из кино</h2>
-        <!-- Кнопка без onclick, обработчик добавляется в JS -->
         <button id="add-moment-btn" class="tab-btn" style="padding: 12px 25px;">➕ Добавить момент</button>
     </div>
 
-    <!-- Модальное окно для добавления момента -->
     <div id="add-moment-modal" class="modal" style="display: none;">
         <div class="modal-content">
             <h3>🎬 Добавить момент из кино</h3>
-            <!-- Важно: enctype="multipart/form-data" для загрузки файлов -->
             <form id="add-moment-form" enctype="multipart/form-data">
                 <input type="text" name="title" placeholder="Название момента" required
                     style="width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid var(--accent); border-radius: 10px; background: rgba(255,255,255,0.1); color: white;"><br>
@@ -55,34 +52,46 @@
         <div class="card">
             <h3 class="card-title">{{ moment.title }}</h3>
             <p class="card-description">{{ moment.description }}</p>
-            
+
             {% if moment.video_url %}
-                <!-- Проверяем, является ли ссылка Telegram-ссылкой -->
                 {% if moment.video_url.startswith('https://t.me/') %}
-                    <!-- Отображаем Telegram Widget -->
-                    <div style="position: relative; padding-bottom: 56.25%; /* 16:9 Aspect Ratio */ height: 0; overflow: hidden; border-radius: 10px; margin-bottom: 15px;">
-                        <script async src="https://telegram.org/js/telegram-widget.js?22" 
-                                data-telegram-post="{{ moment.video_url.replace('https://t.me/', '') }}" 
-                                data-width="100%" 
-                                data-height="100%"
+                    <!-- Telegram Widget -->
+                    <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 10px; margin-bottom: 15px;">
+                        <script async src="https://telegram.org/js/telegram-widget.js?22"
+                                data-telegram-post="{{ moment.video_url.replace('https://t.me/', '') }}"
+                                data-width="100%" data-height="100%"
                                 style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none;">
                         </script>
                     </div>
+
                 {% elif moment.video_url.startswith('/uploads/') %}
-                    <!-- Загруженное видео -->
-                    <video class="card-media" controls preload="metadata" controlsList="nodownload">
+                    <!-- Локальное видео -->
+                    <video class="card-media" controls preload="metadata" controlsList="nodownload" style="border-radius: 10px; max-width: 100%;">
                         <source src="{{ moment.video_url }}" type="video/mp4">
                         Ваш браузер не поддерживает видео.
                     </video>
+
                 {% elif 'youtube.com' in moment.video_url or 'youtu.be' in moment.video_url %}
-                    <iframe class="card-media" src="{{ moment.video_url.replace('watch?v=', 'embed/').replace('youtu.be/', 'youtube.com/embed/') }}"
-                        frameborder="0" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>
+                    <!-- YouTube iframe -->
+                    <iframe class="card-media" style="width: 100%; height: 315px; border-radius: 10px;" 
+                            src="{{ moment.video_url
+                                |replace('watch?v=', 'embed/')
+                                |replace('youtu.be/', 'youtube.com/embed/') }}"
+                            frameborder="0" allowfullscreen
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture">
+                    </iframe>
+
                 {% elif 'vimeo.com' in moment.video_url %}
-                    <iframe class="card-media" src="{{ moment.video_url.replace('vimeo.com/', 'player.vimeo.com/video/') }}"
-                        frameborder="0" allowfullscreen allow="autoplay; fullscreen; picture-in-picture"></iframe>
+                    <!-- Vimeo iframe -->
+                    <iframe class="card-media" style="width: 100%; height: 315px; border-radius: 10px;"
+                            src="{{ moment.video_url.replace('vimeo.com/', 'player.vimeo.com/video/') }}"
+                            frameborder="0" allowfullscreen
+                            allow="autoplay; fullscreen; picture-in-picture">
+                    </iframe>
+
                 {% else %}
-                    <!-- Прямая ссылка на видео файл -->
-                    <video class="card-media" controls preload="metadata" controlsList="nodownload">
+                    <!-- Прямая ссылка на видео -->
+                    <video class="card-media" controls preload="metadata" controlsList="nodownload" style="border-radius: 10px; max-width: 100%;">
                         <source src="{{ moment.video_url }}" type="video/mp4">
                         Ваш браузер не поддерживает видео.
                     </video>
@@ -123,7 +132,6 @@
         <div style="text-align: center; padding: 50px; color: var(--accent);">
             <h2>🎬 Моменты из кино</h2>
             <p>Пока нет добавленных моментов из фильмов</p>
-            <!-- Кнопка без onclick, обработчик добавляется в JS -->
             <button id="add-moment-btn-alt" class="tab-btn" style="margin-top: 20px;">➕ Добавить первый момент</button>
         </div>
         {% endif %}
