@@ -1,12 +1,3 @@
-// Автоматически разворачиваем на весь экран в Telegram
-if (typeof window.Telegram !== 'undefined' && 
-    typeof window.Telegram.WebApp !== 'undefined' && 
-    typeof window.Telegram.WebApp.expand === 'function') {
-    window.Telegram.WebApp.expand();
-    document.documentElement.style.height = '100vh';
-    document.body.style.height = '100vh';
-}
-
 // Глобальные переменные
 let currentTab = 'moments';
 let userId = 'user_' + Math.random().toString(36).substr(2, 9);
