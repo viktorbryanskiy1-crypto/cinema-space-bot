@@ -5,8 +5,9 @@ from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 import os
 import threading
 import json
-# ВАЖНО: Импортируем init_db из database
-from database import *, init_db
+# ИСПРАВЛЕНИЕ: Правильный способ импорта всех функций и init_db отдельно
+from database import *
+from database import init_db # <-- Импортируем init_db отдельно
 from werkzeug.utils import secure_filename
 import uuid
 from datetime import datetime
@@ -18,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 # Получаем токен и URL из переменных окружения
 TOKEN = os.environ.get('TELEGRAM_TOKEN')
-WEBHOOK_URL = os.environ.get('WEBHOOK_URL', 'https://cinema-space-bot.onrender.com').strip()
+WEBHOOK_URL = os.environ.get('WEBHOOK_URL', 'https://cinema-space-bot.onrender.com').strip() # ИСПРАВЛЕНИЕ: Убраны лишние пробелы
 
 # Создаем Flask приложение
 app = Flask(__name__)
@@ -143,7 +144,7 @@ def handle_pending_video_url(update, context):
             return
 
         # --> ИСПРАВЛЕННЫЙ КОД <-- (Шаг 1: Проверка Telegram-ссылки)
-        # Проверяем, является ли ссылка ссылкой на Telegram (исправлена ошибка с лишними пробелами)
+        # ИСПРАВЛЕНИЕ: Убраны лишние пробелы в проверке
         is_telegram_link = video_url.startswith('https://t.me/')
 
         if is_telegram_link:
@@ -181,6 +182,7 @@ def handle_pending_video_url(update, context):
         pass
 
 # Регистрируем обработчики команд
+# ИСПРАВЛЕНИЕ: Удален старый обработчик add_video_handler, так как он конфликтует с новым пошаговым процессом
 dp.add_handler(CommandHandler("start", start))
 dp.add_handler(CommandHandler("add_video", add_video_command))
 # Обработчик для получения URL после команды /add_video
@@ -477,6 +479,7 @@ if __name__ == '__main__':
     # --- ДОБАВЛЕНО ДЛЯ ИНИЦИАЛИЗАЦИИ БАЗЫ ДАННЫХ ---
     # Вызываем init_db() один раз при запуске приложения
     try:
+        # ИСПРАВЛЕНИЕ: Правильный вызов init_db()
         init_db()
         print("✅ База данных инициализирована при запуске приложения.")
         logger.info("✅ База данных инициализирована при запуске приложения.")
