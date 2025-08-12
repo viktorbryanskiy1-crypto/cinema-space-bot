@@ -56,7 +56,7 @@ def start(update, context):
     
     reply_markup = InlineKeyboardMarkup(keyboard)
     update.message.reply_text(
-        "🚀 Добро пожаловать в КиноВселенная!\n"
+        "🚀 Добро пожаловать в КиноВселенную!\n"
         "✨ Исследуй космос кино\n"
         "🎬 Лучшие моменты из фильмов\n"
         "🎥 Свежие трейлеры\n"
@@ -136,7 +136,18 @@ def add_video_handler(update, context):
     if not video_url:
         update.message.reply_text("❌ Укажите ссылку на видео!")
         return
-    
+
+    # --> НОВЫЙ КОД <-- (Шаг 1)
+    # Проверяем, является ли ссылка ссылкой на Telegram
+    is_telegram_link = video_url.startswith('https://t.me/')
+
+    if is_telegram_link:
+        update.message.reply_text(f"ℹ️ Обнаружена ссылка на Telegram: {video_url}")
+        # TODO: Здесь будет логика извлечения данных из Telegram
+    else:
+        update.message.reply_text(f"ℹ️ Обычная ссылка: {video_url}")
+    # --> КОНЕЦ НОВОГО КОДА <--
+
     try:
         # Добавляем видео в базу данных
         if content_type == 'moment':
