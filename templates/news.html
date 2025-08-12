@@ -3,14 +3,15 @@
         <h2 style="background: linear-gradient(45deg, #00f3ff, #ff00c8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size: 2em;">📰 Новости</h2>
         <button onclick="showAddNewsModal()" class="tab-btn" style="padding: 12px 25px;">➕ Добавить новость</button>
     </div>
-    
+
     <!-- Модальное окно для добавления новости -->
     <div id="add-news-modal" class="modal" style="display: none;">
         <div class="modal-content">
             <h3>📰 Добавить новость</h3>
             <form id="add-news-form" enctype="multipart/form-data">
-                <input type="text" name="title" placeholder="Заголовок новости" required style="width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid var(--accent); border-radius: 10px; background: rgba(255,255,255,0.1); color: white;"><br>
-                
+                <input type="text" name="title" placeholder="Заголовок новости" required
+                    style="width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid var(--accent); border-radius: 10px; background: rgba(255,255,255,0.1); color: white;"><br>
+
                 <div style="margin-bottom: 15px;">
                     <label style="display: block; margin-bottom: 10px;">Выберите способ добавления изображения:</label>
                     <div>
@@ -22,40 +23,36 @@
                         <label for="news_image_url">Ссылка на изображение</label>
                     </div>
                 </div>
-                
+
                 <div id="news-file-section">
                     <input type="file" name="image_file" accept="image/*" style="width: 100%; margin-bottom: 15px; color: white;">
                     <small style="color: var(--text-secondary);">Макс. размер: 16MB. Форматы: PNG, JPG, JPEG, GIF, WEBP</small>
                 </div>
-                
+
                 <div id="news-url-section" style="display: none;">
-                    <input type="text" name="image_url" placeholder="URL изображения" style="width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid var(--accent); border-radius: 10px; background: rgba(255,255,255,0.1); color: white;">
+                    <input type="text" name="image_url" placeholder="URL изображения"
+                        style="width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid var(--accent); border-radius: 10px; background: rgba(255,255,255,0.1); color: white;">
                 </div>
-                
-                <textarea name="text" placeholder="Текст новости" required style="width: 100%; padding: 12px; margin-bottom: 15px; height: 150px; border: 1px solid var(--accent); border-radius: 10px; background: rgba(255,255,255,0.1); color: white;"></textarea><br>
-                
+
+                <textarea name="text" placeholder="Текст новости" required
+                    style="width: 100%; padding: 12px; margin-bottom: 15px; height: 150px; border: 1px solid var(--accent); border-radius: 10px; background: rgba(255,255,255,0.1); color: white;"></textarea><br>
+
                 <button type="submit" class="submit-btn" style="width: 100%;">Добавить новость</button>
                 <button type="button" onclick="closeModal('add-news-modal')" class="tab-btn" style="width: 100%; margin-top: 10px;">Отмена</button>
             </form>
         </div>
     </div>
-    
+
     <div class="card-grid">
         {% if news %}
             {% for news_item in news %}
             <div class="card">
                 <h3 class="card-title">{{ news_item.title }}</h3>
                 {% if news_item.image_url %}
-                    {% if news_item.image_url.startswith('/uploads/') %}
-                        <!-- Загруженное изображение -->
-                        <img class="card-media" src="{{ news_item.image_url }}" alt="{{ news_item.title }}" onerror="this.style.display='none'">
-                    {% else %}
-                        <!-- Изображение по URL -->
-                        <img class="card-media" src="{{ news_item.image_url }}" alt="{{ news_item.title }}" onerror="this.style.display='none'">
-                    {% endif %}
+                    <img class="card-media" src="{{ news_item.image_url }}" alt="{{ news_item.title }}" onerror="this.style.display='none'" style="border-radius: 10px; max-width: 100%;">
                 {% endif %}
                 <div class="card-text">{{ news_item.text }}</div>
-                
+
                 <div class="reactions">
                     <button class="reaction-btn" data-id="{{ news_item.id }}" data-type="news" data-reaction="like">
                         👍 <span class="reaction-count">{{ news_item.reactions.like }}</span>
@@ -70,7 +67,7 @@
                         🔥 <span class="reaction-count">{{ news_item.reactions.fire }}</span>
                     </button>
                 </div>
-                
+
                 <div class="comments-section">
                     <button class="load-comments tab-btn" data-id="{{ news_item.id }}" data-type="news" style="margin-bottom: 15px; padding: 8px 15px;">
                         💬 Показать комментарии ({{ news_item.comments_count }})
@@ -110,15 +107,15 @@ document.addEventListener('change', function(e) {
 // Обработчик формы добавления новости
 document.getElementById('add-news-form').addEventListener('submit', async function(e) {
     e.preventDefault();
-    
+
     const formData = new FormData(this);
-    
+
     try {
         const response = await fetch('/api/add_news', {
             method: 'POST',
             body: formData
         });
-        
+
         const result = await response.json();
         if (result.success) {
             closeModal('add-news-modal');
@@ -136,13 +133,4 @@ function showAddNewsModal() {
     document.getElementById('add-news-modal').style.display = 'flex';
 }
 
-// Закрытие модального окна при клике вне его
-window.addEventListener('click', function(e) {
-    const modals = document.querySelectorAll('.modal');
-    modals.forEach(modal => {
-        if (e.target === modal) {
-            modal.style.display = 'none';
-        }
-    });
-});
-</script>
+//
