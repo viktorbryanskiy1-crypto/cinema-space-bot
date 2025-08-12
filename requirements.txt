@@ -1,6 +1,6 @@
 python-telegram-bot==13.15
-Flask==2.3.3
-Flask-CORS==4.0.0
-Flask-Login==0.6.3
+Flask==2.0.3
+gunicorn==20.1.0
 bcrypt==4.0.1
-gunicorn==21.2.0
+psycopg2-binary==2.9.9
+Werkzeug==2.0.3
