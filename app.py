@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, jsonify, redirect, url_for, session, send_from_directory
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, Update
-from telegram.ext import Updater, CommandHandler
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 import os
 import threading
 import json
@@ -65,8 +65,97 @@ def start(update, context):
         reply_markup=reply_markup
     )
 
+def add_video_command(update, context):
+    """Команда для добавления видео по ссылке"""
+    user = update.message.from_user
+    telegram_id = str(user.id)
+    
+    # Проверяем, является ли пользователь владельцем или админом
+    user_role = get_user_role(telegram_id)
+    if user_role not in ['owner', 'admin']:
+        update.message.reply_text("❌ У вас нет прав для добавления видео!")
+        return
+    
+    # Отправляем инструкцию
+    update.message.reply_text(
+        "🎬 Добавление видео по ссылке\n\n"
+        "Введите данные в формате:\n"
+        "/add_video [тип] [название]\n"
+        "[ссылка на видео]\n\n"
+        "Пример:\n"
+        "/add_video moment Эпичная сцена из Матрицы\n"
+        "https://youtu.be/example_video\n\n"
+        "Типы:\n"
+        "- moment (Моменты из кино)\n"
+        "- trailer (Трейлеры)\n"
+        "- news (Новости)"
+    )
+
+def add_video_handler(update, context):
+    """Обработчик добавления видео по ссылке"""
+    user = update.message.from_user
+    telegram_id = str(user.id)
+    
+    # Проверяем, является ли пользователь владельцем или админом
+    user_role = get_user_role(telegram_id)
+    if user_role not in ['owner', 'admin']:
+        update.message.reply_text("❌ У вас нет прав для добавления видео!")
+        return
+    
+    # Получаем текст сообщения
+    text = update.message.text
+    
+    # Проверяем формат команды
+    if not text.startswith('/add_video '):
+        update.message.reply_text("❌ Неверный формат команды! Используйте: /add_video [тип] [название]")
+        return
+    
+    lines = text.split('\n')
+    if len(lines) < 2:
+        update.message.reply_text("❌ Неверный формат команды! Введите название и ссылку на видео.")
+        return
+    
+    # Разбираем команду
+    command_line = lines[0]
+    video_url = lines[1].strip()
+    
+    parts = command_line.split(' ', 3)
+    if len(parts) < 3:
+        update.message.reply_text("❌ Неверный формат команды! Используйте: /add_video [тип] [название]")
+        return
+    
+    content_type = parts[1]
+    title = ' '.join(parts[2:])
+    
+    # Проверяем тип контента
+    if content_type not in ['moment', 'trailer', 'news']:
+        update.message.reply_text("❌ Неверный тип контента! Доступные типы: moment, trailer, news")
+        return
+    
+    # Проверяем URL видео
+    if not video_url:
+        update.message.reply_text("❌ Укажите ссылку на видео!")
+        return
+    
+    try:
+        # Добавляем видео в базу данных
+        if content_type == 'moment':
+            add_moment(title, "Добавлено через Telegram", video_url)
+            update.message.reply_text(f"✅ Момент '{title}' успешно добавлен!")
+        elif content_type == 'trailer':
+            add_trailer(title, "Добавлено через Telegram", video_url)
+            update.message.reply_text(f"✅ Трейлер '{title}' успешно добавлен!")
+        elif content_type == 'news':
+            add_news(title, "Добавлено через Telegram", video_url)
+            update.message.reply_text(f"✅ Новость '{title}' успешно добавлена!")
+            
+    except Exception as e:
+        update.message.reply_text(f"❌ Ошибка при добавлении видео: {str(e)}")
+
 # Регистрируем обработчики команд
 dp.add_handler(CommandHandler("start", start))
+dp.add_handler(CommandHandler("add_video", add_video_command))
+dp.add_handler(MessageHandler(Filters.text & Filters.regex(r'^/add_video '), add_video_handler))
 
 # Обработчик webhook
 @app.route(f'/{TOKEN}', methods=['POST'])
