@@ -108,23 +108,4 @@
 
             <div class="comments-section">
                 <button class="load-comments tab-btn" data-id="{{ trailer.id }}" data-type="trailer"
-                    style="margin-bottom: 15px; padding: 8px 15px;">
-                    💬 Показать комментарии ({{ trailer.comments_count }})
-                </button>
-                <div class="comments-list"></div>
-                <form class="comment-form" data-id="{{ trailer.id }}" data-type="trailer">
-                    <textarea class="comment-input" placeholder="Написать комментарий..."></textarea>
-                    <button type="submit" class="submit-btn">Отправить</button>
-                </form>
-            </div>
-        </div>
-        {% endfor %}
-        {% else %}
-        <div style="text-align: center; padding: 50px; color: var(--accent);">
-            <h2>🎬 Трейлеры</h2>
-            <p>Пока нет добавленных трейлеров</p>
-            <button id="add-trailer-btn-alt" class="tab-btn" style="margin-top: 20px;">➕ Добавить первый трейлер</button>
-        </div>
-        {% endif %}
-    </div>
-</div>
+                    style="margin-bottom: 15px
