@@ -10,10 +10,9 @@ from flask import (
 )
 from werkzeug.utils import secure_filename
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, Update
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackQueryHandler
 
-# Импорт из твоего модуля database
-# ВАЖНО: Убедитесь, что в database.py нет вызова init_db() в конце файла
+# Импорт из модуля database
 from database import (
     get_or_create_user, get_user_role,
     add_moment, add_trailer, add_news,
@@ -23,7 +22,7 @@ from database import (
     authenticate_admin, get_stats,
     delete_moment, delete_trailer, delete_news,
     get_access_settings, update_access_settings,
-    init_db # <-- Импортируем init_db
+    init_db
 )
 
 # --- Настройка логирования ---
@@ -35,18 +34,16 @@ logger = logging.getLogger(__name__)
 
 # --- Конфигурация ---
 TOKEN = os.environ.get('TELEGRAM_TOKEN')
-WEBHOOK_URL = os.environ.get('WEBHOOK_URL', 'https://cinema-space-bot.onrender.com').strip() # Убраны лишние пробелы
+WEBHOOK_URL = os.environ.get('WEBHOOK_URL', 'https://cinema-space-bot.onrender.com').strip()
 if not TOKEN:
     logger.error("TELEGRAM_TOKEN не установлен в переменных окружения!")
     exit(1)
 
 # --- Flask приложение ---
 app = Flask(__name__)
-# Используем секретный ключ из переменных окружения для безопасности
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'super-secret-key-change-me-please')
 
-# Загрузка файлов
-app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
 app.config['UPLOAD_FOLDER'] = 'uploads'
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
@@ -60,41 +57,118 @@ def allowed_file(filename, allowed_extensions):
 updater = Updater(TOKEN, use_context=True)
 dp = updater.dispatcher
 
-# --- Временное хранилище для пошагового добавления видео ---
 pending_video_data = {}
 
-# --- Хэндлеры Telegram ---
-
+# --- Функция /start с двухсостояниевой кнопкой ---
 def start(update, context):
     try:
         user = update.message.from_user
         telegram_id = str(user.id)
+
         get_or_create_user(
             telegram_id=telegram_id,
             username=user.username,
             first_name=user.first_name,
             last_name=user.last_name
         )
-        keyboard = [[
-            InlineKeyboardButton(
-                "🌌 КиноВселенная",
-                web_app=WebAppInfo(url=f"{WEBHOOK_URL}?mode=fullscreen")  # Добавляем параметр
+
+        # Работа с PostgreSQL для состояния кнопки
+        import psycopg2
+        cursor = None
+        started = True
+        try:
+            DB_HOST = os.environ.get('DB_HOST', 'localhost')
+            DB_NAME = os.environ.get('DB_NAME', 'cinema')
+            DB_USER = os.environ.get('DB_USER', 'postgres')
+            DB_PASS = os.environ.get('DB_PASS', 'postgres')
+
+            conn = psycopg2.connect(
+                host=DB_HOST, database=DB_NAME,
+                user=DB_USER, password=DB_PASS
             )
-        ]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        update.message.reply_text(
-            "🚀 Добро пожаловать в КиноВселенную!\n"
-            "✨ Исследуй космос кино\n"
-            "🎬 Лучшие моменты из фильмов\n"
-            "🎥 Свежие трейлеры\n"
-            "📰 Горячие новости\n"
-            "Нажми кнопку для входа в космическое приложение",
-            reply_markup=reply_markup
-        )
+            cursor = conn.cursor()
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS telegram_users (
+                    telegram_id BIGINT PRIMARY KEY,
+                    started BOOLEAN DEFAULT FALSE
+                );
+            """)
+            conn.commit()
+
+            cursor.execute("SELECT started FROM telegram_users WHERE telegram_id=%s;", (telegram_id,))
+            result = cursor.fetchone()
+            if result is None:
+                cursor.execute("INSERT INTO telegram_users (telegram_id, started) VALUES (%s, %s);", (telegram_id, False))
+                conn.commit()
+                started = False
+            else:
+                started = result[0]
+        except Exception as e:
+            logger.error(f"Ошибка работы с БД: {e}")
+            started = True
+        finally:
+            if cursor:
+                cursor.close()
+            if 'conn' in locals():
+                conn.close()
+
+        if not started:
+            keyboard = [[InlineKeyboardButton("Начать", callback_data="start_app")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            update.message.reply_text(
+                "🚀 Добро пожаловать в КиноВселенную!\n"
+                "Нажмите кнопку ниже, чтобы начать:",
+                reply_markup=reply_markup
+            )
+        else:
+            keyboard = [[InlineKeyboardButton("🌌 КиноВселенная", web_app=WebAppInfo(url=f"{WEBHOOK_URL}?mode=fullscreen"))]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            update.message.reply_text(
+                "🚀 Добро пожаловать обратно! Откройте приложение:",
+                reply_markup=reply_markup
+            )
         logger.info(f"/start от пользователя {telegram_id}")
     except Exception as e:
         logger.error(f"Ошибка в /start: {e}")
 
+# --- Callback кнопки "Начать" ---
+def button_callback(update, context):
+    query = update.callback_query
+    telegram_id = query.from_user.id
+
+    if query.data == "start_app":
+        keyboard = [[InlineKeyboardButton("🌌 КиноВселенная", web_app=WebAppInfo(url=f"{WEBHOOK_URL}?mode=fullscreen"))]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        query.edit_message_text(
+            text="Приложение готово! Нажмите кнопку ниже:",
+            reply_markup=reply_markup
+        )
+
+        # Обновляем состояние пользователя в БД
+        import psycopg2
+        cursor = None
+        try:
+            DB_HOST = os.environ.get('DB_HOST', 'localhost')
+            DB_NAME = os.environ.get('DB_NAME', 'cinema')
+            DB_USER = os.environ.get('DB_USER', 'postgres')
+            DB_PASS = os.environ.get('DB_PASS', 'postgres')
+
+            conn = psycopg2.connect(
+                host=DB_HOST, database=DB_NAME,
+                user=DB_USER, password=DB_PASS
+            )
+            cursor = conn.cursor()
+            cursor.execute("UPDATE telegram_users SET started=TRUE WHERE telegram_id=%s;", (telegram_id,))
+            conn.commit()
+        except Exception as e:
+            logger.error(f"Ошибка обновления состояния пользователя: {e}")
+        finally:
+            if cursor:
+                cursor.close()
+            if 'conn' in locals():
+                conn.close()
+
+# --- Хэндлеры Telegram ---
 def add_video_command(update, context):
     user = update.message.from_user
     telegram_id = str(user.id)
@@ -115,7 +189,6 @@ def add_video_command(update, context):
 
     content_type = parts[1].lower()
     title = parts[2]
-
     if content_type not in ['moment', 'trailer', 'news']:
         update.message.reply_text("❌ Тип контента должен быть: moment, trailer или news")
         return
@@ -135,7 +208,7 @@ def handle_pending_video_url(update, context):
     user = update.message.from_user
     telegram_id = str(user.id)
     if telegram_id not in pending_video_data:
-        return  # Нет ожидающего состояния
+        return
 
     video_url = update.message.text.strip()
     if not video_url:
@@ -146,7 +219,6 @@ def handle_pending_video_url(update, context):
     content_type = data['content_type']
     title = data['title']
 
-    # ИСПРАВЛЕНО: Убраны лишние пробелы в проверке
     is_telegram_link = video_url.startswith('https://t.me/')
     if is_telegram_link:
         update.message.reply_text(f"ℹ️ Обнаружена Telegram-ссылка: {video_url}")
@@ -168,15 +240,15 @@ def handle_pending_video_url(update, context):
     except Exception as e:
         logger.error(f"Ошибка добавления видео: {e}")
         update.message.reply_text(f"❌ Ошибка при добавлении: {e}")
-        # Вернуть данные в ожидание, чтобы попытаться снова
         pending_video_data[telegram_id] = data
 
-# --- Регистрируем обработчики ---
+# --- Регистрация хэндлеров ---
 dp.add_handler(CommandHandler('start', start))
 dp.add_handler(CommandHandler('add_video', add_video_command))
 dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_pending_video_url))
+dp.add_handler(CallbackQueryHandler(button_callback))
 
-# --- Webhook для Telegram ---
+# --- Webhook ---
 @app.route(f'/{TOKEN}', methods=['POST'])
 def webhook():
     update = Update.de_json(request.get_json(force=True), updater.bot)
@@ -184,7 +256,6 @@ def webhook():
     return 'ok'
 
 # --- Flask маршруты ---
-
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -248,12 +319,10 @@ def search():
     query = request.args.get('q', '')
     results = []
     if query:
-        # TODO: реализовать поиск по БД
         pass
     return render_template('search.html', query=query, results=results)
 
-# --- API для добавления контента ---
-
+# --- API для загрузки файлов ---
 def save_uploaded_file(file_storage, allowed_exts):
     if file_storage and allowed_file(file_storage.filename, allowed_exts):
         filename = secure_filename(file_storage.filename)
@@ -267,17 +336,14 @@ def save_uploaded_file(file_storage, allowed_exts):
 def api_add_moment():
     try:
         video_url = ''
-        # Проверяем, есть ли видео файл в запросе
         if 'video_file' in request.files and request.files['video_file'].filename != '':
             video_url = save_uploaded_file(request.files['video_file'], ALLOWED_VIDEO_EXTENSIONS) or ''
         else:
-            # Если файла нет, пытаемся получить URL из JSON или form data
             if request.is_json:
                 video_url = request.json.get('video_url', '')
             else:
                 video_url = request.form.get('video_url', '')
 
-        # Получаем данные из формы или JSON
         data = request.form if request.form else (request.json if request.is_json else {})
         add_moment(data.get('title', ''), data.get('description', ''), video_url)
         return jsonify(success=True)
@@ -311,22 +377,19 @@ def api_add_news():
         text = ''
         image_url = ''
 
-        # Получаем текстовые данные
         if request.is_json:
             title = request.json.get('title', '')
             text = request.json.get('text', '')
-            image_url = request.json.get('image_url', '') # Получаем image_url из JSON, если есть
+            image_url = request.json.get('image_url', '')
         else:
             title = request.form.get('title', '')
             text = request.form.get('text', '')
 
-        # Проверяем, есть ли файл изображения
         if 'image_file' in request.files and request.files['image_file'].filename != '':
             image_url = save_uploaded_file(request.files['image_file'], ALLOWED_IMAGE_EXTENSIONS) or ''
 
-        # Если нет файла и нет URL в form data, проверяем отдельно (для form data)
         if not image_url and 'image_url' in request.form:
-             image_url = request.form['image_url']
+            image_url = request.form['image_url']
 
         add_news(title, text, image_url)
         return jsonify(success=True)
@@ -338,8 +401,7 @@ def api_add_news():
 def uploaded_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
-# --- API для реакций и комментариев ---
-
+# --- API реакции и комментариев ---
 @app.route('/api/reaction', methods=['POST'])
 def api_add_reaction():
     try:
@@ -382,7 +444,6 @@ def api_add_comment():
         return jsonify(success=False, error=str(e))
 
 # --- Админка ---
-
 @app.route('/admin/login', methods=['GET', 'POST'])
 def admin_login():
     if request.method == 'POST':
@@ -437,55 +498,4 @@ def admin_delete(content_type, content_id):
         delete_trailer(content_id)
     elif content_type == 'news':
         delete_news(content_id)
-    return redirect(url_for('admin_content'))
-
-@app.route('/admin/access')
-@admin_required
-def admin_access_settings():
-    moment_roles = get_access_settings('moment')
-    trailer_roles = get_access_settings('trailer')
-    news_roles = get_access_settings('news')
-
-    logger.debug(f"Access settings - moments: {moment_roles}, trailers: {trailer_roles}, news: {news_roles}")
-
-    return render_template(
-        'admin/access/settings.html',
-        moment_roles=moment_roles,
-        trailer_roles=trailer_roles,
-        news_roles=news_roles
-    )
-
-@app.route('/admin/access/update/<content_type>', methods=['POST'])
-@admin_required
-def admin_update_access(content_type):
-    roles = request.form.getlist('roles')
-    update_access_settings(content_type, roles)
-    logger.info(f"Updated access roles for {content_type}: {roles}")
-    return redirect(url_for('admin_access_settings'))
-
-# --- Запуск бота и приложения ---
-
-def start_bot():
-    logger.info("Запуск Telegram бота...")
-    updater.start_polling()
-    updater.idle()
-
-if __name__ == '__main__':
-    # --- ДОБАВЛЕНО ДЛЯ ИНИЦИАЛИЗАЦИИ БАЗЫ ДАННЫХ ---
-    # Вызываем init_db() один раз при запуске приложения
-    try:
-        init_db()
-        logger.info("✅ База данных успешно инициализирована при запуске приложения.")
-        print("✅ База данных успешно инициализирована при запуске приложения.")
-    except Exception as e:
-        logger.error(f"❌ Ошибка инициализации базы данных: {e}")
-        print(f"❌ Ошибка инициализации базы данных: {e}")
-        # В production, возможно, лучше завершить работу приложения, если БД не инициализировалась
-        # exit(1)
-    # --- КОНЕЦ ДОБАВЛЕНИЯ ---
-    
-    bot_thread = threading.Thread(target=start_bot, daemon=True)
-    bot_thread.start()
-
-    port = int(os.environ.get('PORT', 10000))
-    app.run(host='0.0.0.0', port=port)
+    return
