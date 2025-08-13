@@ -11,42 +11,23 @@ let formToggleHandlerAdded = false;
 document.addEventListener('DOMContentLoaded', function() {
     console.log("DOMContentLoaded сработал");
 
-   // --- Telegram WebApp ---
-if (window.Telegram && window.Telegram.WebApp) {
-    const webApp = window.Telegram.WebApp;
-    try {
-        webApp.ready();
-        webApp.MainButton.hide(); // скрыть нижнюю кнопку Telegram
-        webApp.enableClosingConfirmation();
-        webApp.setHeaderColor('#0f0c29');
-        webApp.setBackgroundColor('#0f0c29');
+    // --- Telegram WebApp ---
+    if (window.Telegram && window.Telegram.WebApp) {
+        const webApp = window.Telegram.WebApp;
 
-        // Принудительное развертывание на весь экран
-        const forceFullScreen = () => {
-            webApp.expand();
-            document.documentElement.style.height = '100%';
-            document.body.style.height = '100%';
-            document.body.style.margin = '0';
-            document.body.style.padding = '0';
-            document.body.style.overflow = 'hidden';
-        };
-
-        // Проверяем каждые 100ms первые 2 секунды
-        let attempts = 0;
-        const intervalId = setInterval(() => {
-            forceFullScreen();
-            attempts++;
-            if (attempts >= 20) clearInterval(intervalId);
-        }, 100);
-
-        console.log("Telegram WebApp fullscreen режим активирован");
-    } catch (error) {
-        console.error("Ошибка инициализации Telegram WebApp:", error);
+        try {
+            webApp.ready(); // уведомляем Telegram, что приложение готово
+            webApp.expand(); // разворачиваем на полный экран
+            webApp.enableClosingConfirmation();
+            webApp.setHeaderColor('#0f0c29');
+            webApp.setBackgroundColor('#0f0c29');
+            console.log("Telegram WebApp инициализирован и расширен");
+        } catch (error) {
+            console.error("Ошибка инициализации Telegram WebApp:", error);
+        }
+    } else {
+        console.warn("Telegram WebApp API недоступен");
     }
-} else {
-    console.warn("Telegram WebApp API недоступен");
-}
-
 
     // --- Вкладки ---
     const contentArea = document.getElementById('content-area');
@@ -414,4 +395,26 @@ function setupContentForm(formId, typeName, apiUrl, modalId, alwaysFormData=fals
         try {
             let response;
             if (!alwaysFormData && typeValue === 'upload' && this.querySelector(`input[name="${typeName}_file"]`)?.files[0]) {
-                response = await fetch(apiUrl, {
+                response = await fetch(apiUrl, { method: 'POST', body: formData });
+            } else {
+                const jsonData = {};
+                formData.forEach((v, k) => jsonData[k] = v);
+                response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(jsonData) });
+            }
+
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            const result = await response.json();
+            if (result.success) {
+                closeModal(modalId);
+                location.reload();
+            } else {
+                alert('Ошибка: ' + (result.error || 'Не удалось добавить контент'));
+            }
+        } catch (error) {
+            console.error('Ошибка загрузки:', error);
+            alert('Ошибка загрузки: ' + error.message);
+        }
+    });
+}
+
+console.log("main.js загружен и выполняется!");
