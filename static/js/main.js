@@ -14,15 +14,29 @@ document.addEventListener('DOMContentLoaded', function() {
     // --- Telegram WebApp ---
     if (window.Telegram && window.Telegram.WebApp) {
         const webApp = window.Telegram.WebApp;
-
         try {
-            webApp.ready(); // уведомляем Telegram, что приложение готово
-            webApp.expand(); // разворачиваем на полный экран
+            webApp.ready();
+            webApp.MainButton.hide(); // убираем нижнюю кнопку Telegram
+
+            // Принудительное fullscreen-развертывание
+            const expandWebApp = () => {
+                webApp.expand();
+                document.body.style.margin = '0';
+                document.body.style.padding = '0';
+                document.documentElement.style.height = '100%';
+                document.body.style.height = '100%';
+                document.body.style.overflow = 'hidden';
+            };
+
+            expandWebApp(); // сразу
+            setTimeout(expandWebApp, 100); // повторно через 100ms
+            setTimeout(expandWebApp, 300); // ещё раз для гарантии
+
             webApp.enableClosingConfirmation();
-            webApp.setHeaderColor('#0f0c29'); // цвет заголовка почти сливается с фоном
-            webApp.setBackgroundColor('#0f0c29'); // фон приложения
-            webApp.MainButton.hide(); // скрываем нижнюю кнопку Telegram
-            console.log("Telegram WebApp инициализирован и максимально fullscreen");
+            webApp.setHeaderColor('#0f0c29');
+            webApp.setBackgroundColor('#0f0c29');
+
+            console.log("Telegram WebApp fullscreen режим активирован");
         } catch (error) {
             console.error("Ошибка инициализации Telegram WebApp:", error);
         }
@@ -392,4 +406,8 @@ function setupContentForm(formId, typeName, apiUrl, modalId, alwaysFormData=fals
         const formData = new FormData(this);
         if (alwaysFormData) formData.delete(typeName);
 
-        const typeValue = this.querySelector(`
+        const typeValue = this.querySelector(`input[name="${typeName}"]:checked`)?.value || 'url';
+        try {
+            let response;
+            if (!alwaysFormData && typeValue === 'upload' && this.querySelector(`input[name="${typeName}_file"]`)?.files[0]) {
+                response = await fetch(apiUrl, {
