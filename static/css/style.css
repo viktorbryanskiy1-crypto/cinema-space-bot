@@ -12,10 +12,14 @@
     --warning: #ff6b6b;
 }
 
-* {
+/* --- ПОЛНОЭКРАННЫЙ РЕЖИМ --- */
+html, body {
     margin: 0;
     padding: 0;
-    box-sizing: border-box;
+    height: 100%;
+    width: 100%;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
 }
 
 body {
@@ -26,35 +30,42 @@ body {
     background-attachment: fixed;
     background-size: cover;
     overflow-x: hidden;
+    padding: 0;
+    margin: 0;
 }
 
 .container {
-    max-width: 1400px;
-    margin: 0 auto;
-    padding: 20px;
+    max-width: 100%;
+    margin: 0;
+    padding: 10px; /* Уменьшено для экономии места */
+    width: 100%;
+    min-height: 100vh;
 }
+/* --- КОНЕЦ ПОЛНОЭКРАННОГО РЕЖИМА --- */
 
-/* Навигация */
+/* Навигация - прилипает к верху */
 .navbar {
     display: flex;
     justify-content: space-between;
     align-items: center;
     background: rgba(15, 12, 41, 0.95);
-    padding: 20px 40px;
-    border-radius: 20px;
-    margin-bottom: 30px;
+    padding: 15px; /* Уменьшен padding */
+    border-radius: 0; /* Убраны скругления для полной ширины */
+    margin-bottom: 20px; /* Уменьшен отступ */
     border: 1px solid var(--border);
     backdrop-filter: blur(20px);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3); /* Уменьшена тень */
     position: sticky;
-    top: 10px;
+    top: 0;
+    width: 100%;
     z-index: 1000;
+    box-sizing: border-box;
 }
 
 .nav-brand {
     display: flex;
     align-items: center;
-    gap: 15px;
+    gap: 10px; /* Уменьшен gap */
 }
 
 .nav-brand h1 {
@@ -62,28 +73,33 @@ body {
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
-    font-size: 2em;
+    font-size: 1.8em; /* Уменьшен размер шрифта */
     font-weight: 800;
-    text-shadow: 0 0 20px rgba(0, 243, 255, 0.5);
+    text-shadow: 0 0 15px rgba(0, 243, 255, 0.5); /* Уменьшена тень */
+    margin: 0; /* Убраны отступы */
+    padding: 0;
 }
 
 .nav-tabs {
     display: flex;
-    gap: 15px;
+    gap: 10px; /* Уменьшен gap */
+    flex-wrap: wrap; /* Позволяет кнопкам переноситься на новую строку */
+    justify-content: center; /* Центрируем на мобильных */
 }
 
 .tab-btn {
     background: transparent;
     border: 2px solid var(--accent);
     color: var(--accent);
-    padding: 12px 25px;
+    padding: 10px 20px; /* Уменьшены отступы */
     border-radius: 30px;
     cursor: pointer;
     transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     font-weight: 600;
-    font-size: 16px;
+    font-size: 14px; /* Уменьшен размер шрифта */
     position: relative;
     overflow: hidden;
+    white-space: nowrap; /* Предотвращает перенос текста */
 }
 
 .tab-btn::before {
@@ -102,37 +118,39 @@ body {
 }
 
 .tab-btn:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 10px 25px rgba(0, 243, 255, 0.4);
+    transform: translateY(-2px); /* Уменьшено движение */
+    box-shadow: 0 5px 15px rgba(0, 243, 255, 0.4); /* Уменьшена тень */
 }
 
 .tab-btn.active {
     background: var(--accent);
     color: #0f0c29;
-    transform: translateY(-3px);
-    box-shadow: 0 10px 25px rgba(0, 243, 255, 0.6);
+    transform: translateY(-2px); /* Уменьшено движение */
+    box-shadow: 0 5px 15px rgba(0, 243, 255, 0.6); /* Уменьшена тень */
 }
 
 /* Поиск */
 .search-container {
     position: relative;
-    width: 350px;
+    width: 100%; /* Занимает всю доступную ширину */
+    max-width: 300px; /* Максимальная ширина */
 }
 
 .search-input {
     width: 100%;
-    padding: 12px 20px;
+    padding: 10px 15px; /* Уменьшены отступы */
     border: 2px solid var(--accent);
     border-radius: 30px;
     background: rgba(25, 25, 60, 0.8);
     color: white;
-    font-size: 16px;
+    font-size: 14px; /* Уменьшен размер шрифта */
     transition: all 0.3s ease;
+    box-sizing: border-box;
 }
 
 .search-input:focus {
     outline: none;
-    box-shadow: 0 0 20px rgba(0, 243, 255, 0.5);
+    box-shadow: 0 0 15px rgba(0, 243, 255, 0.5); /* Уменьшена тень */
     border-color: var(--accent-hover);
 }
 
@@ -144,61 +162,74 @@ body {
     background: var(--accent);
     border: none;
     border-radius: 50%;
-    width: 35px;
-    height: 35px;
+    width: 30px; /* Уменьшен размер */
+    height: 30px; /* Уменьшен размер */
     cursor: pointer;
     transition: all 0.3s ease;
     display: flex;
     align-items: center;
     justify-content: center;
+    font-size: 16px; /* Размер иконки поиска */
 }
 
 .search-btn:hover {
     transform: translateY(-50%) scale(1.1);
-    box-shadow: 0 0 15px rgba(0, 243, 255, 0.7);
+    box-shadow: 0 0 12px rgba(0, 243, 255, 0.7); /* Уменьшена тень */
 }
 
 /* Адаптивность */
 @media (max-width: 768px) {
     .navbar {
         flex-direction: column;
-        gap: 20px;
-        padding: 15px;
+        gap: 15px; /* Уменьшен gap */
+        padding: 10px; /* Уменьшен padding */
     }
     
     .nav-tabs {
         flex-wrap: wrap;
         justify-content: center;
+        width: 100%;
     }
     
     .search-container {
         width: 100%;
+        max-width: 100%;
+    }
+    
+    .nav-brand h1 {
+        font-size: 1.5em; /* Ещё меньше на мобильных */
+    }
+    
+    .tab-btn {
+        padding: 8px 15px; /* Ещё меньше отступы на мобильных */
+        font-size: 13px;
     }
 }
+
 /* Статистика */
 .stats-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 20px;
-    margin: 30px 0;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); /* Уменьшена минимальная ширина */
+    gap: 15px; /* Уменьшен gap */
+    margin: 20px 0; /* Уменьшены отступы */
 }
 
 .stat-card {
     background: var(--card-bg);
-    border-radius: 15px;
-    padding: 25px;
+    border-radius: 12px; /* Уменьшены скругления */
+    padding: 20px; /* Уменьшены отступы */
     border: 1px solid var(--border);
     text-align: center;
     transition: all 0.3s ease;
 }
 
 .stat-card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 10px 25px rgba(0, 243, 255, 0.3);
+    transform: translateY(-3px);
+    box-shadow: 0 8px 20px rgba(0, 243, 255, 0.3); /* Уменьшена тень */
 }
 
 .stat-number {
-    font-size: 2.5em;
+    font-size: 2em; /* Уменьшен размер шрифта */
     font-weight: 700;
     background: linear-gradient(45deg, var(--accent), var(--accent-secondary));
     -webkit-background-clip: text;
@@ -208,8 +239,8 @@ body {
 
 .stat-label {
     color: var(--text-secondary);
-    font-size: 1.1em;
-    margin-top: 10px;
+    font-size: 1em; /* Уменьшен размер шрифта */
+    margin-top: 8px; /* Уменьшен отступ */
 }
 
 /* Админ-кнопки */
@@ -217,16 +248,159 @@ body {
     background: linear-gradient(45deg, var(--warning), #ff4757);
     color: white;
     border: none;
-    padding: 8px 15px;
+    padding: 6px 12px; /* Уменьшены отступы */
     border-radius: 20px;
     cursor: pointer;
     font-weight: 600;
     transition: all 0.3s ease;
     text-decoration: none;
     display: inline-block;
+    font-size: 14px; /* Уменьшен размер шрифта */
 }
 
 .admin-btn:hover {
     transform: scale(1.05);
-    box-shadow: 0 5px 15px rgba(255, 107, 107, 0.4);
+    box-shadow: 0 4px 12px rgba(255, 107, 107, 0.4); /* Уменьшена тень */
+}
+
+/* --- ДОПОЛНИТЕЛЬНЫЕ СТИЛИ ДЛЯ КАРТОЧЕК И КОНТЕНТА --- */
+.content-section {
+    margin-top: 20px;
+}
+
+.card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+}
+
+.card {
+    background: var(--card-bg);
+    border-radius: 15px;
+    padding: 20px;
+    border: 1px solid var(--border);
+    transition: all 0.3s ease;
+}
+
+.card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 25px rgba(0, 243, 255, 0.3);
+}
+
+.card-title {
+    color: var(--accent);
+    margin-bottom: 10px;
+    font-size: 1.3em;
+}
+
+.card-description {
+    color: var(--text-secondary);
+    margin-bottom: 15px;
+    line-height: 1.5;
+}
+
+.card-media {
+    width: 100%;
+    border-radius: 10px;
+    margin-bottom: 15px;
+}
+
+.reactions {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+}
+
+.reaction-btn {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 5px 10px;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 14px;
+}
+
+.reaction-btn:hover {
+    background: rgba(0, 243, 255, 0.2);
+    transform: scale(1.05);
+}
+
+.comment-form {
+    margin-top: 15px;
+}
+
+.comment-input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    margin-bottom: 10px;
+    resize: vertical;
+}
+
+.submit-btn {
+    background: linear-gradient(45deg, var(--accent), var(--accent-secondary));
+    color: #0f0c29;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 25px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.submit-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 5px 15px rgba(0, 243, 255, 0.4);
+}
+
+/* Модальные окна */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+}
+
+.modal-content {
+    background: #222;
+    padding: 25px;
+    border-radius: 15px;
+    border: 1px solid var(--border);
+    max-width: 500px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+}
+
+/* Закрытие модального окна */
+.close-modal {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 24px;
+    cursor: pointer;
+}
+
+.close-modal:hover {
+    color: var(--accent);
 }
