@@ -11,38 +11,42 @@ let formToggleHandlerAdded = false;
 document.addEventListener('DOMContentLoaded', function() {
     console.log("DOMContentLoaded сработал");
 
-    // --- Telegram WebApp ---
-    if (window.Telegram && window.Telegram.WebApp) {
-        const webApp = window.Telegram.WebApp;
-        try {
-            webApp.ready();
-            webApp.MainButton.hide(); // убираем нижнюю кнопку Telegram
+   // --- Telegram WebApp ---
+if (window.Telegram && window.Telegram.WebApp) {
+    const webApp = window.Telegram.WebApp;
+    try {
+        webApp.ready();
+        webApp.MainButton.hide(); // скрыть нижнюю кнопку Telegram
+        webApp.enableClosingConfirmation();
+        webApp.setHeaderColor('#0f0c29');
+        webApp.setBackgroundColor('#0f0c29');
 
-            // Принудительное fullscreen-развертывание
-            const expandWebApp = () => {
-                webApp.expand();
-                document.body.style.margin = '0';
-                document.body.style.padding = '0';
-                document.documentElement.style.height = '100%';
-                document.body.style.height = '100%';
-                document.body.style.overflow = 'hidden';
-            };
+        // Принудительное развертывание на весь экран
+        const forceFullScreen = () => {
+            webApp.expand();
+            document.documentElement.style.height = '100%';
+            document.body.style.height = '100%';
+            document.body.style.margin = '0';
+            document.body.style.padding = '0';
+            document.body.style.overflow = 'hidden';
+        };
 
-            expandWebApp(); // сразу
-            setTimeout(expandWebApp, 100); // повторно через 100ms
-            setTimeout(expandWebApp, 300); // ещё раз для гарантии
+        // Проверяем каждые 100ms первые 2 секунды
+        let attempts = 0;
+        const intervalId = setInterval(() => {
+            forceFullScreen();
+            attempts++;
+            if (attempts >= 20) clearInterval(intervalId);
+        }, 100);
 
-            webApp.enableClosingConfirmation();
-            webApp.setHeaderColor('#0f0c29');
-            webApp.setBackgroundColor('#0f0c29');
-
-            console.log("Telegram WebApp fullscreen режим активирован");
-        } catch (error) {
-            console.error("Ошибка инициализации Telegram WebApp:", error);
-        }
-    } else {
-        console.warn("Telegram WebApp API недоступен");
+        console.log("Telegram WebApp fullscreen режим активирован");
+    } catch (error) {
+        console.error("Ошибка инициализации Telegram WebApp:", error);
     }
+} else {
+    console.warn("Telegram WebApp API недоступен");
+}
+
 
     // --- Вкладки ---
     const contentArea = document.getElementById('content-area');
