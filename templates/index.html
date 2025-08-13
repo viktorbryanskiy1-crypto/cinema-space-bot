@@ -1,60 +1,36 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <!-- Важно: Этот метатег необходим для корректного отображения на мобильных устройствах и полноэкранного режима -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>КиноВселенная</title>
-    <!-- Подключение основного CSS файла -->
+    </style>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <!-- Можно добавить иконку, если она есть -->
-    <!-- <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}"> -->
 </head>
 <body>
-    <!-- Основной контейнер приложения -->
-    <div id="app-container">
-        <!-- Навигация (временно простая, позже заменим на стиль Instagram) -->
+    <div class="container">
+        <!-- Навигация -->
         <nav class="navbar">
             <div class="nav-brand">
                 <h1>🌌 КиноВселенная</h1>
             </div>
             <div class="nav-tabs">
-                <button class="tab-btn active" data-tab="home">Главная</button>
-                <button class="tab-btn" data-tab="moments">🎬 Моменты</button>
+                <button class="tab-btn active" data-tab="moments">🎬 Моменты из кино</button>
                 <button class="tab-btn" data-tab="trailers">🎥 Трейлеры</button>
                 <button class="tab-btn" data-tab="news">📰 Новости</button>
-                <!-- <button class="tab-btn" data-tab="search">🔍 Поиск</button> -->
             </div>
             <div class="search-container">
-                <input type="text" id="search-input" class="search-input" placeholder="Поиск...">
+                <input type="text" id="search-input" class="search-input" placeholder="Поиск по названиям...">
                 <button id="search-btn" class="search-btn">🔍</button>
             </div>
         </nav>
-
+        
         <!-- Основной контент -->
-        <main class="main-content">
-            <div id="content-area">
-                <!-- Содержимое будет подгружаться сюда -->
-                <div class="welcome-placeholder">
-                    <h2>🚀 Добро пожаловать в КиноВселенную!</h2>
-                    <p>Здесь скоро появится космическое приложение с фильмами, трейлерами и новостями.</p>
-                    <p>Выберите раздел в меню навигации.</p>
-                </div>
-                <!-- Пример статического контента, который будет заменен динамически -->
-                <!-- {% if active_tab == 'moments' %}
-                    {% include 'moments_content.html' %}
-                {% elif active_tab == 'trailers' %}
-                    {% include 'trailers_content.html' %}
-                {% elif active_tab == 'news' %}
-                    {% include 'news_content.html' %}
-                {% endif %} -->
+        <div id="content-area">
+            <div style="text-align: center; padding: 50px; color: var(--accent);">
+                <h2>🚀 Добро пожаловать в КиноВселенную!</h2>
+                <p>Здесь скоро появится космическое приложение с фильмами, трейлерами и новостями</p>
             </div>
-        </main>
+        </div>
     </div>
-
-    <!-- Подключение основного JavaScript файла -->
+    
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
-    <!-- Можно подключить дополнительные скрипты -->
-    <!-- <script src="{{ url_for('static', filename='js/navigation.js') }}"></script> -->
 </body>
 </html>
