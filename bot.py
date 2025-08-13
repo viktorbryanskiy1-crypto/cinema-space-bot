@@ -8,7 +8,7 @@ WEBHOOK_URL = os.environ.get('WEBHOOK_URL', 'https://cinema-space-bot.onrender.c
 def start(update, context):
     keyboard = [[
         InlineKeyboardButton(
-            "🌌 ОТКРЫТЬ КИНОВСЕЛЕННУЮ", 
+            "🌌 ОТКРЫТЬ КИНОВСЕЛЕННУЮ",
             web_app=WebAppInfo(url=WEBHOOK_URL)
         )
     ]]
