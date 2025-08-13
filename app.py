@@ -1,18 +1,25 @@
 # app.py
 import os
+import io
 import threading
 import logging
 import uuid
+import mimetypes
 from datetime import datetime
+from urllib.parse import urlparse
 from flask import (
     Flask, render_template, request, jsonify,
-    redirect, url_for, session, send_from_directory
+    redirect, url_for, session, send_from_directory, abort
 )
 from werkzeug.utils import secure_filename
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, Update
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackQueryHandler
+import psycopg2
+import requests
 
-# Импорт из модуля database
+# ====== Импорт из вашего database.py ======
+# В database.py должны быть функции работы с PostgreSQL (а не SQLite).
+# Мы используем их как "бизнес-логику" хранения контента/реакций/комментариев/ролей.
 from database import (
     get_or_create_user, get_user_role,
     add_moment, add_trailer, add_news,
@@ -25,46 +32,155 @@ from database import (
     init_db
 )
 
-# --- Настройка логирования ---
+# ====== Логирование ======
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("cinema-space")
 
-# --- Конфигурация ---
+# ====== Конфигурация окружения ======
 TOKEN = os.environ.get('TELEGRAM_TOKEN')
 WEBHOOK_URL = os.environ.get('WEBHOOK_URL', 'https://cinema-space-bot.onrender.com').strip()
 if not TOKEN:
-    logger.error("TELEGRAM_TOKEN не установлен в переменных окружения!")
-    exit(1)
+    logger.error("TELEGRAM_TOKEN не установлен!")
+    raise SystemExit(1)
 
-# --- Flask приложение ---
+DB_HOST = os.environ.get('DB_HOST', 'localhost')
+DB_NAME = os.environ.get('DB_NAME', 'cinema')
+DB_USER = os.environ.get('DB_USER', 'postgres')
+DB_PASS = os.environ.get('DB_PASS', 'postgres')
+
+# ====== Flask ======
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'super-secret-key-change-me-please')
 
-app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
+# Ограничения и директории для загрузок
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB
 app.config['UPLOAD_FOLDER'] = 'uploads'
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 ALLOWED_VIDEO_EXTENSIONS = {'mp4', 'avi', 'mov', 'wmv', 'flv', 'webm'}
 ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 
-def allowed_file(filename, allowed_extensions):
+def allowed_file(filename: str, allowed_extensions: set) -> bool:
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in allowed_extensions
 
-# --- Telegram bot ---
+# ====== Telegram Bot ======
 updater = Updater(TOKEN, use_context=True)
 dp = updater.dispatcher
 
-pending_video_data = {}
+# Таблица для состояния кнопки в Telegram (двухсостояние)
+def ensure_tg_state_table():
+    try:
+        conn = psycopg2.connect(host=DB_HOST, database=DB_NAME, user=DB_USER, password=DB_PASS)
+        cur = conn.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS telegram_users (
+                telegram_id BIGINT PRIMARY KEY,
+                started BOOLEAN DEFAULT FALSE
+            );
+        """)
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        logger.error(f"Не удалось создать таблицу telegram_users: {e}")
 
-# --- Функция /start с двухсостояниевой кнопкой ---
+ensure_tg_state_table()
+
+# ====== Вспомогательные функции загрузки и "умного" сохранения по URL ======
+def _unique_basename(filename: str) -> str:
+    safe = secure_filename(filename) if filename else 'file'
+    return f"{uuid.uuid4()}_{safe}"
+
+def _guess_ext_from_mime(content_type: str, fallback: str = '') -> str:
+    if not content_type:
+        return fallback
+    ext = mimetypes.guess_extension(content_type.split(';')[0].strip())
+    if ext:
+        return ext.lstrip('.')
+    return fallback
+
+def save_uploaded_file(file_storage, allowed_exts) -> str | None:
+    """
+    Сохраняет присланный файл в /uploads и возвращает web-путь '/uploads/<name>'.
+    """
+    if file_storage and allowed_file(file_storage.filename, allowed_exts):
+        filename = _unique_basename(file_storage.filename)
+        path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file_storage.save(path)
+        return f"/uploads/{filename}"
+    return None
+
+STREAMABLE_HOSTS = ("youtube.com", "youtu.be", "vimeo.com", "t.me", "telegram.me", "telegram.org")
+
+def _should_download_to_server(url: str) -> bool:
+    """
+    Решаем, имеет ли смысл скачивать на сервер:
+    - НЕ скачиваем YouTube/Vimeo/Telegram (их надо встраивать)
+    - Скачиваем прямые ссылки (CDN, файловые хостинги), если размер разумный
+    """
+    try:
+        netloc = urlparse(url).netloc.lower()
+        return url.lower().startswith("http") and not any(h in netloc for h in STREAMABLE_HOSTS)
+    except Exception:
+        return False
+
+def _stream_download_to(path: str, response, max_bytes: int = 50 * 1024 * 1024):
+    """
+    Скачивает поток в файл с ограничением размера.
+    """
+    total = 0
+    with open(path, "wb") as f:
+        for chunk in response.iter_content(chunk_size=1024 * 128):
+            if not chunk:
+                continue
+            total += len(chunk)
+            if total > max_bytes:
+                raise ValueError("Файл превышает лимит 50MB")
+            f.write(chunk)
+
+def download_and_store(url: str, allowed_exts: set, prefer_ext: str = '') -> str | None:
+    """
+    Скачивает файл по прямому URL и кладёт в /uploads, возвращает web-путь.
+    Для видео/изображений определяем расширение по content-type/URL.
+    """
+    try:
+        with requests.get(url, stream=True, timeout=12) as r:
+            r.raise_for_status()
+            # Выясняем расширение
+            content_type = r.headers.get("Content-Type", "")
+            guess_ext = _guess_ext_from_mime(content_type, fallback=prefer_ext)
+            # если в URL есть расширение и оно разрешено — используем его
+            url_path = urlparse(url).path
+            url_ext = os.path.splitext(url_path)[1].lstrip('.').lower()
+            ext = url_ext if url_ext in allowed_exts else (guess_ext if guess_ext in allowed_exts else '')
+            if not ext:
+                # Если не распознали — пробуем mp4/png по типу
+                if 'video' in content_type:
+                    ext = 'mp4' if 'mp4' in ALLOWED_VIDEO_EXTENSIONS else list(ALLOWED_VIDEO_EXTENSIONS)[0]
+                elif 'image' in content_type:
+                    ext = 'png' if 'png' in ALLOWED_IMAGE_EXTENSIONS else list(ALLOWED_IMAGE_EXTENSIONS)[0]
+                else:
+                    # неизвестный тип — лучше отказаться
+                    raise ValueError("Неподдерживаемый тип контента по URL")
+
+            filename = _unique_basename(f"remote.{ext}")
+            path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            _stream_download_to(path, r, max_bytes=50 * 1024 * 1024)
+            return f"/uploads/{filename}"
+    except Exception as e:
+        logger.warning(f"Не удалось скачать по URL {url}: {e}")
+        return None
+
+# ====== Двухсостояние /start ======
 def start(update, context):
     try:
         user = update.message.from_user
         telegram_id = str(user.id)
 
+        # Регистрация пользователя в вашей БД (из database.py)
         get_or_create_user(
             telegram_id=telegram_id,
             username=user.username,
@@ -72,103 +188,71 @@ def start(update, context):
             last_name=user.last_name
         )
 
-        # Работа с PostgreSQL для состояния кнопки
-        import psycopg2
-        cursor = None
+        # Проверяем состояние "started" в PostgreSQL
         started = True
         try:
-            DB_HOST = os.environ.get('DB_HOST', 'localhost')
-            DB_NAME = os.environ.get('DB_NAME', 'cinema')
-            DB_USER = os.environ.get('DB_USER', 'postgres')
-            DB_PASS = os.environ.get('DB_PASS', 'postgres')
-
-            conn = psycopg2.connect(
-                host=DB_HOST, database=DB_NAME,
-                user=DB_USER, password=DB_PASS
-            )
-            cursor = conn.cursor()
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS telegram_users (
-                    telegram_id BIGINT PRIMARY KEY,
-                    started BOOLEAN DEFAULT FALSE
-                );
-            """)
-            conn.commit()
-
-            cursor.execute("SELECT started FROM telegram_users WHERE telegram_id=%s;", (telegram_id,))
-            result = cursor.fetchone()
-            if result is None:
-                cursor.execute("INSERT INTO telegram_users (telegram_id, started) VALUES (%s, %s);", (telegram_id, False))
+            conn = psycopg2.connect(host=DB_HOST, database=DB_NAME, user=DB_USER, password=DB_PASS)
+            cur = conn.cursor()
+            cur.execute("SELECT started FROM telegram_users WHERE telegram_id=%s;", (telegram_id,))
+            row = cur.fetchone()
+            if row is None:
+                cur.execute("INSERT INTO telegram_users (telegram_id, started) VALUES (%s, %s);", (telegram_id, False))
                 conn.commit()
                 started = False
             else:
-                started = result[0]
+                started = bool(row[0])
+            cur.close()
+            conn.close()
         except Exception as e:
-            logger.error(f"Ошибка работы с БД: {e}")
-            started = True
-        finally:
-            if cursor:
-                cursor.close()
-            if 'conn' in locals():
-                conn.close()
+            logger.error(f"Ошибка БД при /start: {e}")
+            started = True  # по умолчанию показываем кнопку открытия
 
         if not started:
+            # Первый раз: показываем кнопку "Начать"
             keyboard = [[InlineKeyboardButton("Начать", callback_data="start_app")]]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            update.message.reply_text(
-                "🚀 Добро пожаловать в КиноВселенную!\n"
-                "Нажмите кнопку ниже, чтобы начать:",
-                reply_markup=reply_markup
-            )
         else:
+            # Уже запускал: сразу даём WebApp-кнопку
             keyboard = [[InlineKeyboardButton("🌌 КиноВселенная", web_app=WebAppInfo(url=f"{WEBHOOK_URL}?mode=fullscreen"))]]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            update.message.reply_text(
-                "🚀 Добро пожаловать обратно! Откройте приложение:",
-                reply_markup=reply_markup
-            )
+
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        update.message.reply_text(
+            "🚀 Добро пожаловать в КиноВселенную!\n"
+            "🎬 Моменты | 🎥 Трейлеры | 📰 Новости\n\n"
+            "Нажмите кнопку ниже:",
+            reply_markup=reply_markup
+        )
         logger.info(f"/start от пользователя {telegram_id}")
     except Exception as e:
-        logger.error(f"Ошибка в /start: {e}")
+        logger.exception(f"Ошибка в обработке /start: {e}")
 
-# --- Callback кнопки "Начать" ---
 def button_callback(update, context):
     query = update.callback_query
     telegram_id = query.from_user.id
 
     if query.data == "start_app":
+        # Меняем сообщение и даём WebApp-кнопку
         keyboard = [[InlineKeyboardButton("🌌 КиноВселенная", web_app=WebAppInfo(url=f"{WEBHOOK_URL}?mode=fullscreen"))]]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        query.edit_message_text(
-            text="Приложение готово! Нажмите кнопку ниже:",
-            reply_markup=reply_markup
-        )
-
-        # Обновляем состояние пользователя в БД
-        import psycopg2
-        cursor = None
         try:
-            DB_HOST = os.environ.get('DB_HOST', 'localhost')
-            DB_NAME = os.environ.get('DB_NAME', 'cinema')
-            DB_USER = os.environ.get('DB_USER', 'postgres')
-            DB_PASS = os.environ.get('DB_PASS', 'postgres')
+            query.edit_message_text("Приложение готово! Нажмите кнопку ниже:", reply_markup=reply_markup)
+        except Exception:
+            # Если нельзя редактировать (старое сообщение) — просто ответим
+            query.message.reply_text("Приложение готово! Нажмите кнопку ниже:", reply_markup=reply_markup)
 
-            conn = psycopg2.connect(
-                host=DB_HOST, database=DB_NAME,
-                user=DB_USER, password=DB_PASS
-            )
-            cursor = conn.cursor()
-            cursor.execute("UPDATE telegram_users SET started=TRUE WHERE telegram_id=%s;", (telegram_id,))
+        # Обновляем состояние в БД
+        try:
+            conn = psycopg2.connect(host=DB_HOST, database=DB_NAME, user=DB_USER, password=DB_PASS)
+            cur = conn.cursor()
+            cur.execute("UPDATE telegram_users SET started=TRUE WHERE telegram_id=%s;", (telegram_id,))
             conn.commit()
+            cur.close()
+            conn.close()
         except Exception as e:
-            logger.error(f"Ошибка обновления состояния пользователя: {e}")
-        finally:
-            if cursor:
-                cursor.close()
-            if 'conn' in locals():
-                conn.close()
+            logger.error(f"Ошибка обновления started для {telegram_id}: {e}")
 
-# --- Хэндлеры Telegram ---
+# ====== Добавление видео через команду (для админов/владельцев) ======
+pending_video_data = {}
+
 def add_video_command(update, context):
     user = update.message.from_user
     telegram_id = str(user.id)
@@ -179,7 +263,7 @@ def add_video_command(update, context):
 
     text = update.message.text.strip()
     if not text.startswith('/add_video '):
-        update.message.reply_text("❌ Неверный формат команды!")
+        update.message.reply_text("❌ Формат: /add_video [moment|trailer|news] [Название]")
         return
 
     parts = text.split(' ', 2)
@@ -190,7 +274,7 @@ def add_video_command(update, context):
     content_type = parts[1].lower()
     title = parts[2]
     if content_type not in ['moment', 'trailer', 'news']:
-        update.message.reply_text("❌ Тип контента должен быть: moment, trailer или news")
+        update.message.reply_text("❌ Тип: moment | trailer | news")
         return
 
     pending_video_data[telegram_id] = {
@@ -199,10 +283,9 @@ def add_video_command(update, context):
     }
 
     update.message.reply_text(
-        f"🎬 Вы хотите добавить '{content_type}' с названием '{title}'.\n"
-        "Пришлите, пожалуйста, ссылку на видео (YouTube, Telegram и т.п.)."
+        f"🎬 Добавление {content_type} «{title}».\n"
+        f"Пришлите ссылку на видео (YouTube/Telegram/прямой URL)."
     )
-    logger.info(f"Пользователь {telegram_id} начал добавлять видео: {content_type} - {title}")
 
 def handle_pending_video_url(update, context):
     user = update.message.from_user
@@ -210,7 +293,7 @@ def handle_pending_video_url(update, context):
     if telegram_id not in pending_video_data:
         return
 
-    video_url = update.message.text.strip()
+    video_url = (update.message.text or '').strip()
     if not video_url:
         update.message.reply_text("❌ Ссылка не может быть пустой. Попробуйте ещё раз.")
         return
@@ -219,55 +302,53 @@ def handle_pending_video_url(update, context):
     content_type = data['content_type']
     title = data['title']
 
-    is_telegram_link = video_url.startswith('https://t.me/')
-    if is_telegram_link:
-        update.message.reply_text(f"ℹ️ Обнаружена Telegram-ссылка: {video_url}")
-        logger.info(f"ℹ️ Обнаружена Telegram-ссылка: {video_url}")
-    else:
-        update.message.reply_text(f"ℹ️ Получена ссылка: {video_url}")
-        logger.info(f"ℹ️ Получена ссылка: {video_url}")
+    # Если это прямая ссылка (CDN/файл), попробуем скачать и хранить локально
+    local_url = None
+    if _should_download_to_server(video_url):
+        local_url = download_and_store(video_url, ALLOWED_VIDEO_EXTENSIONS)
+
+    final_url = local_url or video_url
+    description = "Добавлено через Telegram"
 
     try:
-        description = "Добавлено через Telegram бот"
         if content_type == 'moment':
-            add_moment(title, description, video_url)
+            add_moment(title, description, final_url)
         elif content_type == 'trailer':
-            add_trailer(title, description, video_url)
+            add_trailer(title, description, final_url)
         elif content_type == 'news':
-            add_news(title, description, video_url)
-        update.message.reply_text(f"✅ '{content_type}' '{title}' успешно добавлен!")
-        logger.info(f"Пользователь {telegram_id} добавил {content_type}: {title}")
+            add_news(title, description, final_url)  # тут видео_url трактуется как ссылка (редко для news)
+        update.message.reply_text(f"✅ {content_type} «{title}» добавлен!")
     except Exception as e:
-        logger.error(f"Ошибка добавления видео: {e}")
-        update.message.reply_text(f"❌ Ошибка при добавлении: {e}")
-        pending_video_data[telegram_id] = data
+        logger.exception("Ошибка добавления через бота")
+        update.message.reply_text(f"❌ Ошибка: {e}")
 
-# --- Регистрация хэндлеров ---
+# Регистрируем хэндлеры
 dp.add_handler(CommandHandler('start', start))
+dp.add_handler(CallbackQueryHandler(button_callback))
 dp.add_handler(CommandHandler('add_video', add_video_command))
 dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_pending_video_url))
-dp.add_handler(CallbackQueryHandler(button_callback))
 
-# --- Webhook ---
+# ====== Telegram webhook endpoint (можно оставить, даже если используете polling) ======
 @app.route(f'/{TOKEN}', methods=['POST'])
 def webhook():
     update = Update.de_json(request.get_json(force=True), updater.bot)
     updater.dispatcher.process_update(update)
     return 'ok'
 
-# --- Flask маршруты ---
+# ====== Flask маршруты ======
 @app.route('/')
 def index():
+    # Ваш index.html может выполнять Telegram.WebApp.expand() для полного экрана
     return render_template('index.html')
 
 @app.route('/moments')
 def moments():
-    moments_data = get_all_moments()
-    moments_with_extra = []
-    for m in moments_data:
+    items = get_all_moments()
+    enriched = []
+    for m in items:
         reactions = get_reactions_count('moment', m[0])
         comments_count = len(get_comments('moment', m[0]))
-        moments_with_extra.append({
+        enriched.append({
             'id': m[0],
             'title': m[1],
             'description': m[2],
@@ -276,16 +357,16 @@ def moments():
             'reactions': reactions,
             'comments_count': comments_count
         })
-    return render_template('moments.html', moments=moments_with_extra)
+    return render_template('moments.html', moments=enriched)
 
 @app.route('/trailers')
 def trailers():
-    trailers_data = get_all_trailers()
-    trailers_with_extra = []
-    for t in trailers_data:
+    items = get_all_trailers()
+    enriched = []
+    for t in items:
         reactions = get_reactions_count('trailer', t[0])
         comments_count = len(get_comments('trailer', t[0]))
-        trailers_with_extra.append({
+        enriched.append({
             'id': t[0],
             'title': t[1],
             'description': t[2],
@@ -294,16 +375,16 @@ def trailers():
             'reactions': reactions,
             'comments_count': comments_count
         })
-    return render_template('trailers.html', trailers=trailers_with_extra)
+    return render_template('trailers.html', trailers=enriched)
 
 @app.route('/news')
 def news():
-    news_data = get_all_news()
-    news_with_extra = []
-    for n in news_data:
+    items = get_all_news()
+    enriched = []
+    for n in items:
         reactions = get_reactions_count('news', n[0])
         comments_count = len(get_comments('news', n[0]))
-        news_with_extra.append({
+        enriched.append({
             'id': n[0],
             'title': n[1],
             'text': n[2],
@@ -312,100 +393,124 @@ def news():
             'reactions': reactions,
             'comments_count': comments_count
         })
-    return render_template('news.html', news=news_with_extra)
+    return render_template('news.html', news=enriched)
 
 @app.route('/search')
 def search():
     query = request.args.get('q', '')
+    # TODO: если нужно — реализуй поиск в database.py
     results = []
-    if query:
-        pass
     return render_template('search.html', query=query, results=results)
 
-# --- API для загрузки файлов ---
-def save_uploaded_file(file_storage, allowed_exts):
-    if file_storage and allowed_file(file_storage.filename, allowed_exts):
-        filename = secure_filename(file_storage.filename)
-        unique_name = f"{uuid.uuid4()}_{filename}"
-        path = os.path.join(app.config['UPLOAD_FOLDER'], unique_name)
-        file_storage.save(path)
-        return f"/uploads/{unique_name}"
-    return None
-
+# ====== API: добавление контента (файл / URL + опциональное скачивание прямых ссылок) ======
 @app.route('/api/add_moment', methods=['POST'])
 def api_add_moment():
     try:
+        # 1) Приоритет — загруженный файл
         video_url = ''
-        if 'video_file' in request.files and request.files['video_file'].filename != '':
+        if 'video_file' in request.files and request.files['video_file'].filename:
             video_url = save_uploaded_file(request.files['video_file'], ALLOWED_VIDEO_EXTENSIONS) or ''
-        else:
-            if request.is_json:
-                video_url = request.json.get('video_url', '')
-            else:
-                video_url = request.form.get('video_url', '')
 
-        data = request.form if request.form else (request.json if request.is_json else {})
-        add_moment(data.get('title', ''), data.get('description', ''), video_url)
+        # 2) Если файла нет — берем URL
+        if not video_url:
+            if request.is_json:
+                video_url = (request.json or {}).get('video_url', '') or ''
+                title = (request.json or {}).get('title', '') or ''
+                description = (request.json or {}).get('description', '') or ''
+            else:
+                video_url = request.form.get('video_url', '') or ''
+                title = request.form.get('title', '') or ''
+                description = request.form.get('description', '') or ''
+        else:
+            # Файл есть, а текстовые поля могут прийти в form-data
+            title = request.form.get('title', '') if request.form else ''
+            description = request.form.get('description', '') if request.form else ''
+
+        # 3) Если пришёл прямой URL (CDN) — пробуем скачать на сервер
+        if not video_url.startswith('/uploads/') and _should_download_to_server(video_url):
+            local = download_and_store(video_url, ALLOWED_VIDEO_EXTENSIONS)
+            if local:
+                video_url = local
+
+        add_moment(title, description, video_url)
         return jsonify(success=True)
     except Exception as e:
-        logger.error(f"API add_moment error: {e}")
-        return jsonify(success=False, error=str(e))
+        logger.exception("API add_moment error")
+        return jsonify(success=False, error=str(e)), 400
 
 @app.route('/api/add_trailer', methods=['POST'])
 def api_add_trailer():
     try:
         video_url = ''
-        if 'video_file' in request.files and request.files['video_file'].filename != '':
+        if 'video_file' in request.files and request.files['video_file'].filename:
             video_url = save_uploaded_file(request.files['video_file'], ALLOWED_VIDEO_EXTENSIONS) or ''
-        else:
-            if request.is_json:
-                video_url = request.json.get('video_url', '')
-            else:
-                video_url = request.form.get('video_url', '')
 
-        data = request.form if request.form else (request.json if request.is_json else {})
-        add_trailer(data.get('title', ''), data.get('description', ''), video_url)
+        if not video_url:
+            if request.is_json:
+                video_url = (request.json or {}).get('video_url', '') or ''
+                title = (request.json or {}).get('title', '') or ''
+                description = (request.json or {}).get('description', '') or ''
+            else:
+                video_url = request.form.get('video_url', '') or ''
+                title = request.form.get('title', '') or ''
+                description = request.form.get('description', '') or ''
+        else:
+            title = request.form.get('title', '') if request.form else ''
+            description = request.form.get('description', '') if request.form else ''
+
+        if not video_url.startswith('/uploads/') and _should_download_to_server(video_url):
+            local = download_and_store(video_url, ALLOWED_VIDEO_EXTENSIONS)
+            if local:
+                video_url = local
+
+        add_trailer(title, description, video_url)
         return jsonify(success=True)
     except Exception as e:
-        logger.error(f"API add_trailer error: {e}")
-        return jsonify(success=False, error=str(e))
+        logger.exception("API add_trailer error")
+        return jsonify(success=False, error=str(e)), 400
 
 @app.route('/api/add_news', methods=['POST'])
 def api_add_news():
     try:
-        title = ''
-        text = ''
-        image_url = ''
-
         if request.is_json:
-            title = request.json.get('title', '')
-            text = request.json.get('text', '')
-            image_url = request.json.get('image_url', '')
+            title = (request.json or {}).get('title', '') or ''
+            text = (request.json or {}).get('text', '') or ''
+            image_url = (request.json or {}).get('image_url', '') or ''
         else:
-            title = request.form.get('title', '')
-            text = request.form.get('text', '')
+            title = request.form.get('title', '') or ''
+            text = request.form.get('text', '') or ''
+            image_url = request.form.get('image_url', '') or ''
 
-        if 'image_file' in request.files and request.files['image_file'].filename != '':
-            image_url = save_uploaded_file(request.files['image_file'], ALLOWED_IMAGE_EXTENSIONS) or ''
+        # Файл изображения имеет приоритет
+        if 'image_file' in request.files and request.files['image_file'].filename:
+            image_url = save_uploaded_file(request.files['image_file'], ALLOWED_IMAGE_EXTENSIONS) or image_url
 
-        if not image_url and 'image_url' in request.form:
-            image_url = request.form['image_url']
+        # Если пришёл прямой URL (CDN) для картинки — пробуем скачать на сервер
+        if image_url and not image_url.startswith('/uploads/') and _should_download_to_server(image_url):
+            local = download_and_store(image_url, ALLOWED_IMAGE_EXTENSIONS)
+            if local:
+                image_url = local
 
         add_news(title, text, image_url)
         return jsonify(success=True)
     except Exception as e:
-        logger.error(f"API add_news error: {e}")
-        return jsonify(success=False, error=str(e))
+        logger.exception("API add_news error")
+        return jsonify(success=False, error=str(e)), 400
 
-@app.route('/uploads/<filename>')
+# ====== Отдача загруженных файлов ======
+@app.route('/uploads/<path:filename>')
 def uploaded_file(filename):
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+    safe = secure_filename(filename)
+    full_path = os.path.join(app.config['UPLOAD_FOLDER'], safe)
+    if not os.path.isfile(full_path):
+        abort(404)
+    return send_from_directory(app.config['UPLOAD_FOLDER'], safe, as_attachment=False)
 
-# --- API реакции и комментариев ---
+# ====== Реакции и комментарии ======
 @app.route('/api/reaction', methods=['POST'])
 def api_add_reaction():
     try:
-        data = request.json
+        data = request.get_json(force=True)
         success = add_reaction(
             data.get('item_type'),
             data.get('item_id'),
@@ -414,24 +519,24 @@ def api_add_reaction():
         )
         return jsonify(success=success)
     except Exception as e:
-        logger.error(f"API add_reaction error: {e}")
-        return jsonify(success=False, error=str(e))
+        logger.exception("API add_reaction error")
+        return jsonify(success=False, error=str(e)), 400
 
 @app.route('/api/comments', methods=['GET'])
 def api_get_comments():
     try:
         item_type = request.args.get('type')
-        item_id = request.args.get('id')
-        comments = get_comments(item_type, int(item_id))
+        item_id = int(request.args.get('id'))
+        comments = get_comments(item_type, item_id)
         return jsonify(comments=comments)
     except Exception as e:
-        logger.error(f"API get_comments error: {e}")
-        return jsonify(comments=[], error=str(e))
+        logger.exception("API get_comments error")
+        return jsonify(comments=[], error=str(e)), 400
 
 @app.route('/api/comment', methods=['POST'])
 def api_add_comment():
     try:
-        data = request.json
+        data = request.get_json(force=True)
         add_comment(
             data.get('item_type'),
             data.get('item_id'),
@@ -440,10 +545,10 @@ def api_add_comment():
         )
         return jsonify(success=True)
     except Exception as e:
-        logger.error(f"API add_comment error: {e}")
-        return jsonify(success=False, error=str(e))
+        logger.exception("API add_comment error")
+        return jsonify(success=False, error=str(e)), 400
 
-# --- Админка ---
+# ====== Админка ======
 @app.route('/admin/login', methods=['GET', 'POST'])
 def admin_login():
     if request.method == 'POST':
@@ -498,4 +603,53 @@ def admin_delete(content_type, content_id):
         delete_trailer(content_id)
     elif content_type == 'news':
         delete_news(content_id)
-    return
+    return redirect(url_for('admin_content'))
+
+@app.route('/admin/access')
+@admin_required
+def admin_access_settings():
+    moment_roles = get_access_settings('moment')
+    trailer_roles = get_access_settings('trailer')
+    news_roles = get_access_settings('news')
+    logger.debug(f"Access settings -> moments: {moment_roles}, trailers: {trailer_roles}, news: {news_roles}")
+    return render_template(
+        'admin/access/settings.html',
+        moment_roles=moment_roles,
+        trailer_roles=trailer_roles,
+        news_roles=news_roles
+    )
+
+@app.route('/admin/access/update/<content_type>', methods=['POST'])
+@admin_required
+def admin_update_access(content_type):
+    roles = request.form.getlist('roles')
+    update_access_settings(content_type, roles)
+    logger.info(f"Updated access roles for {content_type}: {roles}")
+    return redirect(url_for('admin_access_settings'))
+
+# ====== Запуск бота и приложения ======
+def start_bot():
+    logger.info("Запуск Telegram бота (polling)...")
+    updater.start_polling()
+    updater.idle()
+
+if __name__ == '__main__':
+    # 1) Инициализация вашей основной БД (контент/реакции/комменты/роли)
+    try:
+        init_db()
+        logger.info("✅ База данных (контент) инициализирована.")
+        print("✅ База данных (контент) инициализирована.")
+    except Exception as e:
+        logger.error(f"❌ Ошибка init_db(): {e}")
+        print(f"❌ Ошибка init_db(): {e}")
+
+    # 2) Инициализация таблицы telegram_users для состояния /start
+    ensure_tg_state_table()
+
+    # 3) Запуск бота в отдельном потоке
+    bot_thread = threading.Thread(target=start_bot, daemon=True)
+    bot_thread.start()
+
+    # 4) Flask
+    port = int(os.environ.get('PORT', 10000))
+    app.run(host='0.0.0.0', port=port)
