@@ -19,9 +19,10 @@ document.addEventListener('DOMContentLoaded', function() {
             webApp.ready(); // уведомляем Telegram, что приложение готово
             webApp.expand(); // разворачиваем на полный экран
             webApp.enableClosingConfirmation();
-            webApp.setHeaderColor('#0f0c29');
-            webApp.setBackgroundColor('#0f0c29');
-            console.log("Telegram WebApp инициализирован и расширен");
+            webApp.setHeaderColor('#0f0c29'); // цвет заголовка почти сливается с фоном
+            webApp.setBackgroundColor('#0f0c29'); // фон приложения
+            webApp.MainButton.hide(); // скрываем нижнюю кнопку Telegram
+            console.log("Telegram WebApp инициализирован и максимально fullscreen");
         } catch (error) {
             console.error("Ошибка инициализации Telegram WebApp:", error);
         }
@@ -391,30 +392,4 @@ function setupContentForm(formId, typeName, apiUrl, modalId, alwaysFormData=fals
         const formData = new FormData(this);
         if (alwaysFormData) formData.delete(typeName);
 
-        const typeValue = this.querySelector(`input[name="${typeName}"]:checked`)?.value || 'url';
-        try {
-            let response;
-            if (!alwaysFormData && typeValue === 'upload' && this.querySelector(`input[name="${typeName}_file"]`)?.files[0]) {
-                response = await fetch(apiUrl, { method: 'POST', body: formData });
-            } else {
-                const jsonData = {};
-                formData.forEach((v, k) => jsonData[k] = v);
-                response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(jsonData) });
-            }
-
-            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-            const result = await response.json();
-            if (result.success) {
-                closeModal(modalId);
-                location.reload();
-            } else {
-                alert('Ошибка: ' + (result.error || 'Не удалось добавить контент'));
-            }
-        } catch (error) {
-            console.error('Ошибка загрузки:', error);
-            alert('Ошибка загрузки: ' + error.message);
-        }
-    });
-}
-
-console.log("main.js загружен и выполняется!");
+        const typeValue = this.querySelector(`
