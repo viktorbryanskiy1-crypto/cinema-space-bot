@@ -1,4 +1,4 @@
-// main.js — полный рабочий файл с оптимизацией Telegram WebApp
+// main.js — полный рабочий файл с оптимизацией Telegram WebApp и fullscreen
 
 // Глобальные переменные
 let currentTab = 'moments';
@@ -17,11 +17,19 @@ document.addEventListener('DOMContentLoaded', function() {
 
         try {
             webApp.ready(); // уведомляем Telegram, что приложение готово
-            webApp.expand(); // разворачиваем на полный экран
+
+            // Попытка fullscreen (максимальный размер)
+            if (webApp.requestFullscreen) {
+                webApp.requestFullscreen();
+            } else {
+                webApp.expand(); // fallback
+            }
+
             webApp.enableClosingConfirmation();
             webApp.setHeaderColor('#0f0c29');
             webApp.setBackgroundColor('#0f0c29');
-            console.log("Telegram WebApp инициализирован и расширен");
+            webApp.MainButton.hide(); // скрыть нижнюю кнопку
+            console.log("Telegram WebApp инициализирован и расширен до полного экрана");
         } catch (error) {
             console.error("Ошибка инициализации Telegram WebApp:", error);
         }
@@ -139,7 +147,7 @@ function addReactionHandlers() {
     document.querySelectorAll('.reaction-btn').forEach(btn => {
         const clone = btn.cloneNode(true);
         btn.parentNode.replaceChild(clone, btn);
-        
+
         clone.addEventListener('click', async function () {
             const itemId = this.dataset.id;
             const itemType = this.dataset.type;
@@ -417,4 +425,4 @@ function setupContentForm(formId, typeName, apiUrl, modalId, alwaysFormData=fals
     });
 }
 
-console.log("main.js загружен и выполняется!");
+console.log("main.js загружен и выполняется с fullscreen Telegram WebApp!");
