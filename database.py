@@ -342,7 +342,7 @@ def add_comment(item_type, item_id, user_name, text):
         conn.close()
 
 def authenticate_admin(username, password):
-    """Проверка авторизации администратора"""
+    """Проверка авторизации администратора - ИСПРАВЛЕНА ВЕРСИЯ"""
     conn = get_db_connection()
     c = conn.cursor()
     try:
@@ -350,10 +350,27 @@ def authenticate_admin(username, password):
         result = c.fetchone()
         if result:
             stored_hash = result['password_hash']
-            # Проверяем, является ли stored_hash bytes, если нет - конвертируем
+            
+            # Обработка разных типов данных, которые могут прийти из PostgreSQL
             if isinstance(stored_hash, str):
-                stored_hash = stored_hash.encode('utf-8')
-            return bcrypt.checkpw(password.encode('utf-8'), stored_hash)
+                # Если это строка, попробуем декодировать из base64 или оставить как есть
+                try:
+                    import base64
+                    stored_hash = base64.b64decode(stored_hash)
+                except:
+                    # Если не base64, конвертируем в bytes
+                    stored_hash = stored_hash.encode('utf-8')
+            elif isinstance(stored_hash, memoryview):
+                # Если это memoryview (часто бывает в PostgreSQL)
+                stored_hash = bytes(stored_hash)
+            
+            # Убедимся, что пароль тоже в правильном формате
+            password_bytes = password.encode('utf-8')
+            
+            return bcrypt.checkpw(password_bytes, stored_hash)
+        return False
+    except Exception as e:
+        print(f"Ошибка аутентификации: {e}")
         return False
     finally:
         conn.close()
