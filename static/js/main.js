@@ -1,3 +1,21 @@
+// Полноэкранный режим при загрузке
+document.addEventListener('DOMContentLoaded', function() {
+    // Попытка открыть в полноэкранном режиме
+    if (window.Telegram && window.Telegram.WebApp) {
+        const webApp = window.Telegram.WebApp;
+        webApp.expand(); // Раскрываем WebApp на весь доступный размер
+        webApp.enableClosingConfirmation(); // Подтверждение при закрытии
+        
+        // Установка цвета фона статус бара
+        webApp.setHeaderColor('#0f0c29');
+        webApp.setBackgroundColor('#0f0c29');
+    }
+    
+    // Скрываем адресную строку на мобильных устройствах
+    window.scrollTo(0, 1);
+    setTimeout(() => window.scrollTo(0, 1), 100);
+});
+
 // Глобальные переменные
 let currentTab = 'moments';
 let userId = 'user_' + Math.random().toString(36).substr(2, 9);
