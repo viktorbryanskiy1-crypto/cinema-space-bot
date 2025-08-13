@@ -1,19 +1,27 @@
-// Полноэкранный режим при загрузке
+// Полноэкранный режим при загрузке с логированием
 document.addEventListener('DOMContentLoaded', function() {
-    // Попытка открыть в полноэкранном режиме
+    console.log("DOMContentLoaded сработал");
+    
     if (window.Telegram && window.Telegram.WebApp) {
-        const webApp = window.Telegram.WebApp;
-        webApp.expand(); // Раскрываем WebApp на весь доступный размер
-        webApp.enableClosingConfirmation(); // Подтверждение при закрытии
+        console.log("Telegram WebApp API доступен");
         
-        // Установка цвета фона статус бара
+        const webApp = window.Telegram.WebApp;
+        
+        try {
+            webApp.expand();
+            console.log("Вызов webApp.expand() выполнен успешно");
+        } catch (error) {
+            console.error("Ошибка при вызове webApp.expand():", error);
+        }
+        
+        webApp.enableClosingConfirmation();
         webApp.setHeaderColor('#0f0c29');
         webApp.setBackgroundColor('#0f0c29');
+        
+        console.log("Все методы Telegram WebApp вызваны");
+    } else {
+        console.warn("Telegram WebApp API недоступен");
     }
-    
-    // Скрываем адресную строку на мобильных устройствах
-    window.scrollTo(0, 1);
-    setTimeout(() => window.scrollTo(0, 1), 100);
 });
 
 // Глобальные переменные
