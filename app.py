@@ -78,7 +78,7 @@ def start(update, context):
         keyboard = [[
             InlineKeyboardButton(
                 "🌌 КиноВселенная",
-                web_app=WebAppInfo(url=WEBHOOK_URL)
+                web_app=WebAppInfo(url=f"{WEBHOOK_URL}?mode=fullscreen")  # Добавляем параметр
             )
         ]]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -87,7 +87,7 @@ def start(update, context):
             "✨ Исследуй космос кино\n"
             "🎬 Лучшие моменты из фильмов\n"
             "🎥 Свежие трейлеры\n"
-            "📰 Горячие новости\n\n"
+            "📰 Горячие новости\n"
             "Нажми кнопку для входа в космическое приложение",
             reply_markup=reply_markup
         )
