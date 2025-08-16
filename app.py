@@ -488,4 +488,4 @@ def admin_update_access(content_type):
     roles = request.form.getlist('roles')
     update_access_settings(content_type, roles)
     logger.info(f"Updated access roles for {content_type}: {roles}")
-    return redirect(url_for('admin
+    return redirect(url_for('admin_access_settings'))
