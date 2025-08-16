@@ -158,6 +158,20 @@ def get_all_moments():
     finally:
         conn.close()
 
+def get_moment_by_id(moment_id):
+    """Получить один момент по id. Возвращает tuple (как в get_all_moments) или None."""
+    conn = get_db_connection()
+    c = conn.cursor()
+    try:
+        c.execute("SELECT * FROM moments WHERE id = %s", (moment_id,))
+        row = c.fetchone()
+        if not row:
+            return None
+        # Возвращаем в том же формате, что и get_all_moments (tuple)
+        return tuple(row.values())
+    finally:
+        conn.close()
+
 def add_moment(title, description, video_url):
     conn = get_db_connection()
     c = conn.cursor()
