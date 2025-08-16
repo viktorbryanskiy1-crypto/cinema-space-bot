@@ -11,9 +11,10 @@ from flask import (
 from werkzeug.utils import secure_filename
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, Update
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
+import redis
+import json
 
 # Импорт из твоего модуля database
-# ВАЖНО: Убедитесь, что в database.py нет вызова init_db() в конце файла
 from database import (
     get_or_create_user, get_user_role,
     add_moment, add_trailer, add_news,
@@ -23,7 +24,7 @@ from database import (
     authenticate_admin, get_stats,
     delete_moment, delete_trailer, delete_news,
     get_access_settings, update_access_settings,
-    init_db # <-- Импортируем init_db
+    init_db
 )
 
 # --- Настройка логирования ---
@@ -35,14 +36,16 @@ logger = logging.getLogger(__name__)
 
 # --- Конфигурация ---
 TOKEN = os.environ.get('TELEGRAM_TOKEN')
-WEBHOOK_URL = os.environ.get('WEBHOOK_URL', 'https://cinema-space-bot.onrender.com').strip() # Убраны лишние пробелы
+WEBHOOK_URL = os.environ.get('WEBHOOK_URL', 'https://cinema-space-bot.onrender.com').strip()
 if not TOKEN:
-    logger.error("TELEGRAM_TOKEN не установлен в переменных окружения!")
+    logger.error("TELEGRAM_TOKEN не установлен!")
     exit(1)
+
+REDIS_URL = os.environ.get('REDIS_URL', 'rediss://default:password@host:6379')
+redis_client = redis.from_url(REDIS_URL, decode_responses=True)
 
 # --- Flask приложение ---
 app = Flask(__name__)
-# Используем секретный ключ из переменных окружения для безопасности
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'super-secret-key-change-me-please')
 
 # Загрузка файлов
@@ -59,11 +62,7 @@ def allowed_file(filename, allowed_extensions):
 # --- Telegram bot ---
 updater = Updater(TOKEN, use_context=True)
 dp = updater.dispatcher
-
-# --- Временное хранилище для пошагового добавления видео ---
 pending_video_data = {}
-
-# --- Хэндлеры Telegram ---
 
 def start(update, context):
     try:
@@ -78,7 +77,7 @@ def start(update, context):
         keyboard = [[
             InlineKeyboardButton(
                 "🌌 КиноВселенная",
-                web_app=WebAppInfo(url=f"{WEBHOOK_URL}?mode=fullscreen")  # Добавляем параметр
+                web_app=WebAppInfo(url=f"{WEBHOOK_URL}?mode=fullscreen")
             )
         ]]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -120,11 +119,7 @@ def add_video_command(update, context):
         update.message.reply_text("❌ Тип контента должен быть: moment, trailer или news")
         return
 
-    pending_video_data[telegram_id] = {
-        'content_type': content_type,
-        'title': title
-    }
-
+    pending_video_data[telegram_id] = {'content_type': content_type, 'title': title}
     update.message.reply_text(
         f"🎬 Вы хотите добавить '{content_type}' с названием '{title}'.\n"
         "Пришлите, пожалуйста, ссылку на видео (YouTube, Telegram и т.п.)."
@@ -135,7 +130,7 @@ def handle_pending_video_url(update, context):
     user = update.message.from_user
     telegram_id = str(user.id)
     if telegram_id not in pending_video_data:
-        return  # Нет ожидающего состояния
+        return
 
     video_url = update.message.text.strip()
     if not video_url:
@@ -146,14 +141,11 @@ def handle_pending_video_url(update, context):
     content_type = data['content_type']
     title = data['title']
 
-    # ИСПРАВЛЕНО: Убраны лишние пробелы в проверке
     is_telegram_link = video_url.startswith('https://t.me/')
     if is_telegram_link:
         update.message.reply_text(f"ℹ️ Обнаружена Telegram-ссылка: {video_url}")
-        logger.info(f"ℹ️ Обнаружена Telegram-ссылка: {video_url}")
     else:
         update.message.reply_text(f"ℹ️ Получена ссылка: {video_url}")
-        logger.info(f"ℹ️ Получена ссылка: {video_url}")
 
     try:
         description = "Добавлено через Telegram бот"
@@ -164,96 +156,22 @@ def handle_pending_video_url(update, context):
         elif content_type == 'news':
             add_news(title, description, video_url)
         update.message.reply_text(f"✅ '{content_type}' '{title}' успешно добавлен!")
-        logger.info(f"Пользователь {telegram_id} добавил {content_type}: {title}")
     except Exception as e:
         logger.error(f"Ошибка добавления видео: {e}")
         update.message.reply_text(f"❌ Ошибка при добавлении: {e}")
-        # Вернуть данные в ожидание, чтобы попытаться снова
         pending_video_data[telegram_id] = data
 
-# --- Регистрируем обработчики ---
 dp.add_handler(CommandHandler('start', start))
 dp.add_handler(CommandHandler('add_video', add_video_command))
 dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_pending_video_url))
 
-# --- Webhook для Telegram ---
 @app.route(f'/{TOKEN}', methods=['POST'])
 def webhook():
     update = Update.de_json(request.get_json(force=True), updater.bot)
     updater.dispatcher.process_update(update)
     return 'ok'
 
-# --- Flask маршруты ---
-
-@app.route('/')
-def index():
-    return render_template('index.html')
-
-@app.route('/moments')
-def moments():
-    moments_data = get_all_moments()
-    moments_with_extra = []
-    for m in moments_data:
-        reactions = get_reactions_count('moment', m[0])
-        comments_count = len(get_comments('moment', m[0]))
-        moments_with_extra.append({
-            'id': m[0],
-            'title': m[1],
-            'description': m[2],
-            'video_url': m[3],
-            'created_at': m[4],
-            'reactions': reactions,
-            'comments_count': comments_count
-        })
-    return render_template('moments.html', moments=moments_with_extra)
-
-@app.route('/trailers')
-def trailers():
-    trailers_data = get_all_trailers()
-    trailers_with_extra = []
-    for t in trailers_data:
-        reactions = get_reactions_count('trailer', t[0])
-        comments_count = len(get_comments('trailer', t[0]))
-        trailers_with_extra.append({
-            'id': t[0],
-            'title': t[1],
-            'description': t[2],
-            'video_url': t[3],
-            'created_at': t[4],
-            'reactions': reactions,
-            'comments_count': comments_count
-        })
-    return render_template('trailers.html', trailers=trailers_with_extra)
-
-@app.route('/news')
-def news():
-    news_data = get_all_news()
-    news_with_extra = []
-    for n in news_data:
-        reactions = get_reactions_count('news', n[0])
-        comments_count = len(get_comments('news', n[0]))
-        news_with_extra.append({
-            'id': n[0],
-            'title': n[1],
-            'text': n[2],
-            'image_url': n[3],
-            'created_at': n[4],
-            'reactions': reactions,
-            'comments_count': comments_count
-        })
-    return render_template('news.html', news=news_with_extra)
-
-@app.route('/search')
-def search():
-    query = request.args.get('q', '')
-    results = []
-    if query:
-        # TODO: реализовать поиск по БД
-        pass
-    return render_template('search.html', query=query, results=results)
-
-# --- API для добавления контента ---
-
+# --- Вспомогательные функции для файлов ---
 def save_uploaded_file(file_storage, allowed_exts):
     if file_storage and allowed_file(file_storage.filename, allowed_exts):
         filename = secure_filename(file_storage.filename)
@@ -263,23 +181,100 @@ def save_uploaded_file(file_storage, allowed_exts):
         return f"/uploads/{unique_name}"
     return None
 
+# --- Кэширование через Redis ---
+def cache_get(key):
+    data = redis_client.get(key)
+    if data:
+        return json.loads(data)
+    return None
+
+def cache_set(key, value, expire=300):
+    redis_client.set(key, json.dumps(value), ex=expire)
+
+# --- Flask маршруты ---
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/moments')
+def moments():
+    cached = cache_get('moments_list')
+    if cached:
+        return render_template('moments.html', moments=cached)
+
+    moments_data = get_all_moments()
+    moments_with_extra = []
+    for m in moments_data:
+        reactions = get_reactions_count('moment', m[0])
+        comments_count = len(get_comments('moment', m[0]))
+        moments_with_extra.append({
+            'id': m[0], 'title': m[1], 'description': m[2],
+            'video_url': m[3], 'created_at': m[4],
+            'reactions': reactions, 'comments_count': comments_count
+        })
+
+    cache_set('moments_list', moments_with_extra)
+    return render_template('moments.html', moments=moments_with_extra)
+
+@app.route('/trailers')
+def trailers():
+    cached = cache_get('trailers_list')
+    if cached:
+        return render_template('trailers.html', trailers=cached)
+
+    trailers_data = get_all_trailers()
+    trailers_with_extra = []
+    for t in trailers_data:
+        reactions = get_reactions_count('trailer', t[0])
+        comments_count = len(get_comments('trailer', t[0]))
+        trailers_with_extra.append({
+            'id': t[0], 'title': t[1], 'description': t[2],
+            'video_url': t[3], 'created_at': t[4],
+            'reactions': reactions, 'comments_count': comments_count
+        })
+
+    cache_set('trailers_list', trailers_with_extra)
+    return render_template('trailers.html', trailers=trailers_with_extra)
+
+@app.route('/news')
+def news():
+    cached = cache_get('news_list')
+    if cached:
+        return render_template('news.html', news=cached)
+
+    news_data = get_all_news()
+    news_with_extra = []
+    for n in news_data:
+        reactions = get_reactions_count('news', n[0])
+        comments_count = len(get_comments('news', n[0]))
+        news_with_extra.append({
+            'id': n[0], 'title': n[1], 'text': n[2],
+            'image_url': n[3], 'created_at': n[4],
+            'reactions': reactions, 'comments_count': comments_count
+        })
+
+    cache_set('news_list', news_with_extra)
+    return render_template('news.html', news=news_with_extra)
+
+@app.route('/search')
+def search():
+    query = request.args.get('q', '')
+    results = []
+    return render_template('search.html', query=query, results=results)
+
+# --- API для добавления контента ---
 @app.route('/api/add_moment', methods=['POST'])
 def api_add_moment():
     try:
         video_url = ''
-        # Проверяем, есть ли видео файл в запросе
         if 'video_file' in request.files and request.files['video_file'].filename != '':
             video_url = save_uploaded_file(request.files['video_file'], ALLOWED_VIDEO_EXTENSIONS) or ''
         else:
-            # Если файла нет, пытаемся получить URL из JSON или form data
-            if request.is_json:
-                video_url = request.json.get('video_url', '')
-            else:
-                video_url = request.form.get('video_url', '')
+            video_url = request.json.get('video_url', '') if request.is_json else request.form.get('video_url', '')
 
-        # Получаем данные из формы или JSON
         data = request.form if request.form else (request.json if request.is_json else {})
         add_moment(data.get('title', ''), data.get('description', ''), video_url)
+        redis_client.delete('moments_list')  # Сброс кэша
         return jsonify(success=True)
     except Exception as e:
         logger.error(f"API add_moment error: {e}")
@@ -292,13 +287,11 @@ def api_add_trailer():
         if 'video_file' in request.files and request.files['video_file'].filename != '':
             video_url = save_uploaded_file(request.files['video_file'], ALLOWED_VIDEO_EXTENSIONS) or ''
         else:
-            if request.is_json:
-                video_url = request.json.get('video_url', '')
-            else:
-                video_url = request.form.get('video_url', '')
+            video_url = request.json.get('video_url', '') if request.is_json else request.form.get('video_url', '')
 
         data = request.form if request.form else (request.json if request.is_json else {})
         add_trailer(data.get('title', ''), data.get('description', ''), video_url)
+        redis_client.delete('trailers_list')
         return jsonify(success=True)
     except Exception as e:
         logger.error(f"API add_trailer error: {e}")
@@ -307,28 +300,22 @@ def api_add_trailer():
 @app.route('/api/add_news', methods=['POST'])
 def api_add_news():
     try:
-        title = ''
-        text = ''
-        image_url = ''
-
-        # Получаем текстовые данные
+        title, text, image_url = '', '', ''
         if request.is_json:
             title = request.json.get('title', '')
             text = request.json.get('text', '')
-            image_url = request.json.get('image_url', '') # Получаем image_url из JSON, если есть
+            image_url = request.json.get('image_url', '')
         else:
             title = request.form.get('title', '')
             text = request.form.get('text', '')
 
-        # Проверяем, есть ли файл изображения
         if 'image_file' in request.files and request.files['image_file'].filename != '':
             image_url = save_uploaded_file(request.files['image_file'], ALLOWED_IMAGE_EXTENSIONS) or ''
-
-        # Если нет файла и нет URL в form data, проверяем отдельно (для form data)
         if not image_url and 'image_url' in request.form:
-             image_url = request.form['image_url']
+            image_url = request.form['image_url']
 
         add_news(title, text, image_url)
+        redis_client.delete('news_list')
         return jsonify(success=True)
     except Exception as e:
         logger.error(f"API add_news error: {e}")
@@ -339,7 +326,6 @@ def uploaded_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 # --- API для реакций и комментариев ---
-
 @app.route('/api/reaction', methods=['POST'])
 def api_add_reaction():
     try:
@@ -382,7 +368,6 @@ def api_add_comment():
         return jsonify(success=False, error=str(e))
 
 # --- Админка ---
-
 @app.route('/admin/login', methods=['GET', 'POST'])
 def admin_login():
     if request.method == 'POST':
@@ -445,9 +430,6 @@ def admin_access_settings():
     moment_roles = get_access_settings('moment')
     trailer_roles = get_access_settings('trailer')
     news_roles = get_access_settings('news')
-
-    logger.debug(f"Access settings - moments: {moment_roles}, trailers: {trailer_roles}, news: {news_roles}")
-
     return render_template(
         'admin/access/settings.html',
         moment_roles=moment_roles,
@@ -464,26 +446,17 @@ def admin_update_access(content_type):
     return redirect(url_for('admin_access_settings'))
 
 # --- Запуск бота и приложения ---
-
 def start_bot():
-    logger.info("Запуск Telegram бота...")
     updater.start_polling()
     updater.idle()
 
 if __name__ == '__main__':
-    # --- ДОБАВЛЕНО ДЛЯ ИНИЦИАЛИЗАЦИИ БАЗЫ ДАННЫХ ---
-    # Вызываем init_db() один раз при запуске приложения
     try:
         init_db()
         logger.info("✅ База данных успешно инициализирована при запуске приложения.")
-        print("✅ База данных успешно инициализирована при запуске приложения.")
     except Exception as e:
         logger.error(f"❌ Ошибка инициализации базы данных: {e}")
-        print(f"❌ Ошибка инициализации базы данных: {e}")
-        # В production, возможно, лучше завершить работу приложения, если БД не инициализировалась
-        # exit(1)
-    # --- КОНЕЦ ДОБАВЛЕНИЯ ---
-    
+
     bot_thread = threading.Thread(target=start_bot, daemon=True)
     bot_thread.start()
 
