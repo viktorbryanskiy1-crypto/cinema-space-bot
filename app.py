@@ -489,3 +489,21 @@ def admin_update_access(content_type):
     update_access_settings(content_type, roles)
     logger.info(f"Updated access roles for {content_type}: {roles}")
     return redirect(url_for('admin_access_settings'))
+
+# --- Запуск бота и приложения ---
+def start_bot():
+    updater.start_polling()
+    updater.idle()
+
+if __name__ == '__main__':
+    try:
+        init_db()
+        logger.info("✅ База данных успешно инициализирована при запуске приложения.")
+    except Exception as e:
+        logger.error(f"❌ Ошибка инициализации базы данных: {e}")
+
+    bot_thread = threading.Thread(target=start_bot, daemon=True)
+    bot_thread.start()
+
+    port = int(os.environ.get('PORT', 10000))
+    app.run(host='0.0.0.0', port=port)
