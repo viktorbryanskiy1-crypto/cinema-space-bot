@@ -41,8 +41,38 @@ if not TOKEN:
     logger.error("TELEGRAM_TOKEN не установлен!")
     exit(1)
 
-REDIS_URL = os.environ.get('REDIS_URL', 'rediss://default:password@host:6379')
-redis_client = redis.from_url(REDIS_URL, decode_responses=True)
+# Пытаемся получить REDIS_URL из окружения (например Upstash)
+REDIS_URL = os.environ.get('REDIS_URL', None)
+
+# Инициализация redis_client безопасно
+redis_client = None
+if REDIS_URL:
+    try:
+        # decode_responses=True чтобы работать с python str, а не bytes
+        redis_client = redis.from_url(REDIS_URL, decode_responses=True)
+        # небольшая проверка соединения (PING)
+        try:
+            redis_client.ping()
+            logger.info("✅ Redis успешно подключён по REDIS_URL")
+        except Exception as e:
+            logger.warning(f"⚠️ Redis подключённый по REDIS_URL, но PING вернул ошибку: {e}")
+    except Exception as e:
+        logger.error(f"❌ Ошибка при создании redis клиента из REDIS_URL: {e}")
+        redis_client = None
+else:
+    # fallback на локальный Redis (для локальной разработки)
+    try:
+        redis_client = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+        try:
+            redis_client.ping()
+            logger.info("✅ Локальный Redis (localhost:6379) доступен и подключён")
+        except Exception:
+            # Если нет локального Redis — оставляем redis_client = None и работаем без кеша
+            logger.warning("⚠️ Локальный Redis не отвечает (localhost:6379). Приложение будет работать без кэша.")
+            redis_client = None
+    except Exception as e:
+        logger.error(f"❌ Ошибка при подключении к локальному Redis: {e}")
+        redis_client = None
 
 # --- Flask приложение ---
 app = Flask(__name__)
@@ -156,6 +186,12 @@ def handle_pending_video_url(update, context):
         elif content_type == 'news':
             add_news(title, description, video_url)
         update.message.reply_text(f"✅ '{content_type}' '{title}' успешно добавлен!")
+        # Попытка очистить кэш соответствующего списка
+        try:
+            if redis_client:
+                redis_client.delete(f"{content_type}s_list" if content_type != 'news' else 'news_list')
+        except Exception as e:
+            logger.warning(f"Не удалось удалить кэш после добавления через бот: {e}")
     except Exception as e:
         logger.error(f"Ошибка добавления видео: {e}")
         update.message.reply_text(f"❌ Ошибка при добавлении: {e}")
@@ -181,15 +217,34 @@ def save_uploaded_file(file_storage, allowed_exts):
         return f"/uploads/{unique_name}"
     return None
 
-# --- Кэширование через Redis ---
+# --- Кэширование через Redis (устойчивое) ---
 def cache_get(key):
-    data = redis_client.get(key)
-    if data:
-        return json.loads(data)
-    return None
+    if not redis_client:
+        return None
+    try:
+        data = redis_client.get(key)
+        if data:
+            return json.loads(data)
+        return None
+    except Exception as e:
+        logger.warning(f"Redis GET error for key {key}: {e}")
+        return None
 
 def cache_set(key, value, expire=300):
-    redis_client.set(key, json.dumps(value), ex=expire)
+    if not redis_client:
+        return
+    try:
+        redis_client.set(key, json.dumps(value), ex=expire)
+    except Exception as e:
+        logger.warning(f"Redis SET error for key {key}: {e}")
+
+def cache_delete(key):
+    if not redis_client:
+        return
+    try:
+        redis_client.delete(key)
+    except Exception as e:
+        logger.warning(f"Redis DELETE error for key {key}: {e}")
 
 # --- Flask маршруты ---
 @app.route('/')
@@ -198,21 +253,35 @@ def index():
 
 @app.route('/moments')
 def moments():
+    # пробуем получить из кэша
     cached = cache_get('moments_list')
     if cached:
         return render_template('moments.html', moments=cached)
 
-    moments_data = get_all_moments()
+    # Получаем из БД
+    try:
+        moments_data = get_all_moments() or []
+    except Exception as e:
+        logger.error(f"Ошибка при получении моментов из БД: {e}")
+        moments_data = []
+
     moments_with_extra = []
     for m in moments_data:
-        reactions = get_reactions_count('moment', m[0])
-        comments_count = len(get_comments('moment', m[0]))
+        try:
+            reactions = get_reactions_count('moment', m[0])
+        except Exception:
+            reactions = {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}
+        try:
+            comments_count = len(get_comments('moment', m[0]))
+        except Exception:
+            comments_count = 0
         moments_with_extra.append({
             'id': m[0], 'title': m[1], 'description': m[2],
             'video_url': m[3], 'created_at': m[4],
             'reactions': reactions, 'comments_count': comments_count
         })
 
+    # Сохраняем в кэш (если доступен)
     cache_set('moments_list', moments_with_extra)
     return render_template('moments.html', moments=moments_with_extra)
 
@@ -222,11 +291,22 @@ def trailers():
     if cached:
         return render_template('trailers.html', trailers=cached)
 
-    trailers_data = get_all_trailers()
+    try:
+        trailers_data = get_all_trailers() or []
+    except Exception as e:
+        logger.error(f"Ошибка при получении трейлеров из БД: {e}")
+        trailers_data = []
+
     trailers_with_extra = []
     for t in trailers_data:
-        reactions = get_reactions_count('trailer', t[0])
-        comments_count = len(get_comments('trailer', t[0]))
+        try:
+            reactions = get_reactions_count('trailer', t[0])
+        except Exception:
+            reactions = {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}
+        try:
+            comments_count = len(get_comments('trailer', t[0]))
+        except Exception:
+            comments_count = 0
         trailers_with_extra.append({
             'id': t[0], 'title': t[1], 'description': t[2],
             'video_url': t[3], 'created_at': t[4],
@@ -242,11 +322,22 @@ def news():
     if cached:
         return render_template('news.html', news=cached)
 
-    news_data = get_all_news()
+    try:
+        news_data = get_all_news() or []
+    except Exception as e:
+        logger.error(f"Ошибка при получении новостей из БД: {e}")
+        news_data = []
+
     news_with_extra = []
     for n in news_data:
-        reactions = get_reactions_count('news', n[0])
-        comments_count = len(get_comments('news', n[0]))
+        try:
+            reactions = get_reactions_count('news', n[0])
+        except Exception:
+            reactions = {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}
+        try:
+            comments_count = len(get_comments('news', n[0]))
+        except Exception:
+            comments_count = 0
         news_with_extra.append({
             'id': n[0], 'title': n[1], 'text': n[2],
             'image_url': n[3], 'created_at': n[4],
@@ -274,7 +365,7 @@ def api_add_moment():
 
         data = request.form if request.form else (request.json if request.is_json else {})
         add_moment(data.get('title', ''), data.get('description', ''), video_url)
-        redis_client.delete('moments_list')  # Сброс кэша
+        cache_delete('moments_list')  # Сброс кэша
         return jsonify(success=True)
     except Exception as e:
         logger.error(f"API add_moment error: {e}")
@@ -291,7 +382,7 @@ def api_add_trailer():
 
         data = request.form if request.form else (request.json if request.is_json else {})
         add_trailer(data.get('title', ''), data.get('description', ''), video_url)
-        redis_client.delete('trailers_list')
+        cache_delete('trailers_list')
         return jsonify(success=True)
     except Exception as e:
         logger.error(f"API add_trailer error: {e}")
@@ -315,7 +406,7 @@ def api_add_news():
             image_url = request.form['image_url']
 
         add_news(title, text, image_url)
-        redis_client.delete('news_list')
+        cache_delete('news_list')
         return jsonify(success=True)
     except Exception as e:
         logger.error(f"API add_news error: {e}")
