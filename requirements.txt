@@ -5,3 +5,17 @@ bcrypt==4.0.1
 psycopg2-binary==2.9.9
 Werkzeug==2.0.3
 aioredis==2.0.1
+redis==5.3.1
+tornado==6.1
+cachetools==4.2.2
+APScheduler==3.6.3
+certifi
+pytz>=2018.6
+itsdangerous>=2.0
+Jinja2>=3.0
+click>=7.1.2
+typing-extensions
+async-timeout
+tzlocal>=1.2
+six>=1.4.0
+MarkupSafe>=2.0
