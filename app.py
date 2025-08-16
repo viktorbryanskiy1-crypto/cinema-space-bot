@@ -1,4 +1,3 @@
-# app.py
 import os
 import threading
 import logging
@@ -41,34 +40,29 @@ if not TOKEN:
     logger.error("TELEGRAM_TOKEN не установлен!")
     exit(1)
 
-# Пытаемся получить REDIS_URL из окружения (например Upstash)
 REDIS_URL = os.environ.get('REDIS_URL', None)
 
-# Инициализация redis_client безопасно
+# --- Инициализация Redis ---
 redis_client = None
 if REDIS_URL:
     try:
-        # decode_responses=True чтобы работать с python str, а не bytes
         redis_client = redis.from_url(REDIS_URL, decode_responses=True)
-        # небольшая проверка соединения (PING)
         try:
             redis_client.ping()
-            logger.info("✅ Redis успешно подключён по REDIS_URL")
+            logger.info("✅ Redis подключён по REDIS_URL")
         except Exception as e:
-            logger.warning(f"⚠️ Redis подключённый по REDIS_URL, но PING вернул ошибку: {e}")
+            logger.warning(f"⚠️ Redis подключён, но PING вернул ошибку: {e}")
     except Exception as e:
-        logger.error(f"❌ Ошибка при создании redis клиента из REDIS_URL: {e}")
+        logger.error(f"❌ Ошибка при создании Redis клиента: {e}")
         redis_client = None
 else:
-    # fallback на локальный Redis (для локальной разработки)
     try:
         redis_client = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
         try:
             redis_client.ping()
-            logger.info("✅ Локальный Redis (localhost:6379) доступен и подключён")
+            logger.info("✅ Локальный Redis доступен и подключён")
         except Exception:
-            # Если нет локального Redis — оставляем redis_client = None и работаем без кеша
-            logger.warning("⚠️ Локальный Redis не отвечает (localhost:6379). Приложение будет работать без кэша.")
+            logger.warning("⚠️ Локальный Redis не отвечает. Работаем без кэша.")
             redis_client = None
     except Exception as e:
         logger.error(f"❌ Ошибка при подключении к локальному Redis: {e}")
@@ -171,11 +165,7 @@ def handle_pending_video_url(update, context):
     content_type = data['content_type']
     title = data['title']
 
-    is_telegram_link = video_url.startswith('https://t.me/')
-    if is_telegram_link:
-        update.message.reply_text(f"ℹ️ Обнаружена Telegram-ссылка: {video_url}")
-    else:
-        update.message.reply_text(f"ℹ️ Получена ссылка: {video_url}")
+    update.message.reply_text(f"ℹ️ Получена ссылка: {video_url}")
 
     try:
         description = "Добавлено через Telegram бот"
@@ -186,12 +176,8 @@ def handle_pending_video_url(update, context):
         elif content_type == 'news':
             add_news(title, description, video_url)
         update.message.reply_text(f"✅ '{content_type}' '{title}' успешно добавлен!")
-        # Попытка очистить кэш соответствующего списка
-        try:
-            if redis_client:
-                redis_client.delete(f"{content_type}s_list" if content_type != 'news' else 'news_list')
-        except Exception as e:
-            logger.warning(f"Не удалось удалить кэш после добавления через бот: {e}")
+        # Очистка кэша
+        cache_delete(f"{content_type}s_list" if content_type != 'news' else 'news_list')
     except Exception as e:
         logger.error(f"Ошибка добавления видео: {e}")
         update.message.reply_text(f"❌ Ошибка при добавлении: {e}")
@@ -207,7 +193,7 @@ def webhook():
     updater.dispatcher.process_update(update)
     return 'ok'
 
-# --- Вспомогательные функции для файлов ---
+# --- Вспомогательные функции ---
 def save_uploaded_file(file_storage, allowed_exts):
     if file_storage and allowed_file(file_storage.filename, allowed_exts):
         filename = secure_filename(file_storage.filename)
@@ -217,7 +203,7 @@ def save_uploaded_file(file_storage, allowed_exts):
         return f"/uploads/{unique_name}"
     return None
 
-# --- Кэширование через Redis (устойчивое) ---
+# --- Кэширование через Redis ---
 def cache_get(key):
     if not redis_client:
         return None
@@ -225,10 +211,9 @@ def cache_get(key):
         data = redis_client.get(key)
         if data:
             return json.loads(data)
-        return None
     except Exception as e:
         logger.warning(f"Redis GET error for key {key}: {e}")
-        return None
+    return None
 
 def cache_set(key, value, expire=300):
     if not redis_client:
@@ -251,37 +236,37 @@ def cache_delete(key):
 def index():
     return render_template('index.html')
 
+def prepare_items_with_extra(data, item_type):
+    result = []
+    for i in data:
+        try:
+            reactions = get_reactions_count(item_type, i[0])
+        except Exception:
+            reactions = {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}
+        try:
+            comments_count = len(get_comments(item_type, i[0]))
+        except Exception:
+            comments_count = 0
+        result.append({
+            'id': i[0], 'title': i[1], 'description': i[2] if item_type != 'news' else i[2],
+            'video_url': i[3] if item_type != 'news' else None,
+            'image_url': i[3] if item_type == 'news' else None,
+            'created_at': i[4],
+            'reactions': reactions, 'comments_count': comments_count
+        })
+    return result
+
 @app.route('/moments')
 def moments():
-    # пробуем получить из кэша
     cached = cache_get('moments_list')
     if cached:
         return render_template('moments.html', moments=cached)
-
-    # Получаем из БД
     try:
         moments_data = get_all_moments() or []
     except Exception as e:
         logger.error(f"Ошибка при получении моментов из БД: {e}")
         moments_data = []
-
-    moments_with_extra = []
-    for m in moments_data:
-        try:
-            reactions = get_reactions_count('moment', m[0])
-        except Exception:
-            reactions = {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}
-        try:
-            comments_count = len(get_comments('moment', m[0]))
-        except Exception:
-            comments_count = 0
-        moments_with_extra.append({
-            'id': m[0], 'title': m[1], 'description': m[2],
-            'video_url': m[3], 'created_at': m[4],
-            'reactions': reactions, 'comments_count': comments_count
-        })
-
-    # Сохраняем в кэш (если доступен)
+    moments_with_extra = prepare_items_with_extra(moments_data, 'moment')
     cache_set('moments_list', moments_with_extra)
     return render_template('moments.html', moments=moments_with_extra)
 
@@ -290,29 +275,12 @@ def trailers():
     cached = cache_get('trailers_list')
     if cached:
         return render_template('trailers.html', trailers=cached)
-
     try:
         trailers_data = get_all_trailers() or []
     except Exception as e:
         logger.error(f"Ошибка при получении трейлеров из БД: {e}")
         trailers_data = []
-
-    trailers_with_extra = []
-    for t in trailers_data:
-        try:
-            reactions = get_reactions_count('trailer', t[0])
-        except Exception:
-            reactions = {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}
-        try:
-            comments_count = len(get_comments('trailer', t[0]))
-        except Exception:
-            comments_count = 0
-        trailers_with_extra.append({
-            'id': t[0], 'title': t[1], 'description': t[2],
-            'video_url': t[3], 'created_at': t[4],
-            'reactions': reactions, 'comments_count': comments_count
-        })
-
+    trailers_with_extra = prepare_items_with_extra(trailers_data, 'trailer')
     cache_set('trailers_list', trailers_with_extra)
     return render_template('trailers.html', trailers=trailers_with_extra)
 
@@ -321,29 +289,12 @@ def news():
     cached = cache_get('news_list')
     if cached:
         return render_template('news.html', news=cached)
-
     try:
         news_data = get_all_news() or []
     except Exception as e:
         logger.error(f"Ошибка при получении новостей из БД: {e}")
         news_data = []
-
-    news_with_extra = []
-    for n in news_data:
-        try:
-            reactions = get_reactions_count('news', n[0])
-        except Exception:
-            reactions = {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}
-        try:
-            comments_count = len(get_comments('news', n[0]))
-        except Exception:
-            comments_count = 0
-        news_with_extra.append({
-            'id': n[0], 'title': n[1], 'text': n[2],
-            'image_url': n[3], 'created_at': n[4],
-            'reactions': reactions, 'comments_count': comments_count
-        })
-
+    news_with_extra = prepare_items_with_extra(news_data, 'news')
     cache_set('news_list', news_with_extra)
     return render_template('news.html', news=news_with_extra)
 
@@ -365,7 +316,7 @@ def api_add_moment():
 
         data = request.form if request.form else (request.json if request.is_json else {})
         add_moment(data.get('title', ''), data.get('description', ''), video_url)
-        cache_delete('moments_list')  # Сброс кэша
+        cache_delete('moments_list')
         return jsonify(success=True)
     except Exception as e:
         logger.error(f"API add_moment error: {e}")
@@ -509,10 +460,13 @@ def admin_content():
 def admin_delete(content_type, content_id):
     if content_type == 'moment':
         delete_moment(content_id)
+        cache_delete('moments_list')
     elif content_type == 'trailer':
         delete_trailer(content_id)
+        cache_delete('trailers_list')
     elif content_type == 'news':
         delete_news(content_id)
+        cache_delete('news_list')
     return redirect(url_for('admin_content'))
 
 @app.route('/admin/access')
@@ -534,22 +488,4 @@ def admin_update_access(content_type):
     roles = request.form.getlist('roles')
     update_access_settings(content_type, roles)
     logger.info(f"Updated access roles for {content_type}: {roles}")
-    return redirect(url_for('admin_access_settings'))
-
-# --- Запуск бота и приложения ---
-def start_bot():
-    updater.start_polling()
-    updater.idle()
-
-if __name__ == '__main__':
-    try:
-        init_db()
-        logger.info("✅ База данных успешно инициализирована при запуске приложения.")
-    except Exception as e:
-        logger.error(f"❌ Ошибка инициализации базы данных: {e}")
-
-    bot_thread = threading.Thread(target=start_bot, daemon=True)
-    bot_thread.start()
-
-    port = int(os.environ.get('PORT', 10000))
-    app.run(host='0.0.0.0', port=port)
+    return redirect(url_for('admin
