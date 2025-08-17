@@ -23,10 +23,19 @@ from database import (
     get_reactions_count, get_comments,
     add_reaction, add_comment,
     authenticate_admin, get_stats,
-    delete_moment, delete_trailer, delete_news,
-    get_access_settings, update_access_settings,
+    delete_item, get_access_settings, update_access_settings,
     init_db, get_item_by_id
 )
+
+# --- Обёртки для удаления ---
+def delete_moment(item_id):
+    delete_item('moments', item_id)
+
+def delete_trailer(item_id):
+    delete_item('trailers', item_id)
+
+def delete_news(item_id):
+    delete_item('news', item_id)
 
 # --- Logging ---
 logging.basicConfig(level=logging.INFO,
@@ -184,8 +193,8 @@ def cache_delete(key):
 def prepare_items_with_extra(data, item_type):
     result=[]
     for i in data:
-        reactions=get_reactions_count(item_type,i[0]) or {'like':0,'dislike':0,'star':0,'fire':0}
-        comments_count=len(get_comments(item_type,i[0]) or [])
+        reactions=get_reactions_count(item_type+'s',i[0]) or {'like':0,'dislike':0,'star':0,'fire':0}
+        comments_count=len(get_comments(item_type+'s',i[0]) or [])
         result.append({
             'id': i[0], 'title': i[1], 'description': i[2],
             'video_url': i[3] if item_type != 'news' else None,
@@ -228,18 +237,18 @@ def news():
 # --- Detail pages ---
 @app.route('/moments/<int:item_id>')
 def moment_detail(item_id):
-    item=get_item_by_id('moment',item_id)
+    item=get_item_by_id('moments',item_id)
     if not item: abort(404)
-    reactions=get_reactions_count('moment',item_id)
-    comments=get_comments('moment',item_id)
+    reactions=get_reactions_count('moments',item_id)
+    comments=get_comments('moments',item_id)
     return render_template('moment_detail.html',item=item,reactions=reactions,comments=comments)
 
 @app.route('/trailers/<int:item_id>')
 def trailer_detail(item_id):
-    item=get_item_by_id('trailer',item_id)
+    item=get_item_by_id('trailers',item_id)
     if not item: abort(404)
-    reactions=get_reactions_count('trailer',item_id)
-    comments=get_comments('trailer',item_id)
+    reactions=get_reactions_count('trailers',item_id)
+    comments=get_comments('trailers',item_id)
     return render_template('trailer_detail.html',item=item,reactions=reactions,comments=comments)
 
 @app.route('/news/<int:item_id>')
