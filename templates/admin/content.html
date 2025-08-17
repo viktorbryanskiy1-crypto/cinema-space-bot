@@ -10,15 +10,24 @@
     <div class="container">
         <nav class="navbar" style="margin-bottom: 30px;">
             <h1>📁 Управление контентом</h1>
-            <div style="display: flex; gap: 10px;">
-                <a href="{{ url_for('admin_dashboard') }}" class="tab-btn">Статистика</a>
-                <a href="{{ url_for('admin_add_video') }}" class="tab-btn" style="background: linear-gradient(45deg, #1dd1a1, #10ac84);">➕ Добавить видео</a>
+            <div>
+                <a href="{{ url_for('admin_dashboard') }}" class="tab-btn" style="margin-right: 10px;">Статистика</a>
                 <a href="{{ url_for('admin_logout') }}" class="tab-btn" style="background: linear-gradient(45deg, #ff6b6b, #ff4757);">Выйти</a>
             </div>
         </nav>
-        
-        <!-- Моменты из кино -->
-        <h3 style="color: var(--accent); margin: 30px 0 20px;">🎬 Моменты из кино ({{ moments|length }})</h3>
+
+        <div style="text-align: right; margin-bottom: 20px;">
+            <a href="{{ url_for('index') }}" class="tab-btn">🏠 Вернуться к приложению</a>
+        </div>
+
+        <!-- Добавить новый контент -->
+        <div style="margin-bottom: 40px;">
+            <h3 style="color: var(--accent);">➕ Добавить новый контент</h3>
+            <p>Используйте Telegram команду <code>/add_video [moment|trailer|news] [название]</code> для добавления видео напрямую через бота.</p>
+        </div>
+
+        <!-- Моменты -->
+        <h3 style="color: var(--accent); margin-bottom: 20px;">🎬 Моменты из кино ({{ moments|length }})</h3>
         {% if moments %}
         <div class="card-grid">
             {% for moment in moments %}
@@ -32,11 +41,11 @@
             {% endfor %}
         </div>
         {% else %}
-        <p>Нет моментов из кино</p>
+        <p>Нет моментов</p>
         {% endif %}
-        
+
         <!-- Трейлеры -->
-        <h3 style="color: var(--accent); margin: 40px 0 20px;">🎥 Трейлеры ({{ trailers|length }})</h3>
+        <h3 style="color: var(--accent); margin-top: 40px; margin-bottom: 20px;">🎥 Трейлеры ({{ trailers|length }})</h3>
         {% if trailers %}
         <div class="card-grid">
             {% for trailer in trailers %}
@@ -52,9 +61,9 @@
         {% else %}
         <p>Нет трейлеров</p>
         {% endif %}
-        
+
         <!-- Новости -->
-        <h3 style="color: var(--accent); margin: 40px 0 20px;">📰 Новости ({{ news|length }})</h3>
+        <h3 style="color: var(--accent); margin-top: 40px; margin-bottom: 20px;">📰 Новости ({{ news|length }})</h3>
         {% if news %}
         <div class="card-grid">
             {% for news_item in news %}
@@ -70,10 +79,6 @@
         {% else %}
         <p>Нет новостей</p>
         {% endif %}
-        
-        <div style="text-align: center; margin-top: 50px;">
-            <a href="{{ url_for('index') }}" class="tab-btn">🏠 Вернуться к приложению</a>
-        </div>
     </div>
 </body>
 </html>
