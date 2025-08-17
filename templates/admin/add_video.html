@@ -10,6 +10,11 @@
     </div>
 
     <div class="mb-3">
+        <label for="video-description" class="form-label">Описание</label>
+        <textarea class="form-control" id="video-description" placeholder="Введите описание"></textarea>
+    </div>
+
+    <div class="mb-3">
         <label for="video-type" class="form-label">Тип контента</label>
         <select class="form-select" id="video-type" required>
             <option value="moment">Момент</option>
@@ -30,14 +35,16 @@
 document.getElementById('add-video-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const title = document.getElementById('video-title').value;
+    const description = document.getElementById('video-description').value;
     const category = document.getElementById('video-type').value;
     const post_link = document.getElementById('video-url').value;
 
     const res = await fetch('/admin/add_video_json', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, description: title, category, post_link })
+        body: JSON.stringify({ title, description, category, post_link })
     });
+
     const data = await res.json();
     if (data.success) {
         alert('✅ Видео успешно добавлено!');
