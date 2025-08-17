@@ -1,41 +1,87 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>➕ Добавить видео - Админ-панель</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-</head>
-<body>
-    <div class="container">
-        <nav class="navbar" style="margin-bottom: 30px;">
-            <h1>➕ Добавить видео</h1>
-            <div>
-                <a href="{{ url_for('admin_dashboard') }}" class="tab-btn" style="margin-right: 10px;">📊 Статистика</a>
-                <a href="{{ url_for('admin_content') }}" class="tab-btn" style="margin-right: 10px;">Управление контентом</a>
-                <a href="{{ url_for('admin_access_settings') }}" class="tab-btn" style="margin-right: 10px;">⚙️ Настройки доступа</a>
-                <a href="{{ url_for('admin_logout') }}" class="tab-btn" style="background: linear-gradient(45deg, #ff6b6b, #ff4757);">Выйти</a>
-            </div>
-        </nav>
+{% extends 'admin/base.html' %}
 
-        <h2 style="text-align: center; margin-bottom: 20px;">📥 Форма добавления видео</h2>
+{% block content %}
+<div class="container mt-4">
+    <h2>➕ Добавить видео / контент</h2>
+    <div id="alert" class="alert d-none"></div>
 
-        <form method="POST" action="{{ url_for('add_video') }}" class="form-card">
-            <label for="title">Название видео:</label>
-            <input type="text" id="title" name="title" required>
-
-            <label for="description">Описание:</label>
-            <textarea id="description" name="description" rows="4" required></textarea>
-
-            <label for="video_url">Ссылка на видео (из поста Telegram):</label>
-            <input type="text" id="video_url" name="video_url" required placeholder="https://t.me/...">
-
-            <button type="submit" class="tab-btn" style="margin-top: 20px;">✅ Добавить видео</button>
-        </form>
-
-        <div style="text-align: center; margin-top: 30px;">
-            <a href="{{ url_for('admin_dashboard') }}" class="tab-btn">⬅ Вернуться в админ-панель</a>
+    <form id="add-video-form" enctype="multipart/form-data">
+        <div class="mb-3">
+            <label for="content_type" class="form-label">Тип контента</label>
+            <select class="form-select" id="content_type" name="content_type" required>
+                <option value="moment">Момент</option>
+                <option value="trailer">Трейлер</option>
+                <option value="news">Новость</option>
+            </select>
         </div>
-    </div>
-</body>
-</html>
+
+        <div class="mb-3">
+            <label for="title" class="form-label">Название</label>
+            <input type="text" class="form-control" id="title" name="title" required>
+        </div>
+
+        <div class="mb-3">
+            <label for="description" class="form-label">Описание</label>
+            <textarea class="form-control" id="description" name="description" rows="3"></textarea>
+        </div>
+
+        <div class="mb-3">
+            <label for="video_url" class="form-label">Ссылка на видео</label>
+            <input type="url" class="form-control" id="video_url" name="video_url">
+            <small class="text-muted">Если загружаешь файл, поле можно оставить пустым.</small>
+        </div>
+
+        <div class="mb-3">
+            <label for="video_file" class="form-label">Или выберите файл видео</label>
+            <input class="form-control" type="file" id="video_file" name="video_file" accept="video/*">
+        </div>
+
+        <button type="submit" class="btn btn-primary">Добавить</button>
+    </form>
+</div>
+
+<script>
+document.getElementById('add-video-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const alertDiv = document.getElementById('alert');
+    alertDiv.classList.add('d-none');
+    alertDiv.textContent = '';
+
+    const formData = new FormData(this);
+    const type = formData.get('content_type');
+
+    let apiUrl = '';
+    if (type === 'moment') apiUrl = '/api/add_moment';
+    else if (type === 'trailer') apiUrl = '/api/add_trailer';
+    else if (type === 'news') apiUrl = '/api/add_news';
+    else {
+        alertDiv.textContent = 'Неверный тип контента';
+        alertDiv.classList.remove('d-none');
+        alertDiv.classList.add('alert-danger');
+        return;
+    }
+
+    try {
+        const res = await fetch(apiUrl, {
+            method: 'POST',
+            body: formData
+        });
+        const result = await res.json();
+        if (result.success) {
+            alertDiv.textContent = '✅ Контент успешно добавлен!';
+            alertDiv.classList.remove('d-none', 'alert-danger');
+            alertDiv.classList.add('alert-success');
+            this.reset();
+        } else {
+            alertDiv.textContent = '❌ Ошибка: ' + (result.error || 'Неизвестная ошибка');
+            alertDiv.classList.remove('d-none', 'alert-success');
+            alertDiv.classList.add('alert-danger');
+        }
+    } catch (err) {
+        alertDiv.textContent = '❌ Ошибка запроса: ' + err;
+        alertDiv.classList.remove('d-none', 'alert-success');
+        alertDiv.classList.add('alert-danger');
+    }
+});
+</script>
+{% endblock %}
