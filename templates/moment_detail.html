@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}{{ item.title }} — Момент{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-12">
+    <h1>{{ item.title }}</h1>
+    {% if item.created_at %}
+      <p class="text-muted small">Добавлено: {{ item.created_at }}</p>
+    {% endif %}
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-12 video-wrap">
+    {% if item.video_url %}
+      <video controls preload="metadata" style="width:100%; max-height:720px;">
+        <source src="{{ item.video_url }}" />
+        Ваш браузер не поддерживает тег video.
+      </video>
+    {% else %}
+      <div class="alert alert-warning">У этого момента нет видео.</div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="row mb-3">
+  <div class="col-md-8">
+    <h5>Описание</h5>
+    <p>{{ item.description }}</p>
+  </div>
+  <div class="col-md-4">
+    <h5>Реакции</h5>
+    <div id="reactions">
+      👍 <span id="r-like">{{ reactions['like'] if reactions else 0 }}</span>
+      👎 <span id="r-dislike">{{ reactions['dislike'] if reactions else 0 }}</span>
+      ⭐ <span id="r-star">{{ reactions['star'] if reactions else 0 }}</span>
+      🔥 <span id="r-fire">{{ reactions['fire'] if reactions else 0 }}</span>
+    </div>
+    <div class="mt-2">
+      <button class="btn btn-sm btn-outline-primary me-1" onclick="sendReaction('like')">👍</button>
+      <button class="btn btn-sm btn-outline-secondary me-1" onclick="sendReaction('dislike')">👎</button>
+      <button class="btn btn-sm btn-outline-warning me-1" onclick="sendReaction('star')">⭐</button>
+      <button class="btn btn-sm btn-outline-danger" onclick="sendReaction('fire')">🔥</button>
+    </div>
+  </div>
+</div>
+
+<hr>
+
+<div class="row">
+  <div class="col-12">
+    <h5>Комментарии (<span id="comments-count">{{ comments|length if comments else 0 }}</span>)</h5>
+    <div id="comments-list">
+      {% if comments %}
+        {% for c in comments %}
+          <div class="comment border rounded p-2">
+            <strong>{{ c[0] }}</strong> <small class="text-muted">{{ c[2] }}</small>
+            <div>{{ c[1] }}</div>
+          </div>
+        {% endfor %}
+      {% else %}
+        <div class="text-muted">Пока нет комментариев.</div>
+      {% endif %}
+    </div>
+
+    <hr>
+    <h6>Оставить комментарий</h6>
+    <form id="comment-form" onsubmit="event.preventDefault(); submitComment();">
+      <div class="mb-2">
+        <input id="comment-name" class="form-control" placeholder="Ваше имя (опционально)" />
+      </div>
+      <div class="mb-2">
+        <textarea id="comment-text" class="form-control" rows="3" placeholder="Текст комментария"></textarea>
+      </div>
+      <button class="btn btn-primary" type="submit">Отправить</button>
+    </form>
+  </div>
+</div>
+
+<script>
+const ITEM_TYPE = 'moment';
+const ITEM_ID = {{ item.id|tojson }};
+
+async function sendReaction(reaction) {
+  try {
+    const resp = await fetch('/api/reaction', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({item_type: ITEM_TYPE, item_id: ITEM_ID, reaction: reaction})
+    });
+    const j = await resp.json();
+    if (j.success) {
+      // обновим счётчики локально — проще перезагрузить страницу, но обновим только значение
+      // Чтобы увидеть изменения, сделаем запрос к серверу комментариев/реакций — но для простоты перезагрузим
+      location.reload();
+    } else {
+      alert('Ошибка при отправке реакции');
+    }
+  } catch (e) {
+    console.error(e); alert('Ошибка сети');
+  }
+}
+
+async function submitComment(){
+  const name = document.getElementById('comment-name').value || 'Гость';
+  const text = document.getElementById('comment-text').value || '';
+  if (!text.trim()) { alert('Введите текст комментария'); return; }
+  try {
+    const resp = await fetch('/api/comment', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({item_type: ITEM_TYPE, item_id: ITEM_ID, user_name: name, text: text})
+    });
+    const j = await resp.json();
+    if (j.success) {
+      // добавим комментарий в список локально
+      const now = new Date().toLocaleString();
+      const container = document.getElementById('comments-list');
+      const div = document.createElement('div');
+      div.className = 'comment border rounded p-2';
+      div.innerHTML = `<strong>${escapeHtml(name)}</strong> <small class="text-muted">${now}</small><div>${escapeHtml(text)}</div>`;
+      container.prepend(div);
+      // очистим форму и увеличим счётчик
+      document.getElementById('comment-text').value = '';
+      const countEl = document.getElementById('comments-count');
+      countEl.textContent = parseInt(countEl.textContent||'0') + 1;
+    } else {
+      alert('Ошибка при отправке комментария');
+    }
+  } catch(e){
+    console.error(e); alert('Ошибка сети');
+  }
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"'`=\/]/g, function (c) {
+    return {
+      '&': '&amp;','<': '&lt;','>': '&gt;','"': '&quot;',"'": '&#39;','/':'&#x2F;','`':'&#x60;','=':'&#x3D;'
+    }[c];
+  });
+}
+</script>
+{% endblock %}
