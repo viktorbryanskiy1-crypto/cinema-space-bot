@@ -1,6 +1,8 @@
 from telethon import TelegramClient
+from telethon.errors import SessionPasswordNeededError
 import asyncio
 import logging
+import sys
 
 # Включаем логирование для отладки
 logging.basicConfig(level=logging.INFO)
@@ -16,16 +18,42 @@ client = TelegramClient('session_name', api_id, api_hash)
 async def main():
     print("📞 Подключение к Telegram...")
     
-    # Подключаемся и авторизуемся (если нужно)
-    await client.start(phone=phone_number)
-    print("✅ Авторизация успешна! Клиент подключен!\n")
+    # Попробуем подключиться
+    await client.connect()
+    
+    # Проверим, авторизованы ли мы
+    if not await client.is_user_authorized():
+        print("🔑 Необходима авторизация")
+        try:
+            # Отправляем код на номер
+            await client.send_code_request(phone_number)
+            code = input("Please enter the code you received: ")
+            
+            # Пробуем авторизоваться с кодом
+            try:
+                await client.sign_in(phone_number, code)
+            except SessionPasswordNeededError:
+                # Если включена двухфакторная аутентификация
+                password = input("Please enter your password: ")
+                await client.sign_in(password=password)
+                
+        except Exception as e:
+            print(f"❌ Ошибка авторизации: {e}")
+            return
+    else:
+        print("✅ Уже авторизованы")
+    
+    print("✅ Клиент подключен!\n")
 
     print("📋 Получение списка каналов...")
-    async for dialog in client.iter_dialogs():
-        # Показываем только каналы
-        if dialog.is_channel:
-            username = getattr(dialog.entity, 'username', 'нет username')
-            print(f"- {dialog.name} (@{username}) | ID: {dialog.id}")
+    try:
+        async for dialog in client.iter_dialogs():
+            # Показываем только каналы
+            if dialog.is_channel:
+                username = getattr(dialog.entity, 'username', 'нет username')
+                print(f"- {dialog.name} (@{username}) | ID: {dialog.id}")
+    except Exception as e:
+        print(f"❌ Ошибка при получении диалогов: {e}")
 
     # Пример: получаем сообщения из конкретного канала
     channel_username = 'kinofilmuni'
@@ -51,5 +79,6 @@ if __name__ == '__main__':
         print("\n⚠️  Программа прервана пользователем")
     except Exception as e:
         print(f"❌ Критическая ошибка: {e}")
+        logging.exception("Подробности ошибки:")
     finally:
         print("🔚 Работа завершена")
