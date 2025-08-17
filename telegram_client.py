@@ -10,7 +10,7 @@ async def main():
     await client.start(phone=phone_number)
     print("✅ Клиент подключен!")
 
-    # Список всех диалогов (чатов, каналов, групп)
+    # Проверяем список диалогов
     async for dialog in client.iter_dialogs():
         print(f"{dialog.name} - {dialog.id} - {dialog.is_channel}")
 
