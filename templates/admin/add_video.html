@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>➕ Добавить видео - Админ-панель</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <nav class="navbar" style="margin-bottom: 30px;">
+            <h1>➕ Добавить видео</h1>
+            <div>
+                <a href="{{ url_for('admin_dashboard') }}" class="tab-btn" style="margin-right: 10px;">📊 Статистика</a>
+                <a href="{{ url_for('admin_content') }}" class="tab-btn" style="margin-right: 10px;">Управление контентом</a>
+                <a href="{{ url_for('admin_access_settings') }}" class="tab-btn" style="margin-right: 10px;">⚙️ Настройки доступа</a>
+                <a href="{{ url_for('admin_logout') }}" class="tab-btn" style="background: linear-gradient(45deg, #ff6b6b, #ff4757);">Выйти</a>
+            </div>
+        </nav>
+
+        <h2 style="text-align: center; margin-bottom: 20px;">📥 Форма добавления видео</h2>
+
+        <form method="POST" action="{{ url_for('add_video') }}" class="form-card">
+            <label for="title">Название видео:</label>
+            <input type="text" id="title" name="title" required>
+
+            <label for="description">Описание:</label>
+            <textarea id="description" name="description" rows="4" required></textarea>
+
+            <label for="video_url">Ссылка на видео (из поста Telegram):</label>
+            <input type="text" id="video_url" name="video_url" required placeholder="https://t.me/...">
+
+            <button type="submit" class="tab-btn" style="margin-top: 20px;">✅ Добавить видео</button>
+        </form>
+
+        <div style="text-align: center; margin-top: 30px;">
+            <a href="{{ url_for('admin_dashboard') }}" class="tab-btn">⬅ Вернуться в админ-панель</a>
+        </div>
+    </div>
+</body>
+</html>
