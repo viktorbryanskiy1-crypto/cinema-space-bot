@@ -48,8 +48,7 @@ WEBHOOK_URL = os.environ.get('WEBHOOK_URL', 'https://yourdomain.com').strip()
 REDIS_URL = os.environ.get('REDIS_URL', None)
 if not TOKEN:
     logger.error("TELEGRAM_TOKEN not set!")
-    # Не завершаем процесс под gunicorn, чтобы сайт работал без бота
-    # но для локального запуска лучше явно экспортировать токен.
+
 # --- Redis ---
 redis_client = None
 if REDIS_URL:
@@ -81,7 +80,7 @@ ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 def allowed_file(filename, allowed_exts):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in allowed_exts
 
-# --- Telegram Bot (v13) ---
+# --- Telegram Bot ---
 updater = None
 dp = None
 pending_video_data = {}
@@ -120,114 +119,6 @@ if TOKEN:
         except Exception as e:
             logger.error(f"Error in /start: {e}")
 
-    def add_video_command(update, context):
-        user = update.message.from_user
-        telegram_id = str(user.id)
-        role = get_user_role(telegram_id)
-        if role not in ['owner', 'admin']:
-            update.message.reply_text("❌ You have no rights!")
-            return
-        text = update.message.text.strip()
-        parts = text.split(' ', 2)
-        if len(parts) < 3 or parts[1].lower() not in ['moment','trailer','news']:
-            update.message.reply_text("❌ Format: /add_video [moment|trailer|news] [title]")
-            return
-        pending_video_data[telegram_id] = {'content_type': parts[1].lower(), 'title': parts[2]}
-        update.message.reply_text(
-            f"🎬 Добавление '{parts[1]}' с названием '{parts[2]}'. "
-            f"Пришли прямой URL видео (https://...) или просто отправь видео файлом."
-        )
-        logger.info(f"User {telegram_id} adding video: {parts[1]} - {parts[2]}")
-
-    def handle_pending_video_text(update, context):
-        """Пользователь прислал текст — пытаемся принять как прямой URL.
-        Ссылки на пост t.me парсить ботом нельзя (Bot API не даёт получить произвольное сообщение по ссылке).
-        В этом случае лучше отправить само видео боту (файлом) — бот возьмёт стабильный file_url.
-        """
-        user = update.message.from_user
-        telegram_id = str(user.id)
-        if telegram_id not in pending_video_data:
-            return
-
-        data = pending_video_data.pop(telegram_id)
-        content_type, title = data['content_type'], data['title']
-        desc = "Added via Telegram bot (text URL)"
-        text = update.message.text.strip()
-        video_url = text
-
-        try:
-            if not (video_url.startswith('http://') or video_url.startswith('https://')):
-                update.message.reply_text("❌ Это не URL. Пришли прямую ссылку на видео или отправь файл видео.")
-                pending_video_data[telegram_id] = data
-                return
-
-            if content_type == 'moment':
-                add_moment(title, desc, video_url)
-            elif content_type == 'trailer':
-                add_trailer(title, desc, video_url)
-            elif content_type == 'news':
-                add_news(title, desc, video_url)
-
-            update.message.reply_text(f"✅ '{content_type}' '{title}' добавлено по ссылке!")
-            cache_delete('moments_list')
-            cache_delete('trailers_list')
-            cache_delete('news_list')
-        except Exception as e:
-            logger.error(f"Ошибка при добавлении видео (text): {e}")
-            update.message.reply_text(f"❌ Ошибка: {e}")
-            pending_video_data[telegram_id] = data
-
-    def handle_pending_video_file(update, context):
-        """Пользователь прислал именно файл (video). Берём стабильный file_path через getFile."""
-        user = update.message.from_user
-        telegram_id = str(user.id)
-        if telegram_id not in pending_video_data:
-            return
-
-        data = pending_video_data.pop(telegram_id)
-        content_type, title = data['content_type'], data['title']
-        desc = "Added via Telegram bot (file)"
-
-        try:
-            if not update.message.video:
-                update.message.reply_text("❌ Это не видео. Пришли файл видео или ссылку.")
-                pending_video_data[telegram_id] = data
-                return
-
-            file_obj = context.bot.get_file(update.message.video.file_id)
-            # В PTB v13 file_obj.file_path уже содержит полный стабильный URL
-            video_url = file_obj.file_path
-
-            if content_type == 'moment':
-                add_moment(title, desc, video_url)
-            elif content_type == 'trailer':
-                add_trailer(title, desc, video_url)
-            elif content_type == 'news':
-                add_news(title, desc, video_url)
-
-            update.message.reply_text(f"✅ '{content_type}' '{title}' добавлено из файла!")
-            cache_delete('moments_list')
-            cache_delete('trailers_list')
-            cache_delete('news_list')
-        except Exception as e:
-            logger.error(f"Ошибка при добавлении видео (file): {e}")
-            update.message.reply_text(f"❌ Ошибка: {e}")
-            pending_video_data[telegram_id] = data
-
-    # Подключение обработчиков к боту
-    dp.add_handler(CommandHandler('start', start))
-    dp.add_handler(CommandHandler('add_video', add_video_command))
-    dp.add_handler(MessageHandler(Filters.video & ~Filters.command, handle_pending_video_file))
-    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_pending_video_text))
-
-@app.route(f'/{TOKEN}', methods=['POST'])
-def webhook():
-    if not updater:
-        return 'bot disabled', 200
-    update = Update.de_json(request.get_json(force=True), updater.bot)
-    updater.dispatcher.process_update(update)
-    return 'ok'
-
 # --- Helpers ---
 def save_uploaded_file(file_storage, allowed_exts):
     if file_storage and allowed_file(file_storage.filename, allowed_exts):
@@ -261,10 +152,6 @@ def cache_delete(key):
             pass
 
 def build_extra_map(data, item_type_plural):
-    """
-    data: список кортежей (id, title, description, video_or_image_url, created_at)
-    возвращает словарь { id: {reactions: {...}, comments_count: N} }
-    """
     extra = {}
     for row in data:
         item_id = row[0]
@@ -283,13 +170,11 @@ def moments():
     cached = cache_get('moments_list')
     if cached:
         logger.info(f"/moments from cache: {len(cached)} items")
-        # cached хранит обогащённые данные в некоторых прежних версиях — подстрахуем шаблон
         return render_template('moments.html', moments=cached, extra_by_id={})
 
-    data = get_all_moments() or []  # список кортежей
+    data = get_all_moments() or []
     logger.info(f"/moments from DB: {len(data)} items")
     extra_map = build_extra_map(data, 'moments')
-    cache_set('moments_list_raw_count', len(data), expire=120)  # вспомогательно
     return render_template('moments.html', moments=data, extra_by_id=extra_map)
 
 @app.route('/trailers')
@@ -302,7 +187,6 @@ def trailers():
     data = get_all_trailers() or []
     logger.info(f"/trailers from DB: {len(data)} items")
     extra_map = build_extra_map(data, 'trailers')
-    cache_set('trailers_list_raw_count', len(data), expire=120)
     return render_template('trailers.html', trailers=data, extra_by_id=extra_map)
 
 @app.route('/news')
@@ -315,10 +199,8 @@ def news():
     data = get_all_news() or []
     logger.info(f"/news from DB: {len(data)} items")
     extra_map = build_extra_map(data, 'news')
-    cache_set('news_list_raw_count', len(data), expire=120)
     return render_template('news.html', news=data, extra_by_id=extra_map)
 
-# --- Детальные страницы (если используются) ---
 @app.route('/moments/<int:item_id>')
 def moment_detail(item_id):
     item = get_item_by_id('moments', item_id)
@@ -342,8 +224,8 @@ def news_detail(item_id):
     reactions = get_reactions_count('news', item_id)
     comments = get_comments('news', item_id)
     return render_template('news_detail.html', item=item, reactions=reactions, comments=comments)
-
-# --- API: добавление контента (универсально принимает JSON или форму) ---
+    
+# --- API: добавление контента ---
 def _get_payload():
     if request.is_json:
         return request.get_json(silent=True) or {}
@@ -356,12 +238,9 @@ def api_add_moment():
         title = payload.get('title', '').strip()
         desc = payload.get('description', '').strip()
         video_url = payload.get('video_url', '').strip()
-
-        # также принимаем файл (на будущее, если понадобится локалка)
         if 'video_file' in request.files and not video_url:
             saved = save_uploaded_file(request.files['video_file'], ALLOWED_VIDEO_EXTENSIONS)
             if saved: video_url = saved
-
         add_moment(title, desc, video_url)
         cache_delete('moments_list')
         logger.info(f"api_add_moment: inserted '{title}'")
@@ -377,11 +256,9 @@ def api_add_trailer():
         title = payload.get('title', '').strip()
         desc = payload.get('description', '').strip()
         video_url = payload.get('video_url', '').strip()
-
         if 'video_file' in request.files and not video_url:
             saved = save_uploaded_file(request.files['video_file'], ALLOWED_VIDEO_EXTENSIONS)
             if saved: video_url = saved
-
         add_trailer(title, desc, video_url)
         cache_delete('trailers_list')
         logger.info(f"api_add_trailer: inserted '{title}'")
@@ -397,11 +274,9 @@ def api_add_news():
         title = payload.get('title', '').strip()
         text = payload.get('text', payload.get('description', '')).strip()
         image_url = payload.get('image_url', '').strip()
-
         if 'image_file' in request.files and not image_url:
             saved = save_uploaded_file(request.files['image_file'], ALLOWED_IMAGE_EXTENSIONS)
             if saved: image_url = saved
-
         add_news(title, text, image_url)
         cache_delete('news_list')
         logger.info(f"api_add_news: inserted '{title}'")
@@ -419,7 +294,7 @@ def uploaded_file(filename):
 def api_add_reaction():
     try:
         data = request.get_json(force=True)
-        item_type = data.get('item_type')  # ожидание: 'moments'|'trailers'|'news'
+        item_type = data.get('item_type')
         item_id = int(data.get('item_id'))
         user_id = data.get('user_id', 'anonymous')
         reaction = data.get('reaction')
@@ -432,7 +307,7 @@ def api_add_reaction():
 @app.route('/api/comments', methods=['GET'])
 def api_get_comments():
     try:
-        item_type = request.args.get('type')  # 'moments'|'trailers'|'news'
+        item_type = request.args.get('type')
         item_id = int(request.args.get('id'))
         comments = get_comments(item_type, item_id)
         return jsonify(comments=comments)
@@ -444,7 +319,7 @@ def api_get_comments():
 def api_add_comment():
     try:
         data = request.get_json(force=True)
-        item_type = data.get('item_type')  # 'moments'|'trailers'|'news'
+        item_type = data.get('item_type')
         item_id = int(data.get('item_id'))
         user_name = data.get('user_name', 'Гость')
         text = data.get('text')
@@ -526,13 +401,79 @@ def admin_update_access(content_type):
     logger.info(f"Updated access roles for {content_type}: {roles}")
     return redirect(url_for('admin_access_settings'))
 
-# --- Новая панель «Добавить видео» ---
-@app.route('/admin/add_video', methods=['GET'])
-@admin_required
-def admin_add_video():
-    return render_template('admin/add_video.html')  # шаблон ты уже добавил ранее
+# --- Telegram Add Video Command ---
+def add_video_command(update, context):
+    user = update.message.from_user
+    telegram_id = str(user.id)
+    role = get_user_role(telegram_id)
+    if role not in ['owner', 'admin']:
+        update.message.reply_text("❌ You have no rights!")
+        return
+    text = update.message.text.strip()
+    parts = text.split(' ', 2)
+    if len(parts) < 3 or parts[1].lower() not in ['moment','trailer','news']:
+        update.message.reply_text("❌ Format: /add_video [moment|trailer|news] [title]")
+        return
+    pending_video_data[telegram_id] = {'content_type': parts[1].lower(), 'title': parts[2]}
+    update.message.reply_text(
+        f"🎬 Добавление '{parts[1]}' с названием '{parts[2]}'. "
+        f"Пришли прямой URL видео (https://...) или отправь видео файлом."
+    )
+    logger.info(f"User {telegram_id} adding video: {parts[1]} - {parts[2]}")
 
-# --- Запуск бота (локально) ---
+def handle_pending_video_text(update, context):
+    user = update.message.from_user
+    telegram_id = str(user.id)
+    if telegram_id not in pending_video_data:
+        return
+    data = pending_video_data.pop(telegram_id)
+    content_type, title = data['content_type'], data['title']
+    video_url = update.message.text.strip()
+    if not (video_url.startswith('http://') or video_url.startswith('https://')):
+        update.message.reply_text("❌ Это не URL. Пришли прямую ссылку на видео или отправь файл.")
+        pending_video_data[telegram_id] = data
+        return
+    if content_type == 'moment':
+        add_moment(title, "Added via Telegram", video_url)
+    elif content_type == 'trailer':
+        add_trailer(title, "Added via Telegram", video_url)
+    elif content_type == 'news':
+        add_news(title, "Added via Telegram", video_url)
+    update.message.reply_text(f"✅ '{content_type}' '{title}' добавлено по ссылке!")
+    cache_delete('moments_list')
+    cache_delete('trailers_list')
+    cache_delete('news_list')
+
+def handle_pending_video_file(update, context):
+    user = update.message.from_user
+    telegram_id = str(user.id)
+    if telegram_id not in pending_video_data:
+        return
+    data = pending_video_data.pop(telegram_id)
+    content_type, title = data['content_type'], data['title']
+    if not update.message.video:
+        update.message.reply_text("❌ Это не видео. Пришли файл видео или ссылку.")
+        pending_video_data[telegram_id] = data
+        return
+    file_obj = context.bot.get_file(update.message.video.file_id)
+    video_url = file_obj.file_path
+    if content_type == 'moment':
+        add_moment(title, "Added via Telegram", video_url)
+    elif content_type == 'trailer':
+        add_trailer(title, "Added via Telegram", video_url)
+    elif content_type == 'news':
+        add_news(title, "Added via Telegram", video_url)
+    update.message.reply_text(f"✅ '{content_type}' '{title}' добавлено из файла!")
+    cache_delete('moments_list')
+    cache_delete('trailers_list')
+    cache_delete('news_list')
+
+if dp:
+    dp.add_handler(CommandHandler('add_video', add_video_command))
+    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_pending_video_text))
+    dp.add_handler(MessageHandler(Filters.video & ~Filters.command, handle_pending_video_file))
+
+# --- Start Bot ---
 def start_bot():
     if updater:
         updater.start_polling()
