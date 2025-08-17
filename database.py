@@ -212,8 +212,10 @@ def add_news_with_blocks(title, blocks):
         c.execute("INSERT INTO news (title) VALUES (%s) RETURNING id", (title,))
         news_id = c.fetchone()['id']
         for block in blocks:
-            c.execute("INSERT INTO news_blocks (news_id, block_type, content, position) VALUES (%s,%s,%s,%s)",
-                      (news_id, block['type'], block['content'], block['position']))
+            c.execute(
+                "INSERT INTO news_blocks (news_id, block_type, content, position) VALUES (%s,%s,%s,%s)",
+                (news_id, block['type'], block['content'], block['position'])
+            )
         conn.commit()
         return news_id
     finally:
@@ -228,7 +230,10 @@ def get_news_with_blocks():
         result = []
         for news in news_items:
             news_id = news['id']
-            c.execute("SELECT block_type, content, position FROM news_blocks WHERE news_id=%s ORDER BY position ASC, created_at ASC", (news_id,))
+            c.execute(
+                "SELECT block_type, content, position FROM news_blocks WHERE news_id=%s ORDER BY position ASC, created_at ASC",
+                (news_id,)
+            )
             blocks = c.fetchall()
             news_data = dict(news)
             news_data['blocks'] = [dict(b) for b in blocks]
@@ -274,6 +279,7 @@ def add_reaction(item_type, item_id, user_id, reaction):
     conn = get_db_connection()
     c = conn.cursor()
     try:
+        # Удаляем старую реакцию и добавляем новую
         c.execute("DELETE FROM reactions WHERE item_type=%s AND item_id=%s AND user_id=%s AND reaction=%s", (item_type, item_id, user_id, reaction))
         c.execute("INSERT INTO reactions (item_type, item_id, user_id, reaction) VALUES (%s,%s,%s,%s)", (item_type, item_id, user_id, reaction))
         conn.commit()
@@ -388,13 +394,6 @@ def get_stats():
         conn.close()
 
 # ---------------- Совместимость со старым кодом ----------------
-def get_all_moments():
-    return get_all_items("moments")
-
-def get_all_trailers():
-    return get_all_items("trailers")
-
-def get_all_news():
-    return get_all_items("news")
-
-# --- init_db() вызывать вручную после установки DATABASE_URL ---
+def get_all_moments(): return get_all_items("moments")
+def get_all_trailers(): return get_all_items("trailers")
+def get_all_news(): return get_all_items("news")
