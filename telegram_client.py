@@ -10,14 +10,14 @@ async def main():
     await client.start(phone=phone_number)
     print("✅ Клиент подключен!")
 
-    group_username = 'kinofilmuni'  # Заменить на юзернейм канала
-
-    async for message in client.iter_messages(group_username, limit=5):
+    # Используем get_entity для приватного или публичного канала
+    group = await client.get_entity('kinofilmuni')  # заменяй на ссылку или юзернейм
+    async for message in client.iter_messages(group, limit=5):
         print(f"ID: {message.id}")
         if message.text:
             print(f"Текст: {message.text}")
         if message.media:
-            print(f"Есть медиа: {message.media}")
+            print("Есть медиа!")
         print('---------------------')
 
 if __name__ == '__main__':
