@@ -1,32 +1,60 @@
 import psycopg2
-from psycopg2.extras import RealDictCursor
+import os
 
-DB_HOST = "dpg-d2dis5c9c44c73fa50q0-a.oregon-postgres.render.com"
-DB_PORT = "5432"
-DB_NAME = "cinema_db_jvvx"
-DB_USER = "cinema_db_jvvx_user"
-DB_PASSWORD = "jh0QW70EhxsKHx3mEq4CqGRSRhua7F5n"
+# Берём данные из .env (GitHub Actions или локально через secrets)
+DB_HOST = os.getenv("DB_HOST")
+DB_NAME = os.getenv("DB_NAME")
+DB_USER = os.getenv("DB_USER")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
 
 def get_connection():
     conn = psycopg2.connect(
         host=DB_HOST,
-        dbname=DB_NAME,
+        database=DB_NAME,
         user=DB_USER,
-        password=DB_PASSWORD,
-        port=DB_PORT,
-        cursor_factory=RealDictCursor
+        password=DB_PASSWORD
     )
     return conn
 
-def get_all_videos():
+def create_tables():
     conn = get_connection()
     cur = conn.cursor()
-    cur.execute("SELECT * FROM videos ORDER BY uploaded_at DESC;")
-    videos = cur.fetchall()
+
+    # Таблица видео
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS videos (
+        id SERIAL PRIMARY KEY,
+        title TEXT NOT NULL,
+        description TEXT,
+        video_url TEXT NOT NULL,
+        category TEXT NOT NULL,
+        uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
+
+    # Таблица комментариев
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS comments (
+        id SERIAL PRIMARY KEY,
+        video_id INT REFERENCES videos(id) ON DELETE CASCADE,
+        user_id TEXT NOT NULL,
+        content TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
+
+    # Таблица реакций
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS reactions (
+        id SERIAL PRIMARY KEY,
+        video_id INT REFERENCES videos(id) ON DELETE CASCADE,
+        user_id TEXT NOT NULL,
+        type TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
+
+    conn.commit()
     cur.close()
     conn.close()
-    return videos
-
-if __name__ == "__main__":
-    videos = get_all_videos()
-    print(videos)
+    print("✅ Таблицы созданы или уже существуют")
