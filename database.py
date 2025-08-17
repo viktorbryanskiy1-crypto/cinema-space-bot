@@ -106,7 +106,7 @@ def init_db():
             )
         """)
 
-        # ---------------- Админ по умолчанию ----------------
+        # Админ по умолчанию
         password_hash = bcrypt.hashpw('admin'.encode('utf-8'), bcrypt.gensalt())
         c.execute("""
             INSERT INTO admins (username, password_hash)
@@ -114,14 +114,14 @@ def init_db():
             ON CONFLICT (username) DO NOTHING
         """, ('admin', password_hash))
 
-        # ---------------- Владелец ----------------
+        # Владелец
         c.execute("""
             INSERT INTO users (telegram_id, username, first_name, last_name, role)
             VALUES (%s, %s, %s, %s, %s)
             ON CONFLICT (telegram_id) DO NOTHING
         """, ('993856446', 'owner_user', 'App', 'Owner', 'owner'))
 
-        # ---------------- Настройки доступа по умолчанию ----------------
+        # Настройки доступа по умолчанию
         default_access = [
             ('moment', '["owner"]'),
             ('trailer', '["owner","admin"]'),
@@ -212,10 +212,8 @@ def add_news_with_blocks(title, blocks):
         c.execute("INSERT INTO news (title) VALUES (%s) RETURNING id", (title,))
         news_id = c.fetchone()['id']
         for block in blocks:
-            c.execute(
-                "INSERT INTO news_blocks (news_id, block_type, content, position) VALUES (%s,%s,%s,%s)",
-                (news_id, block['type'], block['content'], block['position'])
-            )
+            c.execute("INSERT INTO news_blocks (news_id, block_type, content, position) VALUES (%s,%s,%s,%s)",
+                      (news_id, block['type'], block['content'], block['position']))
         conn.commit()
         return news_id
     finally:
@@ -230,10 +228,7 @@ def get_news_with_blocks():
         result = []
         for news in news_items:
             news_id = news['id']
-            c.execute(
-                "SELECT block_type, content, position FROM news_blocks WHERE news_id=%s ORDER BY position ASC, created_at ASC",
-                (news_id,)
-            )
+            c.execute("SELECT block_type, content, position FROM news_blocks WHERE news_id=%s ORDER BY position ASC, created_at ASC", (news_id,))
             blocks = c.fetchall()
             news_data = dict(news)
             news_data['blocks'] = [dict(b) for b in blocks]
@@ -247,10 +242,7 @@ def get_comments(item_type, item_id):
     conn = get_db_connection()
     c = conn.cursor()
     try:
-        c.execute(
-            "SELECT user_name, text, created_at FROM comments WHERE item_type=%s AND item_id=%s ORDER BY created_at DESC",
-            (item_type, item_id)
-        )
+        c.execute("SELECT user_name, text, created_at FROM comments WHERE item_type=%s AND item_id=%s ORDER BY created_at DESC", (item_type, item_id))
         return [tuple(c.values()) for c in c.fetchall()]
     finally:
         conn.close()
@@ -259,8 +251,7 @@ def add_comment(item_type, item_id, user_name, text):
     conn = get_db_connection()
     c = conn.cursor()
     try:
-        c.execute("INSERT INTO comments (item_type, item_id, user_name, text) VALUES (%s,%s,%s,%s)",
-                  (item_type, item_id, user_name, text))
+        c.execute("INSERT INTO comments (item_type, item_id, user_name, text) VALUES (%s,%s,%s,%s)", (item_type, item_id, user_name, text))
         conn.commit()
     finally:
         conn.close()
@@ -270,8 +261,7 @@ def get_reactions_count(item_type, item_id):
     conn = get_db_connection()
     c = conn.cursor()
     try:
-        c.execute("SELECT reaction, COUNT(*) AS count FROM reactions WHERE item_type=%s AND item_id=%s GROUP BY reaction",
-                  (item_type, item_id))
+        c.execute("SELECT reaction, COUNT(*) AS count FROM reactions WHERE item_type=%s AND item_id=%s GROUP BY reaction", (item_type, item_id))
         results = c.fetchall()
         reactions = {'like':0,'dislike':0,'star':0,'fire':0}
         for r in results:
@@ -284,10 +274,8 @@ def add_reaction(item_type, item_id, user_id, reaction):
     conn = get_db_connection()
     c = conn.cursor()
     try:
-        c.execute("DELETE FROM reactions WHERE item_type=%s AND item_id=%s AND user_id=%s AND reaction=%s",
-                  (item_type, item_id, user_id, reaction))
-        c.execute("INSERT INTO reactions (item_type, item_id, user_id, reaction) VALUES (%s,%s,%s,%s)",
-                  (item_type, item_id, user_id, reaction))
+        c.execute("DELETE FROM reactions WHERE item_type=%s AND item_id=%s AND user_id=%s AND reaction=%s", (item_type, item_id, user_id, reaction))
+        c.execute("INSERT INTO reactions (item_type, item_id, user_id, reaction) VALUES (%s,%s,%s,%s)", (item_type, item_id, user_id, reaction))
         conn.commit()
         return True
     except:
@@ -304,19 +292,13 @@ def get_or_create_user(telegram_id, username=None, first_name=None, last_name=No
         c.execute("SELECT * FROM users WHERE telegram_id=%s", (telegram_id,))
         user = c.fetchone()
         if user:
-            c.execute(
-                "UPDATE users SET username=%s, first_name=%s, last_name=%s WHERE telegram_id=%s",
-                (username, first_name, last_name, telegram_id)
-            )
+            c.execute("UPDATE users SET username=%s, first_name=%s, last_name=%s WHERE telegram_id=%s", (username, first_name, last_name, telegram_id))
             conn.commit()
             c.execute("SELECT * FROM users WHERE telegram_id=%s", (telegram_id,))
             user = c.fetchone()
             return tuple(user.values())
         else:
-            c.execute(
-                "INSERT INTO users (telegram_id, username, first_name, last_name, role) VALUES (%s,%s,%s,%s,%s) RETURNING *",
-                (telegram_id, username, first_name, last_name, 'user')
-            )
+            c.execute("INSERT INTO users (telegram_id, username, first_name, last_name, role) VALUES (%s,%s,%s,%s,%s) RETURNING *", (telegram_id, username, first_name, last_name, 'user'))
             new_user = c.fetchone()
             conn.commit()
             return tuple(new_user.values())
@@ -345,8 +327,10 @@ def get_access_settings(content_type):
         c.execute("SELECT allowed_roles FROM access_settings WHERE content_type=%s", (content_type,))
         result = c.fetchone()
         if result:
-            try: return json.loads(result['allowed_roles'])
-            except: return ['owner']
+            try:
+                return json.loads(result['allowed_roles'])
+            except:
+                return ['owner']
         return ['owner']
     finally:
         conn.close()
@@ -402,5 +386,15 @@ def get_stats():
         }
     finally:
         conn.close()
+
+# ---------------- Совместимость со старым кодом ----------------
+def get_all_moments():
+    return get_all_items("moments")
+
+def get_all_trailers():
+    return get_all_items("trailers")
+
+def get_all_news():
+    return get_all_items("news")
 
 # --- init_db() вызывать вручную после установки DATABASE_URL ---
