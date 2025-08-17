@@ -1,86 +1,54 @@
 {% extends 'admin/base.html' %}
 
 {% block content %}
-<div class="container mt-4">
-    <h2>➕ Добавить видео / контент</h2>
-    <div id="alert" class="alert d-none"></div>
+<h2 class="text-center mb-4" style="background: linear-gradient(45deg, #ff9f43, #ff6b6b); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">➕ Добавить видео</h2>
 
-    <form id="add-video-form" enctype="multipart/form-data">
-        <div class="mb-3">
-            <label for="content_type" class="form-label">Тип контента</label>
-            <select class="form-select" id="content_type" name="content_type" required>
-                <option value="moment">Момент</option>
-                <option value="trailer">Трейлер</option>
-                <option value="news">Новость</option>
-            </select>
-        </div>
+<form id="add-video-form">
+    <div class="mb-3">
+        <label for="video-title" class="form-label">Название</label>
+        <input type="text" class="form-control" id="video-title" required>
+    </div>
 
-        <div class="mb-3">
-            <label for="title" class="form-label">Название</label>
-            <input type="text" class="form-control" id="title" name="title" required>
-        </div>
+    <div class="mb-3">
+        <label for="video-type" class="form-label">Тип контента</label>
+        <select class="form-select" id="video-type" required>
+            <option value="moment">Момент</option>
+            <option value="trailer">Трейлер</option>
+            <option value="news">Новость</option>
+        </select>
+    </div>
 
-        <div class="mb-3">
-            <label for="description" class="form-label">Описание</label>
-            <textarea class="form-control" id="description" name="description" rows="3"></textarea>
-        </div>
+    <div class="mb-3">
+        <label for="video-url" class="form-label">URL видео</label>
+        <input type="url" class="form-control" id="video-url" required>
+    </div>
 
-        <div class="mb-3">
-            <label for="video_url" class="form-label">Ссылка на видео</label>
-            <input type="url" class="form-control" id="video_url" name="video_url">
-            <small class="text-muted">Если загружаешь файл, поле можно оставить пустым.</small>
-        </div>
-
-        <div class="mb-3">
-            <label for="video_file" class="form-label">Или выберите файл видео</label>
-            <input class="form-control" type="file" id="video_file" name="video_file" accept="video/*">
-        </div>
-
-        <button type="submit" class="btn btn-primary">Добавить</button>
-    </form>
-</div>
+    <button type="submit" class="btn btn-primary">Добавить</button>
+</form>
 
 <script>
-document.getElementById('add-video-form').addEventListener('submit', async function(e) {
+document.getElementById('add-video-form').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const alertDiv = document.getElementById('alert');
-    alertDiv.classList.add('d-none');
-    alertDiv.textContent = '';
+    const title = document.getElementById('video-title').value;
+    const type = document.getElementById('video-type').value;
+    const url = document.getElementById('video-url').value;
 
-    const formData = new FormData(this);
-    const type = formData.get('content_type');
+    let api_url = '';
+    if (type === 'moment') api_url = '/api/add_moment';
+    if (type === 'trailer') api_url = '/api/add_trailer';
+    if (type === 'news') api_url = '/api/add_news';
 
-    let apiUrl = '';
-    if (type === 'moment') apiUrl = '/api/add_moment';
-    else if (type === 'trailer') apiUrl = '/api/add_trailer';
-    else if (type === 'news') apiUrl = '/api/add_news';
-    else {
-        alertDiv.textContent = 'Неверный тип контента';
-        alertDiv.classList.remove('d-none');
-        alertDiv.classList.add('alert-danger');
-        return;
-    }
-
-    try {
-        const res = await fetch(apiUrl, {
-            method: 'POST',
-            body: formData
-        });
-        const result = await res.json();
-        if (result.success) {
-            alertDiv.textContent = '✅ Контент успешно добавлен!';
-            alertDiv.classList.remove('d-none', 'alert-danger');
-            alertDiv.classList.add('alert-success');
-            this.reset();
-        } else {
-            alertDiv.textContent = '❌ Ошибка: ' + (result.error || 'Неизвестная ошибка');
-            alertDiv.classList.remove('d-none', 'alert-success');
-            alertDiv.classList.add('alert-danger');
-        }
-    } catch (err) {
-        alertDiv.textContent = '❌ Ошибка запроса: ' + err;
-        alertDiv.classList.remove('d-none', 'alert-success');
-        alertDiv.classList.add('alert-danger');
+    const res = await fetch(api_url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, description: title, video_url: url })
+    });
+    const data = await res.json();
+    if (data.success) {
+        alert('✅ Видео успешно добавлено!');
+        document.getElementById('add-video-form').reset();
+    } else {
+        alert('❌ Ошибка: ' + (data.error || 'Неизвестная'));
     }
 });
 </script>
