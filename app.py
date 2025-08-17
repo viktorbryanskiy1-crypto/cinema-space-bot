@@ -13,6 +13,9 @@ from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 import redis
 import json
 
+# -----------------------------
+# Импорт реальных функций из database.py
+# -----------------------------
 from database import (
     get_or_create_user, get_user_role,
     add_moment, add_trailer, add_news,
