@@ -10,8 +10,9 @@
     <div class="container">
         <nav class="navbar" style="margin-bottom: 30px;">
             <h1>📁 Управление контентом</h1>
-            <div>
-                <a href="{{ url_for('admin_dashboard') }}" class="tab-btn" style="margin-right: 10px;">Статистика</a>
+            <div style="display: flex; gap: 10px;">
+                <a href="{{ url_for('admin_dashboard') }}" class="tab-btn">Статистика</a>
+                <a href="{{ url_for('admin_add_video') }}" class="tab-btn" style="background: linear-gradient(45deg, #1dd1a1, #10ac84);">➕ Добавить видео</a>
                 <a href="{{ url_for('admin_logout') }}" class="tab-btn" style="background: linear-gradient(45deg, #ff6b6b, #ff4757);">Выйти</a>
             </div>
         </nav>
