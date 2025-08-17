@@ -5,42 +5,122 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>📊 Админ-панель - КиноВселенная</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .tab-content { display: none; margin-top: 30px; }
+        .tab-content.active { display: block; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, select { width: 100%; padding: 8px; border-radius: 5px; border: 1px solid #ccc; }
+        button { padding: 10px 20px; border: none; border-radius: 5px; background: var(--accent); color: #fff; cursor: pointer; }
+        button:hover { opacity: 0.9; }
+    </style>
 </head>
 <body>
     <div class="container">
         <nav class="navbar" style="margin-bottom: 30px;">
             <h1>📊 Админ-панель</h1>
             <div>
+                <a href="#" class="tab-btn" data-tab="stats" style="margin-right: 10px;">Статистика</a>
+                <a href="#" class="tab-btn" data-tab="add-video" style="margin-right: 10px;">➕ Добавить видео</a>
                 <a href="{{ url_for('admin_content') }}" class="tab-btn" style="margin-right: 10px;">Управление контентом</a>
                 <a href="{{ url_for('admin_access_settings') }}" class="tab-btn" style="margin-right: 10px;">⚙️ Настройки доступа</a>
                 <a href="{{ url_for('admin_logout') }}" class="tab-btn" style="background: linear-gradient(45deg, #ff6b6b, #ff4757);">Выйти</a>
             </div>
         </nav>
-        
-        <h2 style="text-align: center; margin-bottom: 30px; background: linear-gradient(45deg, var(--accent), var(--accent-secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">📈 Статистика</h2>
-        
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-number">{{ moments_count }}</div>
-                <div class="stat-label">Моментов из кино</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">{{ trailers_count }}</div>
-                <div class="stat-label">Трейлеров</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">{{ news_count }}</div>
-                <div class="stat-label">Новостей</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">{{ comments_count }}</div>
-                <div class="stat-label">Комментариев</div>
+
+        <!-- Статистика -->
+        <div id="stats" class="tab-content active">
+            <h2 style="text-align: center; margin-bottom: 30px; background: linear-gradient(45deg, var(--accent), var(--accent-secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">📈 Статистика</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-number">{{ moments_count }}</div>
+                    <div class="stat-label">Моментов из кино</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">{{ trailers_count }}</div>
+                    <div class="stat-label">Трейлеров</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">{{ news_count }}</div>
+                    <div class="stat-label">Новостей</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">{{ comments_count }}</div>
+                    <div class="stat-label">Комментариев</div>
+                </div>
             </div>
         </div>
-        
+
+        <!-- Добавление видео -->
+        <div id="add-video" class="tab-content">
+            <h2 style="text-align: center; margin-bottom: 30px;">➕ Добавить новое видео</h2>
+            <form id="addVideoForm">
+                <div class="form-group">
+                    <label for="content_type">Тип контента</label>
+                    <select id="content_type" name="content_type" required>
+                        <option value="moment">Момент</option>
+                        <option value="trailer">Трейлер</option>
+                        <option value="news">Новость</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="title">Название видео</label>
+                    <input type="text" id="title" name="title" placeholder="Введите название" required>
+                </div>
+                <div class="form-group">
+                    <label for="video_url">Ссылка на видео / Telegram пост</label>
+                    <input type="text" id="video_url" name="video_url" placeholder="https://t.me/channel/123 или прямой URL" required>
+                </div>
+                <button type="submit">Добавить видео</button>
+            </form>
+            <div id="addVideoMessage" style="margin-top: 20px; text-align: center;"></div>
+        </div>
+
         <div style="text-align: center; margin-top: 50px;">
             <a href="{{ url_for('index') }}" class="tab-btn">🏠 Вернуться к приложению</a>
         </div>
     </div>
+
+    <script>
+        // Переключение вкладок
+        const tabs = document.querySelectorAll('.tab-btn[data-tab]');
+        const contents = document.querySelectorAll('.tab-content');
+        tabs.forEach(tab => {
+            tab.addEventListener('click', e => {
+                e.preventDefault();
+                const target = tab.dataset.tab;
+                contents.forEach(c => c.classList.remove('active'));
+                document.getElementById(target).classList.add('active');
+            });
+        });
+
+        // Отправка формы через fetch
+        const form = document.getElementById('addVideoForm');
+        form.addEventListener('submit', async e => {
+            e.preventDefault();
+            const content_type = document.getElementById('content_type').value;
+            const title = document.getElementById('title').value;
+            const video_url = document.getElementById('video_url').value;
+            const msgDiv = document.getElementById('addVideoMessage');
+            msgDiv.textContent = '⏳ Добавление...';
+
+            try {
+                const response = await fetch(`/api/add_${content_type}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title, description: 'Добавлено через админку', video_url })
+                });
+                const data = await response.json();
+                if(data.success){
+                    msgDiv.textContent = '✅ Видео успешно добавлено!';
+                    form.reset();
+                } else {
+                    msgDiv.textContent = '❌ Ошибка: ' + (data.error || 'Неизвестная ошибка');
+                }
+            } catch(err){
+                msgDiv.textContent = '❌ Ошибка запроса: ' + err;
+            }
+        });
+    </script>
 </body>
 </html>
