@@ -132,6 +132,7 @@ def add_video_command(update, context):
     update.message.reply_text(f"🎬 Adding '{parts[1]}' with title '{parts[2]}'. Send video URL.")
     logger.info(f"User {telegram_id} adding video: {parts[1]} - {parts[2]}")
 
+# ---------------- Обработка добавления видео по ссылке или прямому URL ----------------
 def handle_pending_video_url(update, context):
     user = update.message.from_user
     telegram_id = str(user.id)
@@ -143,20 +144,28 @@ def handle_pending_video_url(update, context):
     content_type, title = data['content_type'], data['title']
     desc = "Added via Telegram bot"
 
-    video_url = ''
     try:
-        # --- Проверяем, ссылка ли это на пост Telegram ---
+        video_url = ''
+
+        # --- Если это ссылка на пост Telegram ---
         if text.startswith("https://t.me/"):
-            # разбор ссылки на чат и сообщение
             chat_id, message_id = extract_chat_message_id(text)
-            message = context.bot.get_chat(chat_id).get_message(message_id)
-            if message.video:
-                file = context.bot.get_file(message.video.file_id)
-                video_url = file.file_path
+            if chat_id and message_id:
+                msg = context.bot.get_chat(chat_id).get_message(message_id)
+                if msg.video:
+                    # Получаем file_path через API
+                    file = context.bot.get_file(msg.video.file_id)
+                    video_url = file.file_path
+                else:
+                    update.message.reply_text("❌ В этом посте нет видео.")
+                    return
+            else:
+                update.message.reply_text("❌ Неверная ссылка на пост.")
+                return
         else:
             video_url = text  # обычный URL
 
-        # --- Добавляем в базу ---
+        # --- Сохраняем в базу ---
         if content_type == 'moment':
             add_moment(title, desc, video_url)
         elif content_type == 'trailer':
@@ -164,7 +173,7 @@ def handle_pending_video_url(update, context):
         elif content_type == 'news':
             add_news(title, desc, video_url)
 
-        update.message.reply_text(f"✅ '{content_type}' '{title}' добавлено!")
+        update.message.reply_text(f"✅ '{content_type}' '{title}' успешно добавлено!")
         cache_delete(f"{content_type}s_list" if content_type != 'news' else 'news_list')
 
     except Exception as e:
@@ -172,6 +181,23 @@ def handle_pending_video_url(update, context):
         update.message.reply_text(f"❌ Ошибка: {e}")
         pending_video_data[telegram_id] = data
 
+
+# ---------------- Вспомогательная функция для извлечения chat_id и message_id ----------------
+def extract_chat_message_id(t_me_link):
+    """
+    Пример ссылки: https://t.me/channel_username/123
+    Возвращает: chat_id, message_id
+    """
+    try:
+        parts = t_me_link.split('/')
+        message_id = int(parts[-1])
+        username_or_chat = parts[-2]
+        return username_or_chat, message_id
+    except:
+        return None, None
+
+
+# ---------------- Подключение обработчиков к боту ----------------
 dp.add_handler(CommandHandler('start', start))
 dp.add_handler(CommandHandler('add_video', add_video_command))
 dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_pending_video_url))
