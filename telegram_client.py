@@ -1,11 +1,11 @@
 from telethon import TelegramClient
-from telethon.errors import SessionPasswordNeededError
+from telethon.errors import SessionPasswordNeededError, FloodWaitError
 import asyncio
 import logging
 import sys
 
 # Включаем логирование для отладки
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 
 # Вставь свои данные от Telegram API
 api_id = 20307782
@@ -18,59 +18,66 @@ client = TelegramClient('session_name', api_id, api_hash)
 async def main():
     print("📞 Подключение к Telegram...")
     
-    # Попробуем подключиться
-    await client.connect()
-    print("✅ Подключение установлено")
-    
-    # Проверим, авторизованы ли мы
-    is_authorized = await client.is_user_authorized()
-    print(f"🔑 Статус авторизации: {is_authorized}")
-    
-    if not is_authorized:
-        print("🔑 Необходима авторизация")
-        try:
-            print("📤 Отправка запроса кода...")
-            await client.send_code_request(phone_number)
-            print("📝 Ожидание ввода кода...")
-            code = input("Please enter the code you received: ")
-            print(f"🔢 Введён код: {code}")
-            
-            # Пробуем авторизоваться с кодом
-            try:
-                print("🔐 Попытка входа с кодом...")
-                await client.sign_in(phone_number, code)
-                print("✅ Успешный вход по коду")
-            except SessionPasswordNeededError:
-                # Если включена двухфакторная аутентификация
-                print("🔒 Требуется пароль (2FA)")
-                password = input("Please enter your password: ")
-                await client.sign_in(password=password)
-                print("✅ Успешный вход с паролем")
-                
-        except Exception as e:
-            print(f"❌ Ошибка авторизации: {e}")
-            logging.exception("Подробности ошибки авторизации:")
-            return
-    else:
-        print("✅ Уже авторизованы")
-    
-    print("📋 Получение списка каналов...")
     try:
-        count = 0
-        async for dialog in client.iter_dialogs():
-            # Показываем только каналы
-            if dialog.is_channel:
-                username = getattr(dialog.entity, 'username', 'нет username')
-                print(f"- {dialog.name} (@{username}) | ID: {dialog.id}")
-                count += 1
-                if count >= 10:  # Ограничиваем для теста
-                    break
-        print(f"📊 Найдено каналов: {count}")
-    except Exception as e:
-        print(f"❌ Ошибка при получении диалогов: {e}")
-        logging.exception("Подробности ошибки диалогов:")
+        # Попробуем подключиться с таймаутом
+        await asyncio.wait_for(client.connect(), timeout=30.0)
+        print("✅ Подключение установлено")
+        
+        # Проверим, авторизованы ли мы
+        is_authorized = await client.is_user_authorized()
+        print(f"🔑 Статус авторизации: {is_authorized}")
+        
+        if not is_authorized:
+            print("🔑 Необходима авторизация")
+            try:
+                print("📤 Отправка запроса кода...")
+                await client.send_code_request(phone_number)
+                print("📝 Ожидание ввода кода...")
+                code = input("Please enter the code you received: ")
+                print(f"🔢 Введён код: {code}")
+                
+                # Пробуем авторизоваться с кодом
+                try:
+                    print("🔐 Попытка входа с кодом...")
+                    await client.sign_in(phone_number, code)
+                    print("✅ Успешный вход по коду")
+                except SessionPasswordNeededError:
+                    # Если включена двухфакторная аутентификация
+                    print("🔒 Требуется пароль (2FA)")
+                    password = input("Please enter your password: ")
+                    await client.sign_in(password=password)
+                    print("✅ Успешный вход с паролем")
+                    
+            except FloodWaitError as e:
+                print(f"⏰ Слишком много попыток. Подождите {e.seconds} секунд")
+                return
+            except Exception as e:
+                print(f"❌ Ошибка авторизации: {e}")
+                return
+        else:
+            print("✅ Уже авторизованы")
+        
+        print("📋 Получение списка каналов...")
+        try:
+            count = 0
+            async for dialog in client.iter_dialogs():
+                # Показываем только каналы
+                if dialog.is_channel:
+                    username = getattr(dialog.entity, 'username', 'нет username')
+                    print(f"- {dialog.name} (@{username}) | ID: {dialog.id}")
+                    count += 1
+                    if count >= 5:  # Ограничиваем для теста
+                        break
+            print(f"📊 Найдено каналов: {count}")
+        except Exception as e:
+            print(f"❌ Ошибка при получении диалогов: {e}")
 
-    print("🔚 Работа завершена")
+        print("🔚 Работа завершена")
+        
+    except asyncio.TimeoutError:
+        print("❌ Таймаут подключения. Проверьте интернет соединение.")
+    except Exception as e:
+        print(f"❌ Критическая ошибка: {e}")
 
 # Точка входа в программу
 if __name__ == '__main__':
@@ -80,5 +87,4 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         print("\n⚠️  Программа прервана пользователем")
     except Exception as e:
-        print(f"❌ Критическая ошибка: {e}")
-        logging.exception("Подробности критической ошибки:")
+        print(f"❌ Критическая ошибка при запуске: {e}")
