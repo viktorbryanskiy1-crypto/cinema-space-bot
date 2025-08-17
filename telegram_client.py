@@ -7,13 +7,12 @@ phone_number = '+79832438267'
 client = TelegramClient('session_name', api_id, api_hash)
 
 async def main():
-    # Старт клиента
     await client.start(phone=phone_number)
     print("✅ Клиент подключен!")
 
-    # Проверка: кто мы
-    me = await client.get_me()
-    print(f"Вы вошли как: {me.first_name} (@{me.username})")
+    # Список всех диалогов (чатов, каналов, групп)
+    async for dialog in client.iter_dialogs():
+        print(f"{dialog.name} - {dialog.id} - {dialog.is_channel}")
 
 if __name__ == '__main__':
     import asyncio
