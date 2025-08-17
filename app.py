@@ -137,22 +137,39 @@ def handle_pending_video_url(update, context):
     telegram_id = str(user.id)
     if telegram_id not in pending_video_data:
         return
-    video_url = update.message.text.strip()
-    if not video_url:
-        update.message.reply_text("❌ URL is empty")
-        return
+
+    text = update.message.text.strip()
     data = pending_video_data.pop(telegram_id)
     content_type, title = data['content_type'], data['title']
+    desc = "Added via Telegram bot"
+
+    video_url = ''
     try:
-        desc = "Added via Telegram bot"
-        if content_type == 'moment': add_moment(title, desc, video_url)
-        elif content_type == 'trailer': add_trailer(title, desc, video_url)
-        elif content_type == 'news': add_news(title, desc, video_url)
-        update.message.reply_text(f"✅ '{content_type}' '{title}' added!")
+        # --- Проверяем, ссылка ли это на пост Telegram ---
+        if text.startswith("https://t.me/"):
+            # разбор ссылки на чат и сообщение
+            chat_id, message_id = extract_chat_message_id(text)
+            message = context.bot.get_chat(chat_id).get_message(message_id)
+            if message.video:
+                file = context.bot.get_file(message.video.file_id)
+                video_url = file.file_path
+        else:
+            video_url = text  # обычный URL
+
+        # --- Добавляем в базу ---
+        if content_type == 'moment':
+            add_moment(title, desc, video_url)
+        elif content_type == 'trailer':
+            add_trailer(title, desc, video_url)
+        elif content_type == 'news':
+            add_news(title, desc, video_url)
+
+        update.message.reply_text(f"✅ '{content_type}' '{title}' добавлено!")
         cache_delete(f"{content_type}s_list" if content_type != 'news' else 'news_list')
+
     except Exception as e:
-        logger.error(f"Error adding video: {e}")
-        update.message.reply_text(f"❌ Error: {e}")
+        logger.error(f"Ошибка при добавлении видео: {e}")
+        update.message.reply_text(f"❌ Ошибка: {e}")
         pending_video_data[telegram_id] = data
 
 dp.add_handler(CommandHandler('start', start))
