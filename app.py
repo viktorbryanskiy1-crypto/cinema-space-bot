@@ -8,7 +8,7 @@ from flask import (
     redirect, url_for, session, send_from_directory, abort
 )
 from werkzeug.utils import secure_filename
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 import redis
 import json
@@ -26,16 +26,6 @@ from database import (
     delete_item, get_access_settings, update_access_settings,
     init_db, get_item_by_id
 )
-
-# --- Обёртки для удаления ---
-def delete_moment(item_id):
-    delete_item('moments', item_id)
-
-def delete_trailer(item_id):
-    delete_item('trailers', item_id)
-
-def delete_news(item_id):
-    delete_item('news', item_id)
 
 # --- Logging ---
 logging.basicConfig(level=logging.INFO,
@@ -90,34 +80,30 @@ if TOKEN:
     dp = updater.dispatcher
 
     def start(update, context):
-        try:
-            user = update.message.from_user
-            telegram_id = str(user.id)
-            get_or_create_user(
-                telegram_id=telegram_id,
-                username=user.username,
-                first_name=user.first_name,
-                last_name=user.last_name
+        user = update.message.from_user
+        telegram_id = str(user.id)
+        get_or_create_user(
+            telegram_id=telegram_id,
+            username=user.username,
+            first_name=user.first_name,
+            last_name=user.last_name
+        )
+        keyboard = [[
+            InlineKeyboardButton(
+                "🌌 КиноВселенная",
+                web_app=WebAppInfo(url=f"{WEBHOOK_URL}?mode=fullscreen")
             )
-            keyboard = [[
-                InlineKeyboardButton(
-                    "🌌 КиноВселенная",
-                    web_app=WebAppInfo(url=f"{WEBHOOK_URL}?mode=fullscreen")
-                )
-            ]]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            update.message.reply_text(
-                "🚀 Добро пожаловать в КиноВселенную!\n"
-                "✨ Исследуй космос кино\n"
-                "🎬 Лучшие моменты из фильмов\n"
-                "🎥 Свежие трейлеры\n"
-                "📰 Горячие новости\n"
-                "Нажми кнопку для входа в приложение",
-                reply_markup=reply_markup
-            )
-            logger.info(f"/start from {telegram_id}")
-        except Exception as e:
-            logger.error(f"Error in /start: {e}")
+        ]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        update.message.reply_text(
+            "🚀 Добро пожаловать в КиноВселенную!\n"
+            "✨ Исследуй космос кино\n"
+            "🎬 Лучшие моменты из фильмов\n"
+            "🎥 Свежие трейлеры\n"
+            "📰 Горячие новости\n"
+            "Нажми кнопку для входа в приложение",
+            reply_markup=reply_markup
+        )
 
 # --- Helpers ---
 def save_uploaded_file(file_storage, allowed_exts):
@@ -169,11 +155,8 @@ def index():
 def moments():
     cached = cache_get('moments_list')
     if cached:
-        logger.info(f"/moments from cache: {len(cached)} items")
         return render_template('moments.html', moments=cached, extra_by_id={})
-
     data = get_all_moments() or []
-    logger.info(f"/moments from DB: {len(data)} items")
     extra_map = build_extra_map(data, 'moments')
     return render_template('moments.html', moments=data, extra_by_id=extra_map)
 
@@ -181,11 +164,8 @@ def moments():
 def trailers():
     cached = cache_get('trailers_list')
     if cached:
-        logger.info(f"/trailers from cache: {len(cached)} items")
         return render_template('trailers.html', trailers=cached, extra_by_id={})
-
     data = get_all_trailers() or []
-    logger.info(f"/trailers from DB: {len(data)} items")
     extra_map = build_extra_map(data, 'trailers')
     return render_template('trailers.html', trailers=data, extra_by_id=extra_map)
 
@@ -193,11 +173,8 @@ def trailers():
 def news():
     cached = cache_get('news_list')
     if cached:
-        logger.info(f"/news from cache: {len(cached)} items")
         return render_template('news.html', news=cached, extra_by_id={})
-
     data = get_all_news() or []
-    logger.info(f"/news from DB: {len(data)} items")
     extra_map = build_extra_map(data, 'news')
     return render_template('news.html', news=data, extra_by_id=extra_map)
 
@@ -224,7 +201,7 @@ def news_detail(item_id):
     reactions = get_reactions_count('news', item_id)
     comments = get_comments('news', item_id)
     return render_template('news_detail.html', item=item, reactions=reactions, comments=comments)
-    
+
 # --- API: добавление контента ---
 def _get_payload():
     if request.is_json:
@@ -243,7 +220,6 @@ def api_add_moment():
             if saved: video_url = saved
         add_moment(title, desc, video_url)
         cache_delete('moments_list')
-        logger.info(f"api_add_moment: inserted '{title}'")
         return jsonify(success=True)
     except Exception as e:
         logger.error(f"API add_moment error: {e}")
@@ -261,7 +237,6 @@ def api_add_trailer():
             if saved: video_url = saved
         add_trailer(title, desc, video_url)
         cache_delete('trailers_list')
-        logger.info(f"api_add_trailer: inserted '{title}'")
         return jsonify(success=True)
     except Exception as e:
         logger.error(f"API add_trailer error: {e}")
@@ -279,7 +254,6 @@ def api_add_news():
             if saved: image_url = saved
         add_news(title, text, image_url)
         cache_delete('news_list')
-        logger.info(f"api_add_news: inserted '{title}'")
         return jsonify(success=True)
     except Exception as e:
         logger.error(f"API add_news error: {e}")
@@ -398,7 +372,6 @@ def admin_access_settings():
 def admin_update_access(content_type):
     roles = request.form.getlist('roles')
     update_access_settings(content_type, roles)
-    logger.info(f"Updated access roles for {content_type}: {roles}")
     return redirect(url_for('admin_access_settings'))
 
 # --- Telegram Add Video Command ---
@@ -419,7 +392,6 @@ def add_video_command(update, context):
         f"🎬 Добавление '{parts[1]}' с названием '{parts[2]}'. "
         f"Пришли прямой URL видео (https://...) или отправь видео файлом."
     )
-    logger.info(f"User {telegram_id} adding video: {parts[1]} - {parts[2]}")
 
 def handle_pending_video_text(update, context):
     user = update.message.from_user
@@ -483,9 +455,8 @@ def start_bot():
 if __name__ == '__main__':
     try:
         init_db()
-        logger.info("✅ Database initialized")
     except Exception as e:
-        logger.error(f"❌ DB init error: {e}")
+        logger.error(f"DB init error: {e}")
     bot_thread = threading.Thread(target=start_bot, daemon=True)
     bot_thread.start()
     port = int(os.environ.get('PORT', 10000))
