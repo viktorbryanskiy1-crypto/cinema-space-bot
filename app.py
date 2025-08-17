@@ -71,7 +71,7 @@ else:
 # --- Flask ---
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'super-secret-key')
-app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
+app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500 MB limit
 app.config['UPLOAD_FOLDER'] = 'uploads'
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
@@ -129,10 +129,10 @@ def add_video_command(update, context):
         update.message.reply_text("❌ Format: /add_video [moment|trailer|news] [title]")
         return
     pending_video_data[telegram_id] = {'content_type': parts[1].lower(), 'title': parts[2]}
-    update.message.reply_text(f"🎬 Adding '{parts[1]}' with title '{parts[2]}'. Send video URL.")
+    update.message.reply_text(f"🎬 Adding '{parts[1]}' with title '{parts[2]}'. Send video URL or Telegram post link.")
     logger.info(f"User {telegram_id} adding video: {parts[1]} - {parts[2]}")
 
-# ---------------- Обработка добавления видео по ссылке или прямому URL ----------------
+# ---------------- Обработка видео через Telegram пост или URL ----------------
 def handle_pending_video_url(update, context):
     user = update.message.from_user
     telegram_id = str(user.id)
@@ -153,7 +153,7 @@ def handle_pending_video_url(update, context):
             if chat_id and message_id:
                 msg = context.bot.get_chat(chat_id).get_message(message_id)
                 if msg.video:
-                    # Получаем file_path через API
+                    # Получаем прямой file_path через Telegram API
                     file = context.bot.get_file(msg.video.file_id)
                     video_url = file.file_path
                 else:
@@ -181,13 +181,8 @@ def handle_pending_video_url(update, context):
         update.message.reply_text(f"❌ Ошибка: {e}")
         pending_video_data[telegram_id] = data
 
-
 # ---------------- Вспомогательная функция для извлечения chat_id и message_id ----------------
 def extract_chat_message_id(t_me_link):
-    """
-    Пример ссылки: https://t.me/channel_username/123
-    Возвращает: chat_id, message_id
-    """
     try:
         parts = t_me_link.split('/')
         message_id = int(parts[-1])
@@ -196,8 +191,7 @@ def extract_chat_message_id(t_me_link):
     except:
         return None, None
 
-
-# ---------------- Подключение обработчиков к боту ----------------
+# --- Подключение обработчиков к боту ---
 dp.add_handler(CommandHandler('start', start))
 dp.add_handler(CommandHandler('add_video', add_video_command))
 dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_pending_video_url))
@@ -208,7 +202,7 @@ def webhook():
     updater.dispatcher.process_update(update)
     return 'ok'
 
-# --- Helpers ---
+# --- Helpers для файлов и кэша ---
 def save_uploaded_file(file_storage, allowed_exts):
     if file_storage and allowed_file(file_storage.filename, allowed_exts):
         filename = secure_filename(file_storage.filename)
@@ -458,6 +452,4 @@ if __name__=='__main__':
     try: init_db(); logger.info("✅ Database initialized")
     except Exception as e: logger.error(f"❌ DB init error: {e}")
     bot_thread=threading.Thread(target=start_bot,daemon=True)
-    bot_thread.start()
-    port=int(os.environ.get('PORT',10000))
-    app.run(host='0.0.0.0',port=port)
+   
