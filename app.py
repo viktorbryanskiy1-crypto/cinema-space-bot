@@ -28,14 +28,9 @@ from database import (
 )
 
 # --- Обёртки для удаления ---
-def delete_moment(item_id):
-    delete_item('moments', item_id)
-
-def delete_trailer(item_id):
-    delete_item('trailers', item_id)
-
-def delete_news(item_id):
-    delete_item('news', item_id)
+def delete_moment(item_id): delete_item('moments', item_id)
+def delete_trailer(item_id): delete_item('trailers', item_id)
+def delete_news(item_id): delete_item('news', item_id)
 
 # --- Logging ---
 logging.basicConfig(level=logging.INFO,
@@ -145,51 +140,16 @@ def handle_pending_video_url(update, context):
     desc = "Added via Telegram bot"
 
     try:
-        video_url = ''
-
-        # Если это ссылка на Telegram пост
-        if text.startswith("https://t.me/"):
-            chat_id, message_id = extract_chat_message_id(text)
-            if chat_id and message_id:
-                msg = context.bot.get_chat(chat_id).get_message(message_id)
-                if msg.video:
-                    file = context.bot.get_file(msg.video.file_id)
-                    # Используем прямой URL файла Telegram без ограничения времени
-                    video_url = f"https://api.telegram.org/file/bot{TOKEN}/{file.file_path.split('/')[-1]}"
-                else:
-                    update.message.reply_text("❌ В этом посте нет видео.")
-                    return
-            else:
-                update.message.reply_text("❌ Неверная ссылка на пост.")
-                return
-        else:
-            video_url = text
-
-        # Добавляем в базу
-        if content_type == 'moment':
-            add_moment(title, desc, video_url)
-        elif content_type == 'trailer':
-            add_trailer(title, desc, video_url)
-        elif content_type == 'news':
-            add_news(title, desc, video_url)
-
+        video_url = text
+        if content_type == 'moment': add_moment(title, desc, video_url)
+        elif content_type == 'trailer': add_trailer(title, desc, video_url)
+        elif content_type == 'news': add_news(title, desc, video_url)
         update.message.reply_text(f"✅ '{content_type}' '{title}' успешно добавлено!")
         cache_delete(f"{content_type}s_list" if content_type != 'news' else 'news_list')
-
     except Exception as e:
         logger.error(f"Ошибка при добавлении видео: {e}")
         update.message.reply_text(f"❌ Ошибка: {e}")
         pending_video_data[telegram_id] = data
-
-# --- Извлечение chat_id и message_id из Telegram ссылки ---
-def extract_chat_message_id(t_me_link):
-    try:
-        parts = t_me_link.split('/')
-        message_id = int(parts[-1])
-        username_or_chat = parts[-2]
-        return username_or_chat, message_id
-    except:
-        return None, None
 
 # --- Подключение обработчиков ---
 dp.add_handler(CommandHandler('start', start))
@@ -276,10 +236,7 @@ def news():
 def api_add_moment():
     try:
         data=request.json
-        title=data.get('title','')
-        desc=data.get('description','')
-        video_url=data.get('video_url','')
-        add_moment(title, desc, video_url)
+        add_moment(data.get('title',''), data.get('description',''), data.get('video_url',''))
         cache_delete('moments_list')
         return jsonify(success=True)
     except Exception as e:
@@ -290,10 +247,7 @@ def api_add_moment():
 def api_add_trailer():
     try:
         data=request.json
-        title=data.get('title','')
-        desc=data.get('description','')
-        video_url=data.get('video_url','')
-        add_trailer(title, desc, video_url)
+        add_trailer(data.get('title',''), data.get('description',''), data.get('video_url',''))
         cache_delete('trailers_list')
         return jsonify(success=True)
     except Exception as e:
@@ -304,24 +258,19 @@ def api_add_trailer():
 def api_add_news():
     try:
         data=request.json
-        title=data.get('title','')
-        text=data.get('description','')
-        video_url=data.get('video_url','')
-        add_news(title, text, video_url)
+        add_news(data.get('title',''), data.get('description',''), data.get('video_url',''))
         cache_delete('news_list')
         return jsonify(success=True)
     except Exception as e:
         logger.error(f"API add_news error: {e}")
         return jsonify(success=False,error=str(e))
 
-# --- Admin routes, login, logout, dashboard (как раньше) ---
+# --- Admin routes ---
 @app.route('/admin/login',methods=['GET','POST'])
 def admin_login():
     if request.method=='POST':
-        username=request.form.get('username','')
-        password=request.form.get('password','')
-        if authenticate_admin(username,password):
-            session['admin']=username
+        if authenticate_admin(request.form.get('username',''), request.form.get('password','')):
+            session['admin']=request.form['username']
             return redirect(url_for('admin_dashboard'))
         return render_template('admin/login.html',error='Неверный логин или пароль')
     return render_template('admin/login.html')
@@ -348,6 +297,26 @@ def admin_dashboard():
         trailers_count=stats.get('trailers',0),
         news_count=stats.get('news',0),
         comments_count=stats.get('comments',0))
+
+# --- 📌 Новый маршрут для добавления видео ---
+@app.route('/admin/add_video', methods=['GET','POST'])
+@admin_required
+def admin_add_video():
+    if request.method == 'POST':
+        content_type = request.form.get('type')
+        title = request.form.get('title','')
+        desc = request.form.get('description','')
+        video_url = request.form.get('video_url','')
+
+        try:
+            if content_type == 'moment': add_moment(title, desc, video_url)
+            elif content_type == 'trailer': add_trailer(title, desc, video_url)
+            elif content_type == 'news': add_news(title, desc, video_url)
+            cache_delete(f"{content_type}s_list" if content_type != 'news' else 'news_list')
+            return redirect(url_for('admin_dashboard'))
+        except Exception as e:
+            return render_template('admin/add_video.html', error=str(e))
+    return render_template('admin/add_video.html')
 
 # --- Run ---
 def start_bot():
