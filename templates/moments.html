@@ -140,6 +140,11 @@ function closeModal(id) {
     if (modal) modal.style.display = 'none';
 }
 
+// Для moments.html
+function showAddMomentModal() {
+    showModal('add-moment-modal');
+}
+
 // Переключатель загрузки файла / URL видео
 document.addEventListener('change', (e) => {
     if (!e.target.name || !e.target.closest('#add-moment-modal')) return;
@@ -156,9 +161,9 @@ document.addEventListener('change', (e) => {
 });
 
 // Обработчик открытия модалки
-document.getElementById('add-moment-btn').addEventListener('click', () => showModal('add-moment-modal'));
+document.getElementById('add-moment-btn').addEventListener('click', () => showAddMomentModal());
 const altBtn = document.getElementById('add-moment-btn-alt');
-if (altBtn) altBtn.addEventListener('click', () => showModal('add-moment-modal'));
+if (altBtn) altBtn.addEventListener('click', () => showAddMomentModal());
 
 // Обработка формы добавления момента
 document.getElementById('add-moment-form').addEventListener('submit', async (e) => {
@@ -182,32 +187,6 @@ document.getElementById('add-moment-form').addEventListener('submit', async (e) 
         alert('Ошибка загрузки: ' + err.message);
     }
 });
-
-<script>
-// Функции открытия/закрытия модалок (если их нет)
-function showModal(id) {
-    const modal = document.getElementById(id);
-    if (modal) modal.style.display = 'flex';
-}
-function closeModal(id) {
-    const modal = document.getElementById(id);
-    if (modal) modal.style.display = 'none';
-}
-
-// Для moments.html
-function showAddMomentModal() {
-    showModal('add-moment-modal');
-}
-
-// Для trailers.html
-function showAddTrailerModal() {
-    showModal('add-trailer-modal');
-}
-
-// Для news.html
-function showAddNewsModal() {
-    showModal('add-news-modal');
-}
 
 // Закрытие модалки при клике вне окна
 window.addEventListener('click', function(e) {
