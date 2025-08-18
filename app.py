@@ -198,6 +198,11 @@ if TOKEN:
     dp = updater.dispatcher
 
     def start(update, context):
+        # Проверка наличия сообщения
+        if not update or not update.message:
+            logger.warning("Получен update без сообщения в start()")
+            return
+            
         user = update.message.from_user
         telegram_id = str(user.id)
         get_or_create_user(
@@ -689,6 +694,11 @@ def admin_add_video_json():
 
 # --- Telegram Handlers ---
 def add_video_command(update, context):
+    # Проверка наличия сообщения и текста
+    if not update or not update.message or not update.message.text:
+        logger.warning("Получен update без сообщения или текста в add_video_command()")
+        return
+        
     user = update.message.from_user
     telegram_id = str(user.id)
     role = get_user_role(telegram_id)
@@ -704,6 +714,11 @@ def add_video_command(update, context):
 
 
 def handle_pending_video_text(update, context):
+    # Проверка наличия сообщения и текста
+    if not update or not update.message or not update.message.text:
+        logger.warning("Получен update без сообщения или текста в handle_pending_video_text()")
+        return
+        
     user = update.message.from_user
     telegram_id = str(user.id)
     if telegram_id not in pending_video_data:
@@ -713,6 +728,7 @@ def handle_pending_video_text(update, context):
     video_url = update.message.text.strip()
     if not video_url.startswith('http'):
         update.message.reply_text("❌ Отправьте прямую ссылку.")
+        pending_video_data[telegram_id] = data  # Возвращаем данные обратно
         return
     if content_type == 'moment':
         add_moment(title, "Добавлено через Telegram", video_url)
@@ -727,6 +743,11 @@ def handle_pending_video_text(update, context):
 
 
 def handle_pending_video_file(update, context):
+    # Проверка наличия сообщения и видео
+    if not update or not update.message or not getattr(update.message, 'video', None):
+        logger.warning("Получен update без сообщения или видео в handle_pending_video_file()")
+        return
+        
     user = update.message.from_user
     telegram_id = str(user.id)
     if telegram_id not in pending_video_data:
@@ -737,6 +758,7 @@ def handle_pending_video_file(update, context):
     video_url = get_cached_direct_video_url(file_id)
     if not video_url:
         update.message.reply_text("❌ Не удалось получить ссылку.")
+        pending_video_data[telegram_id] = data  # Возвращаем данные обратно
         return
     if content_type == 'moment':
         add_moment(title, "Добавлено через Telegram", video_url)
