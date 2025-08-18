@@ -365,7 +365,7 @@ def build_extra_map(data, item_type_plural):
     """Добавляет реакции и комментарии к каждому элементу данных."""
     extra = {}
     # ИСПРАВЛЕНО: Полная строка цикла
-    for row in 
+    for row in data:
         if len(row) == 0:
             continue
         item_id = row[0]
