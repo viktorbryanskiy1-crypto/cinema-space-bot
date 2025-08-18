@@ -172,6 +172,7 @@ async def extract_video_url_from_telegram_post(post_url):
             # ВАЖНО: Бот должен быть участником или админом этого чата
             # ID приватных каналов в t.me/c/ формате требует преобразования
             # Chat ID в Telegram API для супергрупп/каналов отрицательный и начинается с -100
+            # Пример: t.me/c/192847563/10 -> chat_id = -100192847563
             chat_id_or_username = -1000000000000 + int(private_match.group(1))
             message_id = int(private_match.group(2))
             logger.debug(f"Найден приватный канал (ID): {chat_id_or_username}, сообщение: {message_id}")
@@ -220,9 +221,8 @@ async def extract_video_url_from_telegram_post(post_url):
 def extract_video_url_sync(post_url):
     """Синхронная обертка для асинхронной функции извлечения видео"""
     try:
-        logger.debug("Создание нового event loop для асинхронного вызова")
+        logger.debug("Получение или создание event loop для асинхронного вызова")
         # Для Flask (синхронного) нужно запускать асинхронный код
-        # В Render/production средах loop может уже быть запущен
         try:
             # Попробуем получить текущий event loop
             loop = asyncio.get_event_loop()
@@ -238,7 +238,7 @@ def extract_video_url_sync(post_url):
         return result
     except Exception as e:
         logger.error(f"Ошибка в синхронной обертке extract_video_url_sync: {e}", exc_info=True)
-        return None, f"Ошибка event loop: {e}"
+        return None, f"Ошибка обработки запроса: {e}"
 
 if TOKEN:
     updater = Updater(TOKEN, use_context=True)
