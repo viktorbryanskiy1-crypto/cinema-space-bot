@@ -13,7 +13,7 @@ from flask import (
     redirect, url_for, session, send_from_directory, abort
 )
 from werkzeug.utils import secure_filename
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, Bot, MenuButtonWebApp, WebAppInfo
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, Bot, MenuButtonWebApp
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 import redis
 import json
@@ -143,8 +143,8 @@ def get_cached_direct_video_url(file_id, cache_time=3600):
 
     return None
 
-# --- ИСПРАВЛЕННОЕ: Функция для извлечения видео из поста Telegram ---
-# (Обновлённая версия с исправлением для PTB v13.15 - убран await)
+# --- ИСПРАВЛЕНО: Функция для извлечения видео из поста Telegram ---
+# (Обновлённая версия с исправлением для PTB v13.15)
 async def extract_video_url_from_telegram_post(post_url):
     """
     Извлекает прямую ссылку на видео из поста Telegram.
@@ -190,9 +190,14 @@ async def extract_video_url_from_telegram_post(post_url):
         # Создаем бота
         bot = Bot(token=TOKEN)
 
-        # --- ИСПРАВЛЕНИЕ: Убран await, так как forward_message в v13.15 не асинхронный ---
+        # --- ИСПРАВЛЕНИЕ: Используем forward_message вместо get_message ---
+        # Мы пересылаем сообщение от имени бота в тот же чат (или в чат с админом для теста)
+        # Это единственный способ получить полный объект Message в v13.15 по chat_id/message_id
+        # ВАЖНО: Бот должен иметь доступ к исходному сообщению!
+        
+        # Вариант 1: Переслать сообщение в тот же чат (работает, если бот админ)
         try:
-            # ВАЖНО: НЕТ await здесь
+            # ВАЖНО: НЕТ await здесь для v13.15
             forwarded_message = bot.forward_message(
                 chat_id=chat_id_or_username,      # Куда пересылать - в тот же чат
                 from_chat_id=chat_id_or_username, # Откуда - из того же чата
@@ -296,7 +301,6 @@ def set_menu_button():
     except Exception as e:
         logger.error(f"❌ Ошибка установки Menu Button: {e}", exc_info=True)
 
-# --- Telegram Bot Handlers ---
 if TOKEN:
     updater = Updater(TOKEN, use_context=True)
     dp = updater.dispatcher
@@ -361,13 +365,12 @@ def cache_delete(key):
         except Exception:
             pass
 
+# --- ИСПРАВЛЕНО: Полностью исправленная функция build_extra_map ---
 def build_extra_map(data, item_type_plural):
     """Добавляет реакции и комментарии к каждому элементу данных."""
     extra = {}
     # ИСПРАВЛЕНО: Полная строка цикла
-    for row in data:
-        if len(row) == 0:
-            continue
+    for row in 
         item_id = row[0]
         reactions = get_reactions_count(item_type_plural, item_id) or {'like':0,'dislike':0,'star':0,'fire':0}
         comments_count = len(get_comments(item_type_plural, item_id) or [])
@@ -399,7 +402,7 @@ def moments():
 
         # --- ИСПРАВЛЕНИЕ: Объединяем данные ---
         combined_data = []
-        for row in data:
+        for row in 
             item_id = row[0]
             # Создаем словарь для удобства работы в шаблоне
             # Предполагаем, что row это tuple: (id, title, description, video_url, created_at)
@@ -424,10 +427,10 @@ def moments():
         logger.info("Данные объединены успешно")
         # Передаем объединенный список
         return render_template('moments.html', moments=combined_data)
-        # --- ИСПРАВЛЕНИЕ КОНЕЦ ---
+        # --- ИЗМЕНЕНИЯ КОНЕЦ ---
     except Exception as e:
-        logger.error(f"Ошибка в маршруте /moments: {e}", exc_info=True)
-        return render_template('moments.html', moments=[]), 500
+        logger.error(f"API add_moment error: {e}", exc_info=True)
+        return jsonify(success=False, error=str(e)), 500
 
 @app.route('/trailers')
 def trailers():
@@ -467,10 +470,10 @@ def trailers():
         
         logger.info("Данные объединены успешно")
         return render_template('trailers.html', trailers=combined_data)
-        # --- ИСПРАВЛЕНИЕ КОНЕЦ ---
+        # --- ИЗМЕНЕНИЯ КОНЕЦ ---
     except Exception as e:
-        logger.error(f"Ошибка в маршруте /trailers: {e}", exc_info=True)
-        return render_template('trailers.html', trailers=[]), 500
+        logger.error(f"API add_trailer error: {e}", exc_info=True)
+        return jsonify(success=False, error=str(e)), 500
 
 @app.route('/news')
 def news():
@@ -510,10 +513,10 @@ def news():
         
         logger.info("Данные объединены успешно")
         return render_template('news.html', news=combined_data)
-        # --- ИСПРАВЛЕНИЕ КОНЕЦ ---
+        # --- ИЗМЕНЕНИЯ КОНЕЦ ---
     except Exception as e:
-        logger.error(f"Ошибка в маршруте /news: {e}", exc_info=True)
-        return render_template('news.html', news=[]), 500
+        logger.error(f"API add_news error: {e}", exc_info=True)
+        return jsonify(success=False, error=str(e)), 500
 
 # --- НОВОЕ: Детальные страницы ---
 @app.route('/moments/<int:item_id>')
@@ -521,7 +524,7 @@ def moment_detail(item_id):
     """Отображает страницу одного момента."""
     logger.info(f"Запрос к /moments/{item_id}")
     item = get_item_by_id('moments', item_id)
-    if not item:
+    if not item: 
         logger.warning(f"Момент с id={item_id} не найден")
         abort(404)
     reactions = get_reactions_count('moments', item_id)
@@ -542,7 +545,7 @@ def trailer_detail(item_id):
     """Отображает страницу одного трейлера."""
     logger.info(f"Запрос к /trailers/{item_id}")
     item = get_item_by_id('trailers', item_id)
-    if not item:
+    if not item: 
         logger.warning(f"Трейлер с id={item_id} не найден")
         abort(404)
     reactions = get_reactions_count('trailers', item_id)
@@ -563,7 +566,7 @@ def news_detail(item_id):
     """Отображает страницу одной новости."""
     logger.info(f"Запрос к /news/{item_id}")
     item = get_item_by_id('news', item_id)
-    if not item:
+    if not item: 
         logger.warning(f"Новость с id={item_id} не найдена")
         abort(404)
     reactions = get_reactions_count('news', item_id)
@@ -983,6 +986,13 @@ def handle_pending_video_file(update, context):
         update.message.reply_text(error_msg)
 
 
+if dp:
+    # --- ИСПРАВЛЕНО: Добавлен обработчик команды /start ---
+    dp.add_handler(CommandHandler('start', start))
+    dp.add_handler(CommandHandler('add_video', add_video_command))
+    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_pending_video_text))
+    dp.add_handler(MessageHandler(Filters.video & ~Filters.command, handle_pending_video_file))
+
 # --- Start Bot ---
 def start_bot():
     if updater:
@@ -1020,12 +1030,3 @@ if __name__ == '__main__':
     logger.info(f"Запуск Flask приложения на порту {port}...")
     app.run(host='0.0.0.0', port=port)
     logger.info("Flask приложение остановлено.")
-
-# --- Регистрация обработчиков Telegram бота ---
-# (Это должно быть в конце файла, после определения всех функций)
-if dp:
-    # --- ИСПРАВЛЕНО: Добавлен обработчик команды /start ---
-    dp.add_handler(CommandHandler('start', start))
-    dp.add_handler(CommandHandler('add_video', add_video_command))
-    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_pending_video_text))
-    dp.add_handler(MessageHandler(Filters.video & ~Filters.command, handle_pending_video_file))
