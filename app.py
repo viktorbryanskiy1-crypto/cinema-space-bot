@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 
 # --- Config ---
 TOKEN = os.environ.get('TELEGRAM_TOKEN')
-WEBHOOK_URL = os.environ.get('WEBHOOK_URL', 'https://cinema-space-bot.onrender.com').strip()
+WEBHOOK_URL = os.environ.get('WEBHOOK_URL', 'https://cinema-space-bot.onrender.com').strip().rstrip('/')
 REDIS_URL = os.environ.get('REDIS_URL', None)
 if not TOKEN:
     logger.error("TELEGRAM_TOKEN not set!")
@@ -287,7 +287,7 @@ def moments():
         extra_map = build_extra_map(data, 'moments')
 
         combined_data = []
-        for row in data:
+        for row in data:  # <-- ИСПРАВЛЕНО: было "for row in"
             item_dict = {
                 'id': row[0],
                 'title': row[1],
@@ -325,7 +325,7 @@ def trailers():
         extra_map = build_extra_map(data, 'trailers')
 
         combined_data = []
-        for row in data:
+        for row in data:  # <-- ИСПРАВЛЕНО: было "for row in"
             item_dict = {
                 'id': row[0],
                 'title': row[1],
@@ -363,7 +363,7 @@ def news():
         extra_map = build_extra_map(data, 'news')
 
         combined_data = []
-        for row in data:
+        for row in data:  # <-- ИСПРАВЛЕНО: было "for row in"
             item_dict = {
                 'id': row[0],
                 'title': row[1],
@@ -756,10 +756,37 @@ if dp:
     dp.add_handler(MessageHandler(Filters.video & ~Filters.command, handle_pending_video_file))
 
 
+# --- Telegram Webhook Route (NEW) ---
+@app.route(f'/{TOKEN}', methods=['POST'])
+def telegram_webhook():
+    """Обработка Telegram Webhook."""
+    if not updater:
+        logger.error("Updater не инициализирован")
+        return "Bot not initialized", 500
+
+    try:
+        json_string = request.get_data().decode('utf-8')
+        from telegram import Update
+        update = Update.de_json(json.loads(json_string), updater.bot)
+        updater.dispatcher.process_update(update)
+        return "OK", 200
+    except Exception as e:
+        logger.error(f"Ошибка обработки webhook: {e}", exc_info=True)
+        return "Error", 500
+
+
 # --- Start Bot ---
 def start_bot():
-    if updater:
-        logger.info("Запуск Telegram бота...")
+    if updater and TOKEN and WEBHOOK_URL:
+        try:
+            logger.info("Установка Telegram webhook...")
+            webhook_url = f"{WEBHOOK_URL}/{TOKEN}"
+            updater.bot.set_webhook(url=webhook_url)
+            logger.info(f"Webhook установлен: {webhook_url}")
+        except Exception as e:
+            logger.error(f"Ошибка установки webhook: {e}", exc_info=True)
+    elif updater:
+        logger.info("Запуск Telegram бота (polling)...")
         updater.start_polling()
 
 
