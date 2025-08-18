@@ -1,3 +1,4 @@
+<!-- templates/news.html -->
 <div class="content-section">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
         <h2 style="background: linear-gradient(45deg, #00f3ff, #ff00c8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size: 2em;">📰 Новости</h2>
@@ -91,18 +92,23 @@
 </div>
 
 <script>
-  // Показ и скрытие модального окна
-  function showAddNewsModal() {
-    const modal = document.getElementById('add-news-modal');
-    modal.style.display = 'flex';
-  }
-  function closeModal(id) {
+// Функции открытия/закрытия модалок
+function showModal(id) {
     const modal = document.getElementById(id);
-    modal.style.display = 'none';
-  }
+    if (modal) modal.style.display = 'flex';
+}
+function closeModal(id) {
+    const modal = document.getElementById(id);
+    if (modal) modal.style.display = 'none';
+}
 
-  // Переключение между загрузкой файла и URL изображения
-  document.addEventListener('change', (e) => {
+// Для news.html
+function showAddNewsModal() {
+    showModal('add-news-modal');
+}
+
+// Показ и скрытие модального окна
+document.addEventListener('change', (e) => {
     if (e.target.name === 'image_type' && e.target.closest('#add-news-modal')) {
       if (e.target.value === 'upload') {
         document.getElementById('news-file-section').style.display = 'block';
@@ -145,4 +151,14 @@
       alert('Ошибка загрузки: ' + err.message);
     }
   });
+
+// Закрытие модального окна при клике вне его
+window.addEventListener('click', function(e) {
+    const modals = document.querySelectorAll('.modal');
+    modals.forEach(modal => {
+        if (e.target === modal) {
+            modal.style.display = 'none';
+        }
+    });
+});
 </script>
