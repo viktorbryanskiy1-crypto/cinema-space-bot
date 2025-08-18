@@ -13,7 +13,7 @@ from flask import (
     redirect, url_for, session, send_from_directory, abort
 )
 from werkzeug.utils import secure_filename
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, Bot
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, Bot, MenuButtonWebApp, WebAppInfo
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 import redis
 import json
@@ -271,11 +271,39 @@ def extract_video_url_sync(post_url):
         logger.error(f"Ошибка в синхронной обертке extract_video_url_sync: {e}", exc_info=True)
         return None, f"Ошибка обработки запроса: {e}"
 
+# --- НОВОЕ: Функция для установки Menu Button ---
+def set_menu_button():
+    """Устанавливает кнопку меню для бота"""
+    if not TOKEN:
+        logger.error("TELEGRAM_TOKEN не установлен для установки Menu Button")
+        return
+
+    try:
+        bot = Bot(token=TOKEN)
+        # URL вашего веб-приложения
+        # ВАЖНО: Убедитесь, что WEBHOOK_URL корректен
+        app_url = WEBHOOK_URL.strip('/') + '/?mode=fullscreen'
+        
+        menu_button = MenuButtonWebApp(
+            text="🌌 КиноВселенная", # Текст на кнопке
+            web_app=WebAppInfo(url=app_url) # URL веб-приложения
+        )
+        
+        # Устанавливаем кнопку меню для бота
+        # Это сделает кнопку доступной для всех пользователей
+        bot.set_chat_menu_button(menu_button=menu_button)
+        logger.info(f"✅ Menu Button установлена: {app_url}")
+    except Exception as e:
+        logger.error(f"❌ Ошибка установки Menu Button: {e}", exc_info=True)
+
+# --- Telegram Bot Handlers ---
 if TOKEN:
     updater = Updater(TOKEN, use_context=True)
     dp = updater.dispatcher
 
+    # --- ИСПРАВЛЕНО: Обработчик команды /start ---
     def start(update, context):
+        """Обработчик команды /start"""
         user = update.message.from_user
         telegram_id = str(user.id)
         get_or_create_user(
@@ -337,7 +365,7 @@ def build_extra_map(data, item_type_plural):
     """Добавляет реакции и комментарии к каждому элементу данных."""
     extra = {}
     # ИСПРАВЛЕНО: Полная строка цикла
-    for row in data:
+    for row in 
         if len(row) == 0:
             continue
         item_id = row[0]
@@ -371,7 +399,7 @@ def moments():
 
         # --- ИСПРАВЛЕНИЕ: Объединяем данные ---
         combined_data = []
-        for row in data:
+        for row in 
             item_id = row[0]
             # Создаем словарь для удобства работы в шаблоне
             # Предполагаем, что row это tuple: (id, title, description, video_url, created_at)
@@ -396,7 +424,7 @@ def moments():
         logger.info("Данные объединены успешно")
         # Передаем объединенный список
         return render_template('moments.html', moments=combined_data)
-        # --- КОНЕЦ ИСПРАВЛЕНИЯ ---
+        # --- ИСПРАВЛЕНИЕ КОНЕЦ ---
     except Exception as e:
         logger.error(f"Ошибка в маршруте /moments: {e}", exc_info=True)
         return render_template('moments.html', moments=[]), 500
@@ -415,7 +443,7 @@ def trailers():
 
         # --- ИСПРАВЛЕНИЕ: Объединяем данные ---
         combined_data = []
-        for row in data:
+        for row in 
             item_id = row[0]
             # Создаем словарь для удобства работы в шаблоне
             # Предполагаем, что row это tuple: (id, title, description, video_url, created_at)
@@ -439,7 +467,7 @@ def trailers():
         
         logger.info("Данные объединены успешно")
         return render_template('trailers.html', trailers=combined_data)
-        # --- КОНЕЦ ИСПРАВЛЕНИЯ ---
+        # --- ИСПРАВЛЕНИЕ КОНЕЦ ---
     except Exception as e:
         logger.error(f"Ошибка в маршруте /trailers: {e}", exc_info=True)
         return render_template('trailers.html', trailers=[]), 500
@@ -458,7 +486,7 @@ def news():
 
         # --- ИСПРАВЛЕНИЕ: Объединяем данные ---
         combined_data = []
-        for row in data:
+        for row in 
             item_id = row[0]
             # Создаем словарь для удобства работы в шаблоне
             # Предполагаем, что row это tuple: (id, title, text, image_url, created_at)
@@ -482,12 +510,12 @@ def news():
         
         logger.info("Данные объединены успешно")
         return render_template('news.html', news=combined_data)
-        # --- КОНЕЦ ИСПРАВЛЕНИЯ ---
+        # --- ИСПРАВЛЕНИЕ КОНЕЦ ---
     except Exception as e:
         logger.error(f"Ошибка в маршруте /news: {e}", exc_info=True)
         return render_template('news.html', news=[]), 500
 
-# --- НОВОЕ: Добавлены маршруты для детальных страниц ---
+# --- НОВОЕ: Детальные страницы ---
 @app.route('/moments/<int:item_id>')
 def moment_detail(item_id):
     """Отображает страницу одного момента."""
@@ -878,7 +906,7 @@ def add_video_command(update, context):
 def handle_pending_video_text(update, context):
     user = update.message.from_user
     telegram_id = str(user.id)
-    if telegram_id not in pending_video_data:
+    if telegram_id not in pending_video_
         return
     data = pending_video_data.pop(telegram_id)
     content_type, title = data['content_type'], data['title']
@@ -904,7 +932,7 @@ def handle_pending_video_file(update, context):
     telegram_id = str(user.id)
     logger.info(f"Получен видеофайл от пользователя {telegram_id}")
 
-    if telegram_id not in pending_video_data:
+    if telegram_id not in pending_video_
         logger.debug("Нет ожидающих данных для видео")
         return
 
@@ -955,17 +983,22 @@ def handle_pending_video_file(update, context):
         update.message.reply_text(error_msg)
 
 
-if dp:
-    dp.add_handler(CommandHandler('add_video', add_video_command))
-    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_pending_video_text))
-    dp.add_handler(MessageHandler(Filters.video & ~Filters.command, handle_pending_video_file))
-
 # --- Start Bot ---
 def start_bot():
     if updater:
         logger.info("Запуск Telegram бота...")
         updater.start_polling()
         logger.info("Telegram бот запущен и_polling.")
+        
+        # --- НОВОЕ: Установка Menu Button после запуска ---
+        logger.info("Установка Menu Button...")
+        try:
+            set_menu_button()
+            logger.info("Menu Button успешно установлена.")
+        except Exception as e:
+            logger.error(f"Не удалось установить Menu Button при запуске: {e}")
+        # --- КОНЕЦ НОВОГО ---
+        
         # updater.idle() блокирует основной поток, что не нужно в Flask приложении
         # updater.idle()
 
@@ -987,3 +1020,12 @@ if __name__ == '__main__':
     logger.info(f"Запуск Flask приложения на порту {port}...")
     app.run(host='0.0.0.0', port=port)
     logger.info("Flask приложение остановлено.")
+
+# --- Регистрация обработчиков Telegram бота ---
+# (Это должно быть в конце файла, после определения всех функций)
+if dp:
+    # --- ИСПРАВЛЕНО: Добавлен обработчик команды /start ---
+    dp.add_handler(CommandHandler('start', start))
+    dp.add_handler(CommandHandler('add_video', add_video_command))
+    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_pending_video_text))
+    dp.add_handler(MessageHandler(Filters.video & ~Filters.command, handle_pending_video_file))
