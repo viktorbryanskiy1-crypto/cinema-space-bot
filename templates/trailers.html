@@ -1,3 +1,4 @@
+<!-- templates/trailers.html -->
 <div class="content-section">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
         <h2 style="background: linear-gradient(45deg, #00f3ff, #ff00c8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size: 2em;">🎥 Трейлеры</h2>
@@ -103,6 +104,21 @@
 </div>
 
 <script>
+// Функции открытия/закрытия модалок
+function showModal(id) {
+    const modal = document.getElementById(id);
+    if (modal) modal.style.display = 'flex';
+}
+function closeModal(id) {
+    const modal = document.getElementById(id);
+    if (modal) modal.style.display = 'none';
+}
+
+// Для trailers.html
+function showAddTrailerModal() {
+    showModal('add-trailer-modal');
+}
+
 // Переключение между загрузкой и URL для трейлеров
 document.addEventListener('change', function(e) {
     if (e.target.name === 'video_type' && e.target.closest('#add-trailer-modal')) {
@@ -159,48 +175,7 @@ document.getElementById('add-trailer-form').addEventListener('submit', async fun
     }
 });
 
-// Функции для модальных окон
-function showAddTrailerModal() {
-    document.getElementById('add-trailer-modal').style.display = 'flex';
-}
-
 // Закрытие модального окна при клике вне его
-window.addEventListener('click', function(e) {
-    const modals = document.querySelectorAll('.modal');
-    modals.forEach(modal => {
-        if (e.target === modal) {
-            modal.style.display = 'none';
-        }
-    });
-});
-<script>
-
-// Функции открытия/закрытия модалок (если их нет)
-function showModal(id) {
-    const modal = document.getElementById(id);
-    if (modal) modal.style.display = 'flex';
-}
-function closeModal(id) {
-    const modal = document.getElementById(id);
-    if (modal) modal.style.display = 'none';
-}
-
-// Для moments.html
-function showAddMomentModal() {
-    showModal('add-moment-modal');
-}
-
-// Для trailers.html
-function showAddTrailerModal() {
-    showModal('add-trailer-modal');
-}
-
-// Для news.html
-function showAddNewsModal() {
-    showModal('add-news-modal');
-}
-
-// Закрытие модалки при клике вне окна
 window.addEventListener('click', function(e) {
     const modals = document.querySelectorAll('.modal');
     modals.forEach(modal => {
