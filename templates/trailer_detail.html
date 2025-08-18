@@ -28,10 +28,19 @@
         <iframe class="card-media" src="{{ item.video_url.replace('vimeo.com/', 'player.vimeo.com/video/') }}"
             frameborder="0" allowfullscreen allow="autoplay; fullscreen; picture-in-picture"
             style="width: 100%; height: 315px; border-radius: 10px;"></iframe>
+       {% elif item.video_url.startswith('https://t.me/') %}
+        <!-- Telegram Widget для постов -->
+        <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 10px; margin-bottom: 15px;">
+            <script async src="https://telegram.org/js/telegram-widget.js?22" 
+                    data-telegram-post="{{ item.video_url.replace('https://t.me/', '') }}" 
+                    data-width="100%" data-height="100%"
+                    style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none;">
+            </script>
+        </div>
       {% else %}
-        <video controls preload="metadata" style="width:100%; max-height:720px;">
-          <source src="{{ item.video_url }}" />
-          Ваш браузер не поддерживает тег video.
+        <video controls preload="metadata" controlsList="nodownload" style="max-width: 100%; border-radius: 10px;">
+          <source src="{{ item.video_url }}" type="video/mp4">
+          Ваш браузер не поддерживает видео.
         </video>
       {% endif %}
     {% else %}
@@ -103,11 +112,16 @@ async function sendReaction(reaction) {
     const resp = await fetch('/api/reaction', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({item_type: ITEM_TYPE, item_id: ITEM_ID, reaction: reaction})
+      body: JSON.stringify({item_type: ITEM_TYPE, item_id: ITEM_ID, user_id: 'anonymous', reaction: reaction})
     });
     const j = await resp.json();
     if (j.success) {
-      location.reload();
+      // обновим счётчики локально
+      const countSpan = document.getElementById(`r-${reaction}`);
+      if (countSpan) {
+        const currentCount = parseInt(countSpan.textContent) || 0;
+        countSpan.textContent = currentCount + 1;
+      }
     } else {
       alert('Ошибка при отправке реакции');
     }
@@ -133,7 +147,9 @@ async function submitComment(){
       const div = document.createElement('div');
       div.className = 'comment border rounded p-2';
       div.innerHTML = `<strong>${escapeHtml(name)}</strong> <small class="text-muted">${now}</small><div>${escapeHtml(text)}</div>`;
-      container.prepend(div);
+      container.firstChild
+        ? container.insertBefore(div, container.firstChild)
+        : container.appendChild(div);
       document.getElementById('comment-text').value = '';
       const countEl = document.getElementById('comments-count');
       countEl.textContent = parseInt(countEl.textContent||'0') + 1;
