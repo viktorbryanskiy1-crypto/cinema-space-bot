@@ -1,4 +1,3 @@
-# app.py
 import os
 import threading
 import logging
@@ -53,6 +52,7 @@ if REDIS_URL:
         logger.info("✅ Redis connected via REDIS_URL")
     except Exception as e:
         logger.warning(f"Redis error: {e}")
+        redis_client = None
 else:
     try:
         redis_client = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
@@ -317,42 +317,131 @@ def build_extra_map(data, item_type_plural):
     return extra
 
 
-# --- Routes (пользовательские) ---
-@app.route('/')
-def index():
-    return render_template('index.html')
-
-
+# --- ИСПРАВЛЕННЫЕ МАРШРУТЫ: moments, trailers, news ---
 @app.route('/moments')
 def moments():
-    cached = cache_get('moments_list')
-    if cached:
-        return render_template('moments.html', moments=cached, extra_by_id={})
-    data = get_all_moments() or []
-    extra_map = build_extra_map(data, 'moments')
-    return render_template('moments.html', moments=data, extra_by_id=extra_map)
+    try:
+        cached = cache_get('moments_list')
+        if cached:
+            logger.info("moments_list загружен из кэша")
+            return render_template('moments.html', moments=cached, extra_by_id={})
+
+        logger.info("Получение всех моментов из БД...")
+        data = get_all_moments() or []
+        logger.info(f"Получено {len(data)} моментов из БД")
+
+        logger.info("Построение extra_map для moments...")
+        extra_map = build_extra_map(data, 'moments')
+
+        combined_data = []
+        for row in data:
+            item_id = row[0]
+            item_dict = {
+                'id': row[0],
+                'title': row[1],
+                'description': row[2],
+                'video_url': row[3],
+                'created_at': row[4] if len(row) > 4 else None
+            }
+            extra = extra_map.get(item_id, {
+                'reactions': {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0},
+                'comments_count': 0
+            })
+            item_dict.update(extra)
+            combined_data.append(item_dict)
+
+        logger.info(f"Объединено {len(combined_data)} моментов с дополнительными данными")
+        cache_set('moments_list', combined_data, expire=600)  # кэшируем на 10 минут
+        return render_template('moments.html', moments=combined_data, extra_by_id={})
+
+    except Exception as e:
+        logger.error(f"Ошибка в /moments: {e}", exc_info=True)
+        return render_template('moments.html', moments=[], extra_by_id={}), 500
 
 
 @app.route('/trailers')
 def trailers():
-    cached = cache_get('trailers_list')
-    if cached:
-        return render_template('trailers.html', trailers=cached, extra_by_id={})
-    data = get_all_trailers() or []
-    extra_map = build_extra_map(data, 'trailers')
-    return render_template('trailers.html', trailers=data, extra_by_id=extra_map)
+    try:
+        cached = cache_get('trailers_list')
+        if cached:
+            logger.info("trailers_list загружен из кэша")
+            return render_template('trailers.html', trailers=cached, extra_by_id={})
+
+        logger.info("Получение всех трейлеров из БД...")
+        data = get_all_trailers() or []
+        logger.info(f"Получено {len(data)} трейлеров из БД")
+
+        logger.info("Построение extra_map для trailers...")
+        extra_map = build_extra_map(data, 'trailers')
+
+        combined_data = []
+        for row in data:
+            item_id = row[0]
+            item_dict = {
+                'id': row[0],
+                'title': row[1],
+                'description': row[2],
+                'video_url': row[3],
+                'created_at': row[4] if len(row) > 4 else None
+            }
+            extra = extra_map.get(item_id, {
+                'reactions': {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0},
+                'comments_count': 0
+            })
+            item_dict.update(extra)
+            combined_data.append(item_dict)
+
+        logger.info(f"Объединено {len(combined_data)} трейлеров с дополнительными данными")
+        cache_set('trailers_list', combined_data, expire=600)
+        return render_template('trailers.html', trailers=combined_data, extra_by_id={})
+
+    except Exception as e:
+        logger.error(f"Ошибка в /trailers: {e}", exc_info=True)
+        return render_template('trailers.html', trailers=[], extra_by_id={}), 500
 
 
 @app.route('/news')
 def news():
-    cached = cache_get('news_list')
-    if cached:
-        return render_template('news.html', news=cached, extra_by_id={})
-    data = get_all_news() or []
-    extra_map = build_extra_map(data, 'news')
-    return render_template('news.html', news=data, extra_by_id=extra_map)
+    try:
+        cached = cache_get('news_list')
+        if cached:
+            logger.info("news_list загружен из кэша")
+            return render_template('news.html', news=cached, extra_by_id={})
+
+        logger.info("Получение всех новостей из БД...")
+        data = get_all_news() or []
+        logger.info(f"Получено {len(data)} новостей из БД")
+
+        logger.info("Построение extra_map для news...")
+        extra_map = build_extra_map(data, 'news')
+
+        combined_data = []
+        for row in data:
+            item_id = row[0]
+            item_dict = {
+                'id': row[0],
+                'title': row[1],
+                'content': row[2],
+                'image_url': row[3],
+                'created_at': row[4] if len(row) > 4 else None
+            }
+            extra = extra_map.get(item_id, {
+                'reactions': {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0},
+                'comments_count': 0
+            })
+            item_dict.update(extra)
+            combined_data.append(item_dict)
+
+        logger.info(f"Объединено {len(combined_data)} новостей с дополнительными данными")
+        cache_set('news_list', combined_data, expire=600)
+        return render_template('news.html', news=combined_data, extra_by_id={})
+
+    except Exception as e:
+        logger.error(f"Ошибка в /news: {e}", exc_info=True)
+        return render_template('news.html', news=[], extra_by_id={}), 500
 
 
+# --- Остальные маршруты (без изменений) ---
 @app.route('/moments/<int:item_id>')
 def moment_detail(item_id):
     item = get_item_by_id('moments', item_id)
