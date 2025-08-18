@@ -3,15 +3,17 @@ import os
 import threading
 import logging
 import uuid
-import requests # Добавлено для получения ссылки от Telegram
-import time # Добавлено для кэширования
+import requests  # Добавлено для получения ссылки от Telegram
+import time  # Добавлено для кэширования
+import re  # Добавлено для парсинга ссылок
+import asyncio  # Добавлено для асинхронных вызовов Telegram API
 from datetime import datetime
 from flask import (
     Flask, render_template, request, jsonify,
     redirect, url_for, session, send_from_directory, abort
 )
 from werkzeug.utils import secure_filename
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, Bot
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 import redis
 import json
@@ -37,7 +39,7 @@ logger = logging.getLogger(__name__)
 
 # --- Config ---
 TOKEN = os.environ.get('TELEGRAM_TOKEN')
-WEBHOOK_URL = os.environ.get('WEBHOOK_URL', 'https://yourdomain.com  ').strip()
+WEBHOOK_URL = os.environ.get('WEBHOOK_URL', 'https://yourdomain.com').strip() # Исправлено: убраны лишние пробелы
 REDIS_URL = os.environ.get('REDIS_URL', None)
 if not TOKEN:
     logger.error("TELEGRAM_TOKEN not set!")
@@ -89,17 +91,20 @@ def get_direct_video_url(file_id):
         return None
 
     try:
-        # Получаем file_path
+        # ИСПРАВЛЕНО: Убраны лишние пробелы в URL
         file_info_url = f"https://api.telegram.org/bot{bot_token}/getFile?file_id={file_id}"
+        logger.debug(f"Запрос к Telegram API: {file_info_url}")
         response = requests.get(file_info_url, timeout=10)
         response.raise_for_status()
 
         json_response = response.json()
+        logger.debug(f"Ответ от Telegram API: {json_response}")
         if not json_response.get('ok'):
             logger.error(f"Ошибка от Telegram API: {json_response}")
             return None
 
         file_path = json_response['result']['file_path']
+        # ИСПРАВЛЕНО: Убраны лишние пробелы в URL
         direct_url = f"https://api.telegram.org/file/bot{bot_token}/{file_path}"
 
         logger.info(f"Сгенерирована прямая ссылка для file_id {file_id}")
@@ -136,6 +141,98 @@ def get_cached_direct_video_url(file_id, cache_time=3600):
         return url
 
     return None
+
+# --- НОВОЕ: Функция для извлечения видео из поста Telegram ---
+async def extract_video_url_from_telegram_post(post_url):
+    """
+    Извлекает прямую ссылку на видео из поста Telegram
+    """
+    try:
+        logger.info(f"Попытка извлечь видео из поста: {post_url}")
+        # Парсим ссылку
+        # Пример: https://t.me/your_channel/123
+        # Для публичных каналов: https://t.me/channelname/messageid
+        # Для приватных каналов (с /c/): https://t.me/c/chatid/messageid
+        public_match = re.search(r'https?://t\.me/([^/]+)/(\d+)$', post_url)
+        private_match = re.search(r'https?://t\.me/c/(\d+)/(\d+)$', post_url)
+
+        chat_id_or_username = None
+        message_id = None
+
+        if public_match:
+            chat_id_or_username = "@" + public_match.group(1) # Добавляем @ для публичных каналов
+            message_id = int(public_match.group(2))
+            logger.debug(f"Найден публичный канал: {chat_id_or_username}, сообщение: {message_id}")
+        elif private_match:
+            # Для приватных каналов используем ID чата напрямую
+            # ВАЖНО: Бот должен быть участником или админом этого чата
+            chat_id_or_username = -1000000000000 - int(private_match.group(1)) # Конвертация ID из t.me/c/
+            message_id = int(private_match.group(2))
+            logger.debug(f"Найден приватный канал (ID): {chat_id_or_username}, сообщение: {message_id}")
+        else:
+            logger.error(f"Неверный формат ссылки на пост: {post_url}")
+            return None, "Неверный формат ссылки на пост Telegram. Используйте формат https://t.me/channel/123 или https://t.me/c/123456789/123"
+
+        if chat_id_or_username is None or message_id is None:
+             return None, "Не удалось распарсить ссылку на пост"
+
+        # Создаем бота
+        bot = Bot(token=TOKEN)
+
+        # Получаем сообщение
+        # ВАЖНО: Бот должен иметь доступ к этому сообщению (быть в канале/группе или иметь ссылку-приглашение)
+        message = await bot.get_message(chat_id=chat_id_or_username, message_id=message_id)
+
+        if not message:
+            logger.error("Сообщение не найдено или бот не имеет доступа")
+            return None, "Сообщение не найдено. Убедитесь, что бот является администратором канала или имеет доступ к сообщению."
+
+        if not message.video:
+            logger.error("В посте нет видео")
+            return None, "В указанном посте не найдено видео."
+
+        # Получаем file_id
+        file_id = message.video.file_id
+        logger.info(f"Найден file_id: {file_id}")
+
+        # Генерируем прямую ссылку
+        direct_url = get_cached_direct_video_url(file_id)
+
+        if not direct_url:
+            logger.error("Не удалось получить прямую ссылку из file_id")
+            return None, "Не удалось получить прямую ссылку на видео из Telegram."
+
+        logger.info(f"Успешно извлечена прямая ссылка: {direct_url}")
+        return direct_url, None
+
+    except Exception as e:
+        logger.error(f"Ошибка извлечения видео из поста {post_url}: {e}", exc_info=True)
+        return None, f"Ошибка при обработке ссылки на пост: {str(e)}"
+
+
+# Синхронная обертка для Flask
+def extract_video_url_sync(post_url):
+    """Синхронная обертка для асинхронной функции извлечения видео"""
+    try:
+        logger.debug("Создание нового event loop для асинхронного вызова")
+        # Для Flask (синхронного) нужно запускать асинхронный код
+        # В Render/production средах loop может уже быть запущен
+        try:
+            # Попробуем получить текущий event loop
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            # Если его нет (например, в новом потоке), создаем новый
+            logger.debug("Создание нового event loop")
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+        logger.debug("Запуск асинхронной функции extract_video_url_from_telegram_post")
+        result = loop.run_until_complete(extract_video_url_from_telegram_post(post_url))
+        logger.debug(f"Асинхронная функция завершена, результат: {result}")
+        return result
+    except Exception as e:
+        logger.error(f"Ошибка в синхронной обертке extract_video_url_sync: {e}", exc_info=True)
+        return None, f"Ошибка event loop: {e}"
 
 if TOKEN:
     updater = Updater(TOKEN, use_context=True)
@@ -270,21 +367,48 @@ def _get_payload():
         return request.get_json(silent=True) or {}
     return request.form or {}
 
+# --- ОБНОВЛЕННЫЕ API ENDPOINTS ---
 @app.route('/api/add_moment', methods=['POST'])
 def api_add_moment():
     try:
         payload = _get_payload()
         title = payload.get('title', '').strip()
         desc = payload.get('description', '').strip()
+
+        # --- ИЗМЕНЕНИЯ НАЧАЛО ---
+        # Сначала проверяем URL из формы/JSON
         video_url = payload.get('video_url', '').strip()
-        if 'video_file' in request.files and not video_url:
+
+        # --- НОВАЯ ЛОГИКА: Если это ссылка на пост Telegram ---
+        if video_url and ('t.me/' in video_url):
+            logger.info(f"Обнаружена ссылка на Telegram пост: {video_url}")
+            # Пытаемся извлечь прямую ссылку
+            direct_url, error = extract_video_url_sync(video_url)
+            if direct_url:
+                video_url = direct_url
+                logger.info(f"Извлечена прямая ссылка из поста: {video_url[:50]}...")
+            else:
+                logger.error(f"Ошибка извлечения видео из поста: {error}")
+                return jsonify(success=False, error=error), 400 # Возвращаем ошибку клиенту
+
+        # Только если URL (включая извлеченный) не указан, пытаемся сохранить файл
+        if not video_url and 'video_file' in request.files:
             saved = save_uploaded_file(request.files['video_file'], ALLOWED_VIDEO_EXTENSIONS)
-            if saved: video_url = saved
+            if saved:
+                video_url = saved
+
+        # Если URL так и не получен, ошибка
+        if not video_url:
+            logger.error("Не указан video_url, не извлечен из поста и не загружен файл")
+            return jsonify(success=False, error="Укажите ссылку на видео, пост Telegram или загрузите файл"), 400
+
         add_moment(title, desc, video_url)
         cache_delete('moments_list')
+        logger.info(f"Добавлен момент: {title}")
         return jsonify(success=True)
+        # --- ИЗМЕНЕНИЯ КОНЕЦ ---
     except Exception as e:
-        logger.error(f"API add_moment error: {e}")
+        logger.error(f"API add_moment error: {e}", exc_info=True)
         return jsonify(success=False, error=str(e)), 500
 
 @app.route('/api/add_trailer', methods=['POST'])
@@ -293,15 +417,36 @@ def api_add_trailer():
         payload = _get_payload()
         title = payload.get('title', '').strip()
         desc = payload.get('description', '').strip()
+
+        # --- ИЗМЕНЕНИЯ НАЧАЛО ---
         video_url = payload.get('video_url', '').strip()
-        if 'video_file' in request.files and not video_url:
+
+        # --- НОВАЯ ЛОГИКА: Если это ссылка на пост Telegram ---
+        if video_url and ('t.me/' in video_url):
+            logger.info(f"Обнаружена ссылка на Telegram пост: {video_url}")
+            direct_url, error = extract_video_url_sync(video_url)
+            if direct_url:
+                video_url = direct_url
+                logger.info(f"Извлечена прямая ссылка из поста: {video_url[:50]}...")
+            else:
+                logger.error(f"Ошибка извлечения видео из поста: {error}")
+                return jsonify(success=False, error=error), 400
+
+        if not video_url and 'video_file' in request.files:
             saved = save_uploaded_file(request.files['video_file'], ALLOWED_VIDEO_EXTENSIONS)
             if saved: video_url = saved
+        # --- ИЗМЕНЕНИЯ КОНЕЦ ---
+
+        if not video_url:
+             logger.error("Не указан video_url, не извлечен из поста и не загружен файл")
+             return jsonify(success=False, error="Укажите ссылку на видео, пост Telegram или загрузите файл"), 400
+
         add_trailer(title, desc, video_url)
         cache_delete('trailers_list')
+        logger.info(f"Добавлен трейлер: {title}")
         return jsonify(success=True)
     except Exception as e:
-        logger.error(f"API add_trailer error: {e}")
+        logger.error(f"API add_trailer error: {e}", exc_info=True)
         return jsonify(success=False, error=str(e)), 500
 
 @app.route('/api/add_news', methods=['POST'])
@@ -309,16 +454,28 @@ def api_add_news():
     try:
         payload = _get_payload()
         title = payload.get('title', '').strip()
+        # В новостях может быть как text, так и description
         text = payload.get('text', payload.get('description', '')).strip()
+
+        # --- ИЗМЕНЕНИЯ НАЧАЛО ---
+        # Для новостей видео может быть не обязательно, но если нужно:
+        # video_url = payload.get('video_url', '').strip()
+        # if video_url and ('t.me/' in video_url):
+        #     # Аналогично для новостей, если добавите блок видео
+        #     pass
+
         image_url = payload.get('image_url', '').strip()
-        if 'image_file' in request.files and not image_url:
+        if not image_url and 'image_file' in request.files:
             saved = save_uploaded_file(request.files['image_file'], ALLOWED_IMAGE_EXTENSIONS)
             if saved: image_url = saved
+        # --- ИЗМЕНЕНИЯ КОНЕЦ ---
+
         add_news(title, text, image_url)
         cache_delete('news_list')
+        logger.info(f"Добавлена новость: {title}")
         return jsonify(success=True)
     except Exception as e:
-        logger.error(f"API add_news error: {e}")
+        logger.error(f"API add_news error: {e}", exc_info=True)
         return jsonify(success=False, error=str(e)), 500
 
 @app.route('/uploads/<filename>')
@@ -337,7 +494,7 @@ def api_add_reaction():
         success = add_reaction(item_type, item_id, user_id, reaction)
         return jsonify(success=success)
     except Exception as e:
-        logger.error(f"API add_reaction error: {e}")
+        logger.error(f"API add_reaction error: {e}", exc_info=True)
         return jsonify(success=False, error=str(e)), 500
 
 @app.route('/api/comments', methods=['GET'])
@@ -348,7 +505,7 @@ def api_get_comments():
         comments = get_comments(item_type, item_id)
         return jsonify(comments=comments)
     except Exception as e:
-        logger.error(f"API get_comments error: {e}")
+        logger.error(f"API get_comments error: {e}", exc_info=True)
         return jsonify(comments=[], error=str(e)), 500
 
 @app.route('/api/comment', methods=['POST'])
@@ -362,7 +519,7 @@ def api_add_comment():
         add_comment(item_type, item_id, user_name, text)
         return jsonify(success=True)
     except Exception as e:
-        logger.error(f"API add_comment error: {e}")
+        logger.error(f"API add_comment error: {e}", exc_info=True)
         return jsonify(success=False, error=str(e)), 500
 
 # --- Admin ---
@@ -493,36 +650,36 @@ def handle_pending_video_file(update, context):
     user = update.message.from_user
     telegram_id = str(user.id)
     logger.info(f"Получен видеофайл от пользователя {telegram_id}")
-    
+
     if telegram_id not in pending_video_data:
         logger.debug("Нет ожидающих данных для видео")
         return
-    
+
     data = pending_video_data.pop(telegram_id)
     content_type, title = data['content_type'], data['title']
     logger.info(f"Обработка {content_type} '{title}'")
-    
+
     if not update.message.video:
         logger.warning("Полученное сообщение не содержит видео")
         update.message.reply_text("❌ Это не видео. Пришли файл видео или ссылку.")
         pending_video_data[telegram_id] = data
         return
-    
+
     file_id = update.message.video.file_id
     logger.info(f"Получен file_id: {file_id}")
-    
+
     # ✅ ИСПРАВЛЕНИЕ: Получаем ПОЛНУЮ прямую ссылку с кэшированием
     # video_url = context.bot.get_file(file_id).file_path # Старый способ - неправильный
     video_url = get_cached_direct_video_url(file_id) # Новый способ - правильный
-    
+
     if not video_url:
         error_msg = "❌ Не удалось получить прямую ссылку на видео из Telegram"
         logger.error(error_msg)
         update.message.reply_text(error_msg)
         return
-    
+
     logger.info(f"Сгенерирована прямая ссылка: {video_url[:50]}...")
-    
+
     # Сохраняем ПОЛНУЮ ссылку
     try:
         if content_type == 'moment':
@@ -531,17 +688,17 @@ def handle_pending_video_file(update, context):
             add_trailer(title, "Added via Telegram", video_url)
         elif content_type == 'news':
             add_news(title, "Added via Telegram", video_url)
-        
-        success_msg = f"✅ '{content_type}' '{title}' добавлено из файла! URL: {video_url[:30]}..."
+
+        success_msg = f"✅ '{content_type}' '{title}' добавлено из файла!"
         logger.info(success_msg)
         update.message.reply_text(success_msg)
-        
+
         cache_delete('moments_list')
         cache_delete('trailers_list')
         cache_delete('news_list')
     except Exception as e:
         error_msg = f"❌ Ошибка сохранения в БД: {e}"
-        logger.error(error_msg)
+        logger.error(error_msg, exc_info=True) # Добавлено exc_info для полного трейса
         update.message.reply_text(error_msg)
 
 
@@ -553,16 +710,27 @@ if dp:
 # --- Start Bot ---
 def start_bot():
     if updater:
+        logger.info("Запуск Telegram бота...")
         updater.start_polling()
-        updater.idle()
+        logger.info("Telegram бот запущен и_polling.")
+        # updater.idle() блокирует основной поток, что не нужно в Flask приложении
+        # updater.idle()
 
 # --- Main ---
 if __name__ == '__main__':
     try:
+        logger.info("Инициализация базы данных...")
         init_db()
+        logger.info("База данных инициализирована.")
     except Exception as e:
-        logger.error(f"DB init error: {e}")
+        logger.error(f"DB init error: {e}", exc_info=True)
+    
+    logger.info("Запуск Telegram бота в отдельном потоке...")
     bot_thread = threading.Thread(target=start_bot, daemon=True)
     bot_thread.start()
+    logger.info("Поток Telegram бота запущен.")
+    
     port = int(os.environ.get('PORT', 10000))
+    logger.info(f"Запуск Flask приложения на порту {port}...")
     app.run(host='0.0.0.0', port=port)
+    logger.info("Flask приложение остановлено.")
