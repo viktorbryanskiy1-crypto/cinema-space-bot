@@ -1,0 +1,17 @@
+<!-- templates/admin/base.html -->
+{% extends 'base.html' %}
+
+{% block title %}Админ-панель - КиноВселенная{% endblock %}
+
+{% block navbar %}
+<nav class="navbar navbar-custom d-flex justify-content-between align-items-center">
+    <h1>📊 Админ-панель</h1>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('admin_dashboard') }}" class="tab-btn" style="background-color:#ff6b6b;">🏠 Панель</a>
+        <a href="{{ url_for('admin_content') }}" class="tab-btn" style="background-color:#1dd1a1;">📂 Контент</a>
+        <a href="{{ url_for('admin_add_video_form') }}" class="tab-btn" style="background-color:#54a0ff;">➕ Добавить видео</a>
+        <a href="{{ url_for('admin_access_settings') }}" class="tab-btn" style="background-color:#f368e0;">⚙️ Доступ</a>
+        <a href="{{ url_for('admin_logout') }}" class="tab-btn" style="background: linear-gradient(45deg, #ff6b6b, #ff4757);">Выйти</a>
+    </div>
+</nav>
+{% endblock %}
