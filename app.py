@@ -338,7 +338,7 @@ def cache_delete(key):
 
 def build_extra_map(data, item_type_plural):
     extra = {}
-    for row in 
+    for row in data:
         item_id = row[0]
         reactions = get_reactions_count(item_type_plural, item_id) or {'like':0,'dislike':0,'star':0,'fire':0}
         comments_count = len(get_comments(item_type_plural, item_id) or [])
