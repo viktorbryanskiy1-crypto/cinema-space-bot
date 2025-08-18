@@ -183,5 +183,39 @@ document.getElementById('add-moment-form').addEventListener('submit', async (e) 
     }
 });
 
-// TODO: Добавить обработчики реакций и комментариев (если есть общие функции, можно подключить здесь)
+<script>
+// Функции открытия/закрытия модалок (если их нет)
+function showModal(id) {
+    const modal = document.getElementById(id);
+    if (modal) modal.style.display = 'flex';
+}
+function closeModal(id) {
+    const modal = document.getElementById(id);
+    if (modal) modal.style.display = 'none';
+}
+
+// Для moments.html
+function showAddMomentModal() {
+    showModal('add-moment-modal');
+}
+
+// Для trailers.html
+function showAddTrailerModal() {
+    showModal('add-trailer-modal');
+}
+
+// Для news.html
+function showAddNewsModal() {
+    showModal('add-news-modal');
+}
+
+// Закрытие модалки при клике вне окна
+window.addEventListener('click', function(e) {
+    const modals = document.querySelectorAll('.modal');
+    modals.forEach(modal => {
+        if (e.target === modal) {
+            modal.style.display = 'none';
+        }
+    });
+});
 </script>
