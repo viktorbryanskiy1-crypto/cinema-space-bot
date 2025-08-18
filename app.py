@@ -143,8 +143,8 @@ def get_cached_direct_video_url(file_id, cache_time=3600):
 
     return None
 
-# --- НОВОЕ: Функция для извлечения видео из поста Telegram ---
-# (Обновлённая версия с исправлением для PTB v13.15)
+# --- ИСПРАВЛЕННОЕ: Функция для извлечения видео из поста Telegram ---
+# (Обновлённая версия с исправлением для PTB v13.15 - убран await)
 async def extract_video_url_from_telegram_post(post_url):
     """
     Извлекает прямую ссылку на видео из поста Telegram.
@@ -190,14 +190,10 @@ async def extract_video_url_from_telegram_post(post_url):
         # Создаем бота
         bot = Bot(token=TOKEN)
 
-        # --- ИСПРАВЛЕНИЕ: Используем forward_message вместо get_message ---
-        # Мы пересылаем сообщение от имени бота в тот же чат (или в чат с админом для теста)
-        # Это единственный способ получить полный объект Message в v13.15 по chat_id/message_id
-        # ВАЖНО: Бот должен иметь доступ к исходному сообщению!
-        
-        # Вариант 1: Переслать сообщение в тот же чат (работает, если бот админ)
+        # --- ИСПРАВЛЕНИЕ: Убран await, так как forward_message в v13.15 не асинхронный ---
         try:
-            forwarded_message = await bot.forward_message(
+            # ВАЖНО: НЕТ await здесь
+            forwarded_message = bot.forward_message(
                 chat_id=chat_id_or_username,      # Куда пересылать - в тот же чат
                 from_chat_id=chat_id_or_username, # Откуда - из того же чата
                 message_id=message_id            # Какое сообщение
@@ -211,7 +207,8 @@ async def extract_video_url_from_telegram_post(post_url):
             # где бот точно является участником
             YOUR_ADMIN_CHAT_ID = -1003045387627 # <<<--- ВАШ ID ТЕСТОВОЙ ГРУППЫ
             try:
-                forwarded_message = await bot.forward_message(
+                # ВАЖНО: НЕТ await здесь тоже
+                forwarded_message = bot.forward_message(
                     chat_id=YOUR_ADMIN_CHAT_ID,       # Куда пересылать - админу/в тестовый чат
                     from_chat_id=chat_id_or_username, # Откуда - из исходного чата
                     message_id=message_id            # Какое сообщение
