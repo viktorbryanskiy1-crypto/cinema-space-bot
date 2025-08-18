@@ -301,28 +301,53 @@ function addLoadCommentsHandlers() {
 }
 
 // --- Модальные окна ---
+// Глобальные функции для открытия модалок
+function showAddMomentModal() {
+    showModal('add-moment-modal');
+}
+function showAddTrailerModal() {
+    showModal('add-trailer-modal');
+}
+function showAddNewsModal() {
+    showModal('add-news-modal');
+}
+function showModal(id) {
+    const modal = document.getElementById(id);
+    if (modal) modal.style.display = 'flex';
+}
+function closeModal(id) {
+    const modal = document.getElementById(id);
+    if (modal) modal.style.display = 'none';
+}
+
 function addModalHandlers() {
-    const modalButtons = [
-        { id: 'add-moment-btn', handler: showAddMomentModal },
-        { id: 'add-moment-btn-alt', handler: showAddMomentModal },
-        { id: 'add-trailer-btn', handler: showAddTrailerModal },
-        { id: 'add-trailer-btn-alt', handler: showAddTrailerModal },
-        { id: 'add-news-btn', handler: showAddNewsModal },
-        { id: 'add-news-btn-alt', handler: showAddNewsModal }
-    ];
-
-    modalButtons.forEach(({ id, handler }) => {
-        const element = document.getElementById(id);
-        if (element) {
-            const clone = element.cloneNode(true);
-            element.parentNode.replaceChild(clone, element);
-            clone.addEventListener('click', handler);
-        }
-    });
-
+    // Убираем клонирование и добавляем обработчики только если они еще не добавлены
     if (!modalClickHandlerAdded) {
+        const modalButtons = [
+            { id: 'add-moment-btn', handler: showAddMomentModal },
+            { id: 'add-moment-btn-alt', handler: showAddMomentModal },
+            { id: 'add-trailer-btn', handler: showAddTrailerModal },
+            { id: 'add-trailer-btn-alt', handler: showAddTrailerModal },
+            { id: 'add-news-btn', handler: showAddNewsModal },
+            { id: 'add-news-btn-alt', handler: showAddNewsModal }
+        ];
+
+        modalButtons.forEach(({ id, handler }) => {
+            const element = document.getElementById(id);
+            if (element) {
+                // Проверяем, не добавлен ли уже обработчик
+                if (!element.dataset.handlerAdded) {
+                    element.addEventListener('click', handler);
+                    element.dataset.handlerAdded = 'true'; // Флаг для предотвращения дублирования
+                }
+            }
+        });
+
+        // Обработчик закрытия модалки при клике вне окна
         document.addEventListener('click', function (e) {
-            if (e.target.classList.contains('modal')) e.target.style.display = 'none';
+            if (e.target.classList && e.target.classList.contains('modal')) {
+                e.target.style.display = 'none';
+            }
         });
         modalClickHandlerAdded = true;
     }
@@ -338,11 +363,6 @@ function escapeHtml(text) {
 function formatDate(dateString) {
     const date = new Date(dateString);
     return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
-}
-
-function closeModal(modalId) {
-    const modal = document.getElementById(modalId);
-    if (modal) modal.style.display = 'none';
 }
 
 // --- Переключение форм ---
