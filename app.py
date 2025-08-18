@@ -1,7 +1,10 @@
+# app.py
 import os
 import threading
 import logging
 import uuid
+import requests # Добавлено для получения ссылки от Telegram
+import time # Добавлено для кэширования
 from datetime import datetime
 from flask import (
     Flask, render_template, request, jsonify,
@@ -34,7 +37,7 @@ logger = logging.getLogger(__name__)
 
 # --- Config ---
 TOKEN = os.environ.get('TELEGRAM_TOKEN')
-WEBHOOK_URL = os.environ.get('WEBHOOK_URL', 'https://yourdomain.com').strip()
+WEBHOOK_URL = os.environ.get('WEBHOOK_URL', 'https://yourdomain.com  ').strip()
 REDIS_URL = os.environ.get('REDIS_URL', None)
 if not TOKEN:
     logger.error("TELEGRAM_TOKEN not set!")
@@ -74,6 +77,65 @@ def allowed_file(filename, allowed_exts):
 updater = None
 dp = None
 pending_video_data = {}
+
+# --- НОВОЕ: Кэш для прямых ссылок ---
+video_url_cache = {}
+
+def get_direct_video_url(file_id):
+    """Преобразует file_id в прямую ссылку для веба"""
+    bot_token = TOKEN
+    if not bot_token:
+        logger.error("TELEGRAM_TOKEN не установлен для генерации ссылки")
+        return None
+
+    try:
+        # Получаем file_path
+        file_info_url = f"https://api.telegram.org/bot{bot_token}/getFile?file_id={file_id}"
+        response = requests.get(file_info_url, timeout=10)
+        response.raise_for_status()
+
+        json_response = response.json()
+        if not json_response.get('ok'):
+            logger.error(f"Ошибка от Telegram API: {json_response}")
+            return None
+
+        file_path = json_response['result']['file_path']
+        direct_url = f"https://api.telegram.org/file/bot{bot_token}/{file_path}"
+
+        logger.info(f"Сгенерирована прямая ссылка для file_id {file_id}")
+        return direct_url
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Ошибка сети при получении ссылки для file_id {file_id}: {e}")
+        return None
+    except KeyError as e:
+        logger.error(f"Ошибка парсинга ответа Telegram для file_id {file_id}: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"Неизвестная ошибка при получении ссылки для file_id {file_id}: {e}")
+        return None
+
+
+def get_cached_direct_video_url(file_id, cache_time=3600):
+    """Кэшированное получение прямой ссылки"""
+    current_time = time.time()
+
+    # Проверяем кэш
+    if file_id in video_url_cache:
+        url, expire_time = video_url_cache[file_id]
+        if current_time < expire_time:
+            logger.debug(f"Ссылка для file_id {file_id} получена из кэша")
+            return url
+
+    # Получаем новую ссылку
+    logger.debug(f"Генерация новой ссылки для file_id {file_id}")
+    url = get_direct_video_url(file_id)
+    if url:
+        # Кэшируем
+        video_url_cache[file_id] = (url, current_time + cache_time)
+        logger.debug(f"Ссылка для file_id {file_id} закэширована")
+        return url
+
+    return None
 
 if TOKEN:
     updater = Updater(TOKEN, use_context=True)
@@ -347,6 +409,16 @@ def admin_content():
     news = get_all_news() or []
     return render_template('admin/content.html', moments=moments, trailers=trailers, news=news)
 
+# Исправленные функции удаления (если они отсутствуют в database.py)
+def delete_moment(item_id):
+    delete_item('moments', item_id)
+
+def delete_trailer(item_id):
+    delete_item('trailers', item_id)
+
+def delete_news(item_id):
+    delete_item('news', item_id)
+
 @app.route('/admin/delete/<content_type>/<int:content_id>')
 @admin_required
 def admin_delete(content_type, content_id):
@@ -416,29 +488,62 @@ def handle_pending_video_text(update, context):
     cache_delete('trailers_list')
     cache_delete('news_list')
 
+# --- ИСПРАВЛЕННЫЙ обработчик файлов ---
 def handle_pending_video_file(update, context):
     user = update.message.from_user
     telegram_id = str(user.id)
+    logger.info(f"Получен видеофайл от пользователя {telegram_id}")
+    
     if telegram_id not in pending_video_data:
+        logger.debug("Нет ожидающих данных для видео")
         return
+    
     data = pending_video_data.pop(telegram_id)
     content_type, title = data['content_type'], data['title']
+    logger.info(f"Обработка {content_type} '{title}'")
+    
     if not update.message.video:
+        logger.warning("Полученное сообщение не содержит видео")
         update.message.reply_text("❌ Это не видео. Пришли файл видео или ссылку.")
         pending_video_data[telegram_id] = data
         return
-    file_obj = context.bot.get_file(update.message.video.file_id)
-    video_url = file_obj.file_path
-    if content_type == 'moment':
-        add_moment(title, "Added via Telegram", video_url)
-    elif content_type == 'trailer':
-        add_trailer(title, "Added via Telegram", video_url)
-    elif content_type == 'news':
-        add_news(title, "Added via Telegram", video_url)
-    update.message.reply_text(f"✅ '{content_type}' '{title}' добавлено из файла!")
-    cache_delete('moments_list')
-    cache_delete('trailers_list')
-    cache_delete('news_list')
+    
+    file_id = update.message.video.file_id
+    logger.info(f"Получен file_id: {file_id}")
+    
+    # ✅ ИСПРАВЛЕНИЕ: Получаем ПОЛНУЮ прямую ссылку с кэшированием
+    # video_url = context.bot.get_file(file_id).file_path # Старый способ - неправильный
+    video_url = get_cached_direct_video_url(file_id) # Новый способ - правильный
+    
+    if not video_url:
+        error_msg = "❌ Не удалось получить прямую ссылку на видео из Telegram"
+        logger.error(error_msg)
+        update.message.reply_text(error_msg)
+        return
+    
+    logger.info(f"Сгенерирована прямая ссылка: {video_url[:50]}...")
+    
+    # Сохраняем ПОЛНУЮ ссылку
+    try:
+        if content_type == 'moment':
+            add_moment(title, "Added via Telegram", video_url)
+        elif content_type == 'trailer':
+            add_trailer(title, "Added via Telegram", video_url)
+        elif content_type == 'news':
+            add_news(title, "Added via Telegram", video_url)
+        
+        success_msg = f"✅ '{content_type}' '{title}' добавлено из файла! URL: {video_url[:30]}..."
+        logger.info(success_msg)
+        update.message.reply_text(success_msg)
+        
+        cache_delete('moments_list')
+        cache_delete('trailers_list')
+        cache_delete('news_list')
+    except Exception as e:
+        error_msg = f"❌ Ошибка сохранения в БД: {e}"
+        logger.error(error_msg)
+        update.message.reply_text(error_msg)
+
 
 if dp:
     dp.add_handler(CommandHandler('add_video', add_video_command))
