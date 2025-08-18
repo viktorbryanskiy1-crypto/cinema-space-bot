@@ -1,9 +1,11 @@
 <!-- templates/admin/add_video.html -->
 {% extends 'admin/base.html' %}
 
+{% block title %}Добавить видео - Админ-панель{% endblock %}
+
 {% block content %}
-<div class="container" style="max-width: 700px; margin-top: 50px;">
-    <h2 class="text-center mb-4">➕ Добавить видео</h2>
+<div class="container" style="max-width: 700px; margin-top: 30px;">
+    <h2 class="text-center mb-4">➕ Добавить новое видео</h2>
 
     <form id="add-video-form">
         <div class="mb-3">
@@ -13,16 +15,16 @@
 
         <div class="mb-3">
             <label for="video-description" class="form-label">Описание</label>
-            <textarea class="form-control" id="video-description" placeholder="Введите описание видео"></textarea>
+            <textarea class="form-control" id="video-description" rows="3" placeholder="Введите описание видео"></textarea>
         </div>
 
         <div class="mb-3">
             <label for="video-type" class="form-label">Тип контента *</label>
             <select class="form-select" id="video-type" required>
                 <option value="">Выберите тип...</option>
-                <option value="moment">Момент</option>
-                <option value="trailer">Трейлер</option>
-                <option value="news">Новость</option>
+                <option value="moment">🎬 Момент</option>
+                <option value="trailer">🎥 Трейлер</option>
+                <option value="news">📰 Новость</option>
             </select>
         </div>
 
@@ -32,11 +34,13 @@
             <div class="form-text">Поддерживаются ссылки на публичные и приватные каналы Telegram.</div>
         </div>
 
-        <button type="submit" class="btn btn-primary w-100">Добавить</button>
+        <button type="submit" class="btn btn-primary w-100">➕ Добавить видео</button>
         <div id="message-area" class="mt-3"></div>
     </form>
 </div>
+{% endblock %}
 
+{% block scripts %}
 <script>
 document.getElementById('add-video-form').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -59,7 +63,7 @@ document.getElementById('add-video-form').addEventListener('submit', async (e) =
     const submitButton = document.querySelector('button[type="submit"]');
     const originalText = submitButton.textContent;
     submitButton.disabled = true;
-    submitButton.textContent = '⏳ Добавление...';
+    submitButton.innerHTML = '⏳ Добавление...';
 
     try {
         // Отправляем данные на НОВЫЙ маршрут
@@ -71,19 +75,22 @@ document.getElementById('add-video-form').addEventListener('submit', async (e) =
 
         const data = await res.json();
 
-        if (data.success) {
+        if (res.ok && data.success) {
             messageArea.innerHTML = '<div class="alert alert-success">✅ Видео успешно добавлено!</div>';
             document.getElementById('add-video-form').reset();
         } else {
-            messageArea.innerHTML = `<div class="alert alert-danger">❌ Ошибка: ${data.error || 'Неизвестная'}</div>`;
+            const errorMsg = data.error || 'Неизвестная ошибка';
+            messageArea.innerHTML = `<div class="alert alert-danger">❌ Ошибка: ${errorMsg}</div>`;
         }
     } catch (err) {
         console.error('Fetch error:', err);
         messageArea.innerHTML = '<div class="alert alert-danger">❌ Ошибка соединения с сервером</div>';
     } finally {
         // Возвращаем кнопку в исходное состояние
-        submitButton.disabled = false;
-        submitButton.textContent = originalText;
+        setTimeout(() => {
+            submitButton.disabled = false;
+            submitButton.innerHTML = originalText;
+        }, 500);
     }
 });
 </script>
