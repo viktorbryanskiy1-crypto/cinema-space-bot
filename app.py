@@ -399,7 +399,7 @@ def moments():
 
         # --- ИСПРАВЛЕНИЕ: Объединяем данные ---
         combined_data = []
-        for row in 
+        for row in data:
             item_id = row[0]
             # Создаем словарь для удобства работы в шаблоне
             # Предполагаем, что row это tuple: (id, title, description, video_url, created_at)
