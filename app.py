@@ -39,7 +39,8 @@ logger = logging.getLogger(__name__)
 
 # --- Config ---
 TOKEN = os.environ.get('TELEGRAM_TOKEN')
-WEBHOOK_URL = os.environ.get('WEBHOOK_URL', 'https://yourdomain.com').strip() # Исправлено: убраны лишние пробелы
+# Исправлено: убраны лишние пробелы
+WEBHOOK_URL = os.environ.get('WEBHOOK_URL', 'https://cinema-space-bot.onrender.com').strip()
 REDIS_URL = os.environ.get('REDIS_URL', None)
 if not TOKEN:
     logger.error("TELEGRAM_TOKEN not set!")
@@ -149,12 +150,15 @@ async def extract_video_url_from_telegram_post(post_url):
     """
     try:
         logger.info(f"Попытка извлечь видео из поста: {post_url}")
+        # ИСПРАВЛЕНО: Убраны лишние пробелы в регулярных выражениях
         # Парсим ссылку
         # Пример: https://t.me/your_channel/123
         # Для публичных каналов: https://t.me/channelname/messageid
         # Для приватных каналов (с /c/): https://t.me/c/chatid/messageid
-        public_match = re.search(r'https?://t\.me/([^/]+)/(\d+)$', post_url)
-        private_match = re.search(r'https?://t\.me/c/(\d+)/(\d+)$', post_url)
+        # Убираем возможные пробелы в конце URL
+        post_url = post_url.strip()
+        public_match = re.search(r'https?://t\.me/([^/\s]+)/(\d+)', post_url)
+        private_match = re.search(r'https?://t\.me/c/(\d+)/(\d+)', post_url)
 
         chat_id_or_username = None
         message_id = None
@@ -166,7 +170,9 @@ async def extract_video_url_from_telegram_post(post_url):
         elif private_match:
             # Для приватных каналов используем ID чата напрямую
             # ВАЖНО: Бот должен быть участником или админом этого чата
-            chat_id_or_username = -1000000000000 - int(private_match.group(1)) # Конвертация ID из t.me/c/
+            # ID приватных каналов в t.me/c/ формате требует преобразования
+            # Chat ID в Telegram API для супергрупп/каналов отрицательный и начинается с -100
+            chat_id_or_username = -1000000000000 + int(private_match.group(1))
             message_id = int(private_match.group(2))
             logger.debug(f"Найден приватный канал (ID): {chat_id_or_username}, сообщение: {message_id}")
         else:
@@ -558,6 +564,13 @@ def admin_dashboard():
         news_count=stats.get('news', 0),
         comments_count=stats.get('comments', 0))
 
+# --- НОВЫЙ МАРШРУТ: Отображение формы добавления видео ---
+@app.route('/admin/add_video')
+@admin_required
+def admin_add_video_form():
+    """Отображает форму добавления видео."""
+    return render_template('admin/add_video.html')
+
 @app.route('/admin/content')
 @admin_required
 def admin_content():
@@ -602,6 +615,62 @@ def admin_update_access(content_type):
     roles = request.form.getlist('roles')
     update_access_settings(content_type, roles)
     return redirect(url_for('admin_access_settings'))
+
+# --- НОВЫЙ МАРШРУТ: API для формы add_video.html ---
+@app.route('/admin/add_video_json', methods=['POST'])
+@admin_required
+def admin_add_video_json():
+    """API endpoint для добавления видео через форму add_video.html"""
+    try:
+        # Этот маршрут ожидает JSON
+        data = request.get_json()
+        if not data:
+            return jsonify(success=False, error="Неверный формат данных (ожидается JSON)"), 400
+
+        title = data.get('title', '').strip()
+        description = data.get('description', '').strip()
+        category = data.get('category', '').strip() # moment, trailer, news
+        post_link = data.get('post_link', '').strip() # Это может быть ссылка на пост или прямой URL
+
+        if not title or not post_link or not category:
+            return jsonify(success=False, error="Заполните все обязательные поля"), 400
+
+        if category not in ['moment', 'trailer', 'news']:
+             return jsonify(success=False, error="Неверный тип контента"), 400
+
+        video_url = post_link
+        # --- НОВАЯ ЛОГИКА: Если это ссылка на пост Telegram ---
+        if 't.me/' in post_link:
+            logger.info(f"[JSON API] Обнаружена ссылка на Telegram пост: {post_link}")
+            # Пытаемся извлечь прямую ссылку
+            direct_url, error = extract_video_url_sync(post_link)
+            if direct_url:
+                video_url = direct_url
+                logger.info(f"[JSON API] Извлечена прямая ссылка из поста: {video_url[:50]}...")
+            else:
+                logger.error(f"[JSON API] Ошибка извлечения видео из поста: {error}")
+                return jsonify(success=False, error=error), 400
+
+        # --- Вызов соответствующей функции добавления ---
+        if category == 'moment':
+            add_moment(title, description, video_url)
+            cache_delete('moments_list')
+        elif category == 'trailer':
+            add_trailer(title, description, video_url)
+            cache_delete('trailers_list')
+        elif category == 'news':
+            # Для новостей, если вы хотите добавлять видео, нужно изменить add_news
+            # Пока что добавляем как изображение, если это ссылка на изображение
+            # Или оставляем image_url пустым
+            add_news(title, description, video_url if video_url.startswith(('http://', 'https://')) else None)
+            cache_delete('news_list')
+
+        logger.info(f"[JSON API] Добавлен {category}: {title}")
+        return jsonify(success=True, message="Видео успешно добавлено!")
+
+    except Exception as e:
+        logger.error(f"[JSON API] add_video error: {e}", exc_info=True)
+        return jsonify(success=False, error=str(e)), 500
 
 # --- Telegram Add Video Command ---
 def add_video_command(update, context):
