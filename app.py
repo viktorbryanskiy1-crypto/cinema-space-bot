@@ -144,12 +144,15 @@ def get_cached_direct_video_url(file_id, cache_time=3600):
     return None
 
 # --- НОВОЕ: Функция для извлечения видео из поста Telegram ---
+# (Обновлённая версия с исправлением для PTB v13.15)
 async def extract_video_url_from_telegram_post(post_url):
     """
-    Извлекает прямую ссылку на видео из поста Telegram
+    Извлекает прямую ссылку на видео из поста Telegram.
+    Совместимо с python-telegram-bot v13.15.
     """
     try:
         logger.info(f"Попытка извлечь видео из поста: {post_url}")
+        
         # ИСПРАВЛЕНО: Убраны лишние пробелы в регулярных выражениях
         # Парсим ссылку
         # Пример: https://t.me/your_channel/123
@@ -164,16 +167,17 @@ async def extract_video_url_from_telegram_post(post_url):
         message_id = None
 
         if public_match:
-            chat_id_or_username = "@" + public_match.group(1) # Добавляем @ для публичных каналов
+            # Для публичных каналов имя пользователя начинается с @
+            chat_id_or_username = "@" + public_match.group(1)
             message_id = int(public_match.group(2))
             logger.debug(f"Найден публичный канал: {chat_id_or_username}, сообщение: {message_id}")
         elif private_match:
-            # Для приватных каналов используем ID чата напрямую
-            # ВАЖНО: Бот должен быть участником или админом этого чата
-            # ID приватных каналов в t.me/c/ формате требует преобразования
-            # Chat ID в Telegram API для супергрупп/каналов отрицательный и начинается с -100
+            # Для приватных каналов/супергрупп используем отрицательный chat_id
+            # ID из t.me/c/ нужно преобразовать
             # Пример: t.me/c/192847563/10 -> chat_id = -100192847563
-            chat_id_or_username = -1000000000000 + int(private_match.group(1))
+            raw_id = int(private_match.group(1))
+            # Правильное преобразование ID приватного чата/канала
+            chat_id_or_username = -1000000000000 - raw_id
             message_id = int(private_match.group(2))
             logger.debug(f"Найден приватный канал (ID): {chat_id_or_username}, сообщение: {message_id}")
         else:
@@ -186,9 +190,39 @@ async def extract_video_url_from_telegram_post(post_url):
         # Создаем бота
         bot = Bot(token=TOKEN)
 
-        # Получаем сообщение
-        # ВАЖНО: Бот должен иметь доступ к этому сообщению (быть в канале/группе или иметь ссылку-приглашение)
-        message = await bot.get_message(chat_id=chat_id_or_username, message_id=message_id)
+        # --- ИСПРАВЛЕНИЕ: Используем forward_message вместо get_message ---
+        # Мы пересылаем сообщение от имени бота в тот же чат (или в чат с админом для теста)
+        # Это единственный способ получить полный объект Message в v13.15 по chat_id/message_id
+        # ВАЖНО: Бот должен иметь доступ к исходному сообщению!
+        
+        # Вариант 1: Переслать сообщение в тот же чат (работает, если бот админ)
+        try:
+            forwarded_message = await bot.forward_message(
+                chat_id=chat_id_or_username,      # Куда пересылать - в тот же чат
+                from_chat_id=chat_id_or_username, # Откуда - из того же чата
+                message_id=message_id            # Какое сообщение
+            )
+            message = forwarded_message
+            logger.debug("Сообщение успешно получено через forward_message (в тот же чат)")
+        except Exception as e1:
+            logger.warning(f"Не удалось получить сообщение через forward в тот же чат: {e1}")
+            # Вариант 2 (если бот не админ): Переслать сообщение себе или в тестовый чат
+            # ВАЖНО: Замените YOUR_ADMIN_CHAT_ID на реальный ID чата админа или тестового чата
+            # где бот точно является участником
+            YOUR_ADMIN_CHAT_ID = -1003045387627 # <<<--- ВАШ ID ТЕСТОВОЙ ГРУППЫ
+            try:
+                forwarded_message = await bot.forward_message(
+                    chat_id=YOUR_ADMIN_CHAT_ID,       # Куда пересылать - админу/в тестовый чат
+                    from_chat_id=chat_id_or_username, # Откуда - из исходного чата
+                    message_id=message_id            # Какое сообщение
+                )
+                message = forwarded_message
+                logger.debug("Сообщение успешно получено через forward_message (в админский чат)")
+            except Exception as e2:
+                logger.error(f"Не удалось получить сообщение через forward: {e1}, {e2}")
+                return None, "Не удалось получить сообщение. Убедитесь, что бот администратор канала или имеет доступ к сообщению."
+
+        # --- Конец исправления ---
 
         if not message:
             logger.error("Сообщение не найдено или бот не имеет доступа")
@@ -304,7 +338,7 @@ def cache_delete(key):
 
 def build_extra_map(data, item_type_plural):
     extra = {}
-    for row in data:
+    for row in 
         item_id = row[0]
         reactions = get_reactions_count(item_type_plural, item_id) or {'like':0,'dislike':0,'star':0,'fire':0}
         comments_count = len(get_comments(item_type_plural, item_id) or [])
@@ -694,7 +728,7 @@ def add_video_command(update, context):
 def handle_pending_video_text(update, context):
     user = update.message.from_user
     telegram_id = str(user.id)
-    if telegram_id not in pending_video_data:
+    if telegram_id not in pending_video_
         return
     data = pending_video_data.pop(telegram_id)
     content_type, title = data['content_type'], data['title']
@@ -720,7 +754,7 @@ def handle_pending_video_file(update, context):
     telegram_id = str(user.id)
     logger.info(f"Получен видеофайл от пользователя {telegram_id}")
 
-    if telegram_id not in pending_video_data:
+    if telegram_id not in pending_video_
         logger.debug("Нет ожидающих данных для видео")
         return
 
