@@ -2,7 +2,7 @@
 <div class="content-section">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
         <h2 style="background: linear-gradient(45deg, #00f3ff, #ff00c8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size: 2em;">📰 Новости</h2>
-        <button onclick="showAddNewsModal()" class="tab-btn" style="padding: 12px 25px;">➕ Добавить новость</button>
+        <button id="add-news-btn" class="tab-btn" style="padding: 12px 25px;">➕ Добавить новость</button>
     </div>
 
     <!-- Модальное окно -->
@@ -85,80 +85,92 @@
             <div style="text-align: center; padding: 50px; color: var(--accent);">
                 <h2>📰 Новости</h2>
                 <p>Пока нет добавленных новостей</p>
-                <button onclick="showAddNewsModal()" class="tab-btn" style="margin-top: 20px;">➕ Добавить первую новость</button>
+                <button id="add-news-btn-alt" class="tab-btn" style="margin-top: 20px;">➕ Добавить первую новость</button>
             </div>
         {% endif %}
     </div>
 </div>
 
+<!-- Глобальные функции для этой страницы, если main.js еще не загрузился -->
 <script>
-// Функции открытия/закрытия модалок
-function showModal(id) {
-    const modal = document.getElementById(id);
-    if (modal) modal.style.display = 'flex';
-}
-function closeModal(id) {
-    const modal = document.getElementById(id);
-    if (modal) modal.style.display = 'none';
-}
-
-// Для news.html
-function showAddNewsModal() {
-    showModal('add-news-modal');
-}
-
-// Показ и скрытие модального окна
-document.addEventListener('change', (e) => {
-    if (e.target.name === 'image_type' && e.target.closest('#add-news-modal')) {
-      if (e.target.value === 'upload') {
-        document.getElementById('news-file-section').style.display = 'block';
-        document.getElementById('news-url-section').style.display = 'none';
-      } else {
-        document.getElementById('news-file-section').style.display = 'none';
-        document.getElementById('news-url-section').style.display = 'block';
-      }
-    }
-  });
-
-  // Инициализация отображения при загрузке страницы
-  document.addEventListener('DOMContentLoaded', () => {
-    const checkedRadio = document.querySelector('input[name="image_type"]:checked');
-    if (checkedRadio) {
-      checkedRadio.dispatchEvent(new Event('change'));
-    }
-  });
-
-  // Обработка отправки формы добавления новости через fetch
-  document.getElementById('add-news-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const form = e.target;
-    const formData = new FormData(form);
-
-    try {
-      const response = await fetch('/api/add_news', {
-        method: 'POST',
-        body: formData
-      });
-      const result = await response.json();
-
-      if (result.success) {
-        closeModal('add-news-modal');
-        location.reload();
-      } else {
-        alert('Ошибка: ' + (result.error || 'Не удалось добавить новость'));
-      }
-    } catch (err) {
-      alert('Ошибка загрузки: ' + err.message);
-    }
-  });
-
-// Закрытие модального окна при клике вне его
-window.addEventListener('click', function(e) {
-    const modals = document.querySelectorAll('.modal');
-    modals.forEach(modal => {
-        if (e.target === modal) {
-            modal.style.display = 'none';
+    // Эти функции будут заменены на функции из main.js, если он загрузится
+    if (typeof showAddNewsModal === 'undefined') {
+        function showModal(id) {
+            const modal = document.getElementById(id);
+            if (modal) modal.style.display = 'flex';
         }
-    });
-});
+        function closeModal(id) {
+            const modal = document.getElementById(id);
+            if (modal) modal.style.display = 'none';
+        }
+        function showAddNewsModal() {
+            showModal('add-news-modal');
+        }
+        
+        // Простой обработчик для кнопок на этой странице
+        document.addEventListener('DOMContentLoaded', function() {
+            const addBtn = document.getElementById('add-news-btn');
+            const addBtnAlt = document.getElementById('add-news-btn-alt');
+            if (addBtn) addBtn.addEventListener('click', showAddNewsModal);
+            if (addBtnAlt) addBtnAlt.addEventListener('click', showAddNewsModal);
+            
+            // Показ и скрытие модального окна
+            document.addEventListener('change', (e) => {
+                if (e.target.name === 'image_type' && e.target.closest('#add-news-modal')) {
+                  if (e.target.value === 'upload') {
+                    document.getElementById('news-file-section').style.display = 'block';
+                    document.getElementById('news-url-section').style.display = 'none';
+                  } else {
+                    document.getElementById('news-file-section').style.display = 'none';
+                    document.getElementById('news-url-section').style.display = 'block';
+                  }
+                }
+            });
+
+            // Инициализация отображения при загрузке страницы
+            document.addEventListener('DOMContentLoaded', () => {
+                const checkedRadio = document.querySelector('input[name="image_type"]:checked');
+                if (checkedRadio) {
+                  checkedRadio.dispatchEvent(new Event('change'));
+                }
+            });
+
+            // Обработка отправки формы добавления новости через fetch
+            const form = document.getElementById('add-news-form');
+            if (form) {
+                form.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const formElement = e.target;
+                    const formData = new FormData(formElement);
+
+                    try {
+                      const response = await fetch('/api/add_news', {
+                        method: 'POST',
+                        body: formData
+                      });
+                      const result = await response.json();
+
+                      if (result.success) {
+                        closeModal('add-news-modal');
+                        location.reload();
+                      } else {
+                        alert('Ошибка: ' + (result.error || 'Не удалось добавить новость'));
+                      }
+                    } catch (err) {
+                      alert('Ошибка загрузки: ' + err.message);
+                    }
+                });
+            }
+            
+            // Закрытие модального окна при клике вне его
+            window.addEventListener('click', function(e) {
+                const modals = document.querySelectorAll('.modal');
+                modals.forEach(modal => {
+                    if (e.target === modal) {
+                        modal.style.display = 'none';
+                    }
+                });
+            });
+        });
+    }
 </script>
