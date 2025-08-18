@@ -354,33 +354,6 @@ def build_extra_map(data, item_type_plural):
 def index():
     return render_template('index.html')
 
-def _combine_data_with_extra(data, extra_map, item_type):
-    """Объединяет данные из БД с дополнительной информацией."""
-    combined_data = []
-    for row in data:
-        if len(row) == 0:
-            continue
-        item_dict = {
-            'id': row[0],
-            'title': row[1] if len(row) > 1 else '',
-            'description': row[2] if len(row) > 2 else '',
-            'video_url': row[3] if len(row) > 3 and item_type != 'news' else '',
-            'image_url': row[3] if len(row) > 3 and item_type == 'news' else '',
-            'text': row[2] if len(row) > 2 and item_type == 'news' else '',
-            'created_at': row[4] if len(row) > 4 else None
-        }
-        # Добавляем extra данные
-        extra_info = extra_map.get(item_dict['id'], {'reactions': {'like':0,'dislike':0,'star':0,'fire':0}, 'comments_count': 0})
-        # Убедимся, что reactions - это словарь
-        if isinstance(extra_info.get('reactions'), dict):
-            item_dict['reactions'] = extra_info['reactions']
-        else:
-            item_dict['reactions'] = {'like':0,'dislike':0,'star':0,'fire':0}
-        
-        item_dict['comments_count'] = extra_info.get('comments_count', 0)
-        combined_data.append(item_dict)
-    return combined_data
-
 @app.route('/moments')
 def moments():
     try:
@@ -400,7 +373,28 @@ def moments():
         logger.info("extra_map построен успешно")
 
         # --- ИСПРАВЛЕНИЕ: Объединяем данные ---
-        combined_data = _combine_data_with_extra(data, extra_map, 'moments')
+        combined_data = []
+        for row in data:
+            item_id = row[0]
+            # Создаем словарь для удобства работы в шаблоне
+            # Предполагаем, что row это tuple: (id, title, description, video_url, created_at)
+            item_dict = {
+                'id': row[0],
+                'title': row[1] if len(row) > 1 else '',
+                'description': row[2] if len(row) > 2 else '',
+                'video_url': row[3] if len(row) > 3 else '',
+                'created_at': row[4] if len(row) > 4 else None
+            }
+            # Добавляем extra данные
+            extra_info = extra_map.get(item_id, {'reactions': {'like':0,'dislike':0,'star':0,'fire':0}, 'comments_count': 0})
+            # Убедимся, что reactions - это словарь
+            if isinstance(extra_info.get('reactions'), dict):
+                item_dict['reactions'] = extra_info['reactions']
+            else:
+                item_dict['reactions'] = {'like':0,'dislike':0,'star':0,'fire':0}
+            
+            item_dict['comments_count'] = extra_info.get('comments_count', 0)
+            combined_data.append(item_dict)
         
         logger.info("Данные объединены успешно")
         # Передаем объединенный список
@@ -423,7 +417,28 @@ def trailers():
         logger.info("extra_map построен успешно")
 
         # --- ИСПРАВЛЕНИЕ: Объединяем данные ---
-        combined_data = _combine_data_with_extra(data, extra_map, 'trailers')
+        combined_data = []
+        for row in data:
+            item_id = row[0]
+            # Создаем словарь для удобства работы в шаблоне
+            # Предполагаем, что row это tuple: (id, title, description, video_url, created_at)
+            item_dict = {
+                'id': row[0],
+                'title': row[1] if len(row) > 1 else '',
+                'description': row[2] if len(row) > 2 else '',
+                'video_url': row[3] if len(row) > 3 else '',
+                'created_at': row[4] if len(row) > 4 else None
+            }
+            # Добавляем extra данные
+            extra_info = extra_map.get(item_id, {'reactions': {'like':0,'dislike':0,'star':0,'fire':0}, 'comments_count': 0})
+            # Убедимся, что reactions - это словарь
+            if isinstance(extra_info.get('reactions'), dict):
+                item_dict['reactions'] = extra_info['reactions']
+            else:
+                item_dict['reactions'] = {'like':0,'dislike':0,'star':0,'fire':0}
+            
+            item_dict['comments_count'] = extra_info.get('comments_count', 0)
+            combined_data.append(item_dict)
         
         logger.info("Данные объединены успешно")
         return render_template('trailers.html', trailers=combined_data)
@@ -445,7 +460,28 @@ def news():
         logger.info("extra_map построен успешно")
 
         # --- ИСПРАВЛЕНИЕ: Объединяем данные ---
-        combined_data = _combine_data_with_extra(data, extra_map, 'news')
+        combined_data = []
+        for row in data:
+            item_id = row[0]
+            # Создаем словарь для удобства работы в шаблоне
+            # Предполагаем, что row это tuple: (id, title, text, image_url, created_at)
+            item_dict = {
+                'id': row[0],
+                'title': row[1] if len(row) > 1 else '',
+                'text': row[2] if len(row) > 2 else '', # Для новостей используем 'text'
+                'image_url': row[3] if len(row) > 3 else '',
+                'created_at': row[4] if len(row) > 4 else None
+            }
+            # Добавляем extra данные
+            extra_info = extra_map.get(item_id, {'reactions': {'like':0,'dislike':0,'star':0,'fire':0}, 'comments_count': 0})
+            # Убедимся, что reactions - это словарь
+            if isinstance(extra_info.get('reactions'), dict):
+                item_dict['reactions'] = extra_info['reactions']
+            else:
+                item_dict['reactions'] = {'like':0,'dislike':0,'star':0,'fire':0}
+            
+            item_dict['comments_count'] = extra_info.get('comments_count', 0)
+            combined_data.append(item_dict)
         
         logger.info("Данные объединены успешно")
         return render_template('news.html', news=combined_data)
@@ -454,29 +490,69 @@ def news():
         logger.error(f"Ошибка в маршруте /news: {e}", exc_info=True)
         return render_template('news.html', news=[]), 500
 
+# --- НОВОЕ: Добавлены маршруты для детальных страниц ---
 @app.route('/moments/<int:item_id>')
 def moment_detail(item_id):
+    """Отображает страницу одного момента."""
+    logger.info(f"Запрос к /moments/{item_id}")
     item = get_item_by_id('moments', item_id)
-    if not item: abort(404)
+    if not item:
+        logger.warning(f"Момент с id={item_id} не найден")
+        abort(404)
     reactions = get_reactions_count('moments', item_id)
     comments = get_comments('moments', item_id)
-    return render_template('moment_detail.html', item=item, reactions=reactions, comments=comments)
+    logger.info(f"Момент {item_id} найден: {item[1] if len(item) > 1 else 'Без названия'}")
+    # Преобразуем кортеж item в словарь для шаблона
+    item_dict = {
+        'id': item[0],
+        'title': item[1] if len(item) > 1 else '',
+        'description': item[2] if len(item) > 2 else '',
+        'video_url': item[3] if len(item) > 3 else '',
+        'created_at': item[4] if len(item) > 4 else None
+    }
+    return render_template('moment_detail.html', item=item_dict, reactions=reactions, comments=comments)
 
 @app.route('/trailers/<int:item_id>')
 def trailer_detail(item_id):
+    """Отображает страницу одного трейлера."""
+    logger.info(f"Запрос к /trailers/{item_id}")
     item = get_item_by_id('trailers', item_id)
-    if not item: abort(404)
+    if not item:
+        logger.warning(f"Трейлер с id={item_id} не найден")
+        abort(404)
     reactions = get_reactions_count('trailers', item_id)
     comments = get_comments('trailers', item_id)
-    return render_template('trailer_detail.html', item=item, reactions=reactions, comments=comments)
+    logger.info(f"Трейлер {item_id} найден: {item[1] if len(item) > 1 else 'Без названия'}")
+    # Преобразуем кортеж item в словарь для шаблона
+    item_dict = {
+        'id': item[0],
+        'title': item[1] if len(item) > 1 else '',
+        'description': item[2] if len(item) > 2 else '',
+        'video_url': item[3] if len(item) > 3 else '',
+        'created_at': item[4] if len(item) > 4 else None
+    }
+    return render_template('trailer_detail.html', item=item_dict, reactions=reactions, comments=comments)
 
 @app.route('/news/<int:item_id>')
 def news_detail(item_id):
+    """Отображает страницу одной новости."""
+    logger.info(f"Запрос к /news/{item_id}")
     item = get_item_by_id('news', item_id)
-    if not item: abort(404)
+    if not item:
+        logger.warning(f"Новость с id={item_id} не найдена")
+        abort(404)
     reactions = get_reactions_count('news', item_id)
     comments = get_comments('news', item_id)
-    return render_template('news_detail.html', item=item, reactions=reactions, comments=comments)
+    logger.info(f"Новость {item_id} найдена: {item[1] if len(item) > 1 else 'Без заголовка'}")
+    # Преобразуем кортеж item в словарь для шаблона
+    item_dict = {
+        'id': item[0],
+        'title': item[1] if len(item) > 1 else '',
+        'text': item[2] if len(item) > 2 else '', # Для новостей используем 'text'
+        'image_url': item[3] if len(item) > 3 else '',
+        'created_at': item[4] if len(item) > 4 else None
+    }
+    return render_template('news_detail.html', item=item_dict, reactions=reactions, comments=comments)
 
 # --- API: добавление контента ---
 def _get_payload():
@@ -805,7 +881,6 @@ def add_video_command(update, context):
 def handle_pending_video_text(update, context):
     user = update.message.from_user
     telegram_id = str(user.id)
-    # ИСПРАВЛЕНО: Полная строка условия
     if telegram_id not in pending_video_data:
         return
     data = pending_video_data.pop(telegram_id)
@@ -832,7 +907,6 @@ def handle_pending_video_file(update, context):
     telegram_id = str(user.id)
     logger.info(f"Получен видеофайл от пользователя {telegram_id}")
 
-    # ИСПРАВЛЕНО: Полная строка условия
     if telegram_id not in pending_video_data:
         logger.debug("Нет ожидающих данных для видео")
         return
