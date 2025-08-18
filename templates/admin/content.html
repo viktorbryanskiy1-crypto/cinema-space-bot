@@ -1,84 +1,70 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>📁 Управление контентом - Админ-панель</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-</head>
-<body>
-    <div class="container">
-        <nav class="navbar" style="margin-bottom: 30px;">
-            <h1>📁 Управление контентом</h1>
-            <div>
-                <a href="{{ url_for('admin_dashboard') }}" class="tab-btn" style="margin-right: 10px;">Статистика</a>
-                <a href="{{ url_for('admin_logout') }}" class="tab-btn" style="background: linear-gradient(45deg, #ff6b6b, #ff4757);">Выйти</a>
-            </div>
-        </nav>
+<!-- templates/admin/content.html -->
+{% extends 'admin/base.html' %}
 
-        <div style="text-align: right; margin-bottom: 20px;">
-            <a href="{{ url_for('index') }}" class="tab-btn">🏠 Вернуться к приложению</a>
-        </div>
+{% block title %}Управление контентом - Админ-панель{% endblock %}
 
-        <!-- Добавить новый контент -->
-        <div style="margin-bottom: 40px;">
-            <h3 style="color: var(--accent);">➕ Добавить новый контент</h3>
-            <p>Используйте Telegram команду <code>/add_video [moment|trailer|news] [название]</code> для добавления видео напрямую через бота.</p>
-        </div>
+{% block content %}
+<div style="text-align: right; margin-bottom: 20px;">
+    <a href="{{ url_for('index') }}" class="tab-btn">🏠 Вернуться к приложению</a>
+</div>
 
-        <!-- Моменты -->
-        <h3 style="color: var(--accent); margin-bottom: 20px;">🎬 Моменты из кино ({{ moments|length }})</h3>
-        {% if moments %}
-        <div class="card-grid">
-            {% for moment in moments %}
-            <div class="card">
-                <h4 class="card-title">{{ moment[1] }}</h4>
-                <p class="card-description">{{ moment[2][:100] }}{% if moment[2]|length > 100 %}...{% endif %}</p>
-                <div style="display: flex; gap: 10px; margin-top: 15px;">
-                    <a href="{{ url_for('admin_delete', content_type='moment', content_id=moment[0]) }}" class="admin-btn" onclick="return confirm('Удалить этот момент?')">🗑 Удалить</a>
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-        {% else %}
-        <p>Нет моментов</p>
-        {% endif %}
+<!-- Добавить новый контент -->
+<div style="margin-bottom: 40px;">
+    <h3 style="color: var(--accent);">➕ Добавить новый контент</h3>
+    <p>Используйте Telegram команду <code>/add_video [moment|trailer|news] [название]</code> для добавления видео напрямую через бота.</p>
+</div>
 
-        <!-- Трейлеры -->
-        <h3 style="color: var(--accent); margin-top: 40px; margin-bottom: 20px;">🎥 Трейлеры ({{ trailers|length }})</h3>
-        {% if trailers %}
-        <div class="card-grid">
-            {% for trailer in trailers %}
-            <div class="card">
-                <h4 class="card-title">{{ trailer[1] }}</h4>
-                <p class="card-description">{{ trailer[2][:100] }}{% if trailer[2]|length > 100 %}...{% endif %}</p>
-                <div style="display: flex; gap: 10px; margin-top: 15px;">
-                    <a href="{{ url_for('admin_delete', content_type='trailer', content_id=trailer[0]) }}" class="admin-btn" onclick="return confirm('Удалить этот трейлер?')">🗑 Удалить</a>
-                </div>
-            </div>
-            {% endfor %}
+<!-- Моменты -->
+<h3 style="color: var(--accent); margin-bottom: 20px;">🎬 Моменты из кино ({{ moments|length }})</h3>
+{% if moments %}
+<div class="card-grid">
+    {% for moment in moments %}
+    <div class="card">
+        <h4 class="card-title">{{ moment[1] }}</h4>
+        <p class="card-description">{{ moment[2][:100] }}{% if moment[2]|length > 100 %}...{% endif %}</p>
+        <div style="display: flex; gap: 10px; margin-top: 15px;">
+            <a href="{{ url_for('admin_delete', content_type='moment', content_id=moment[0]) }}" class="admin-btn" style="background-color: #ff6b6b;" onclick="return confirm('Удалить этот момент?')">🗑 Удалить</a>
         </div>
-        {% else %}
-        <p>Нет трейлеров</p>
-        {% endif %}
-
-        <!-- Новости -->
-        <h3 style="color: var(--accent); margin-top: 40px; margin-bottom: 20px;">📰 Новости ({{ news|length }})</h3>
-        {% if news %}
-        <div class="card-grid">
-            {% for news_item in news %}
-            <div class="card">
-                <h4 class="card-title">{{ news_item[1] }}</h4>
-                <p class="card-description">{{ news_item[2][:100] }}{% if news_item[2]|length > 100 %}...{% endif %}</p>
-                <div style="display: flex; gap: 10px; margin-top: 15px;">
-                    <a href="{{ url_for('admin_delete', content_type='news', content_id=news_item[0]) }}" class="admin-btn" onclick="return confirm('Удалить эту новость?')">🗑 Удалить</a>
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-        {% else %}
-        <p>Нет новостей</p>
-        {% endif %}
     </div>
-</body>
-</html>
+    {% endfor %}
+</div>
+{% else %}
+<p>Нет моментов</p>
+{% endif %}
+
+<!-- Трейлеры -->
+<h3 style="color: var(--accent); margin-top: 40px; margin-bottom: 20px;">🎥 Трейлеры ({{ trailers|length }})</h3>
+{% if trailers %}
+<div class="card-grid">
+    {% for trailer in trailers %}
+    <div class="card">
+        <h4 class="card-title">{{ trailer[1] }}</h4>
+        <p class="card-description">{{ trailer[2][:100] }}{% if trailer[2]|length > 100 %}...{% endif %}</p>
+        <div style="display: flex; gap: 10px; margin-top: 15px;">
+            <a href="{{ url_for('admin_delete', content_type='trailer', content_id=trailer[0]) }}" class="admin-btn" style="background-color: #ff6b6b;" onclick="return confirm('Удалить этот трейлер?')">🗑 Удалить</a>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<p>Нет трейлеров</p>
+{% endif %}
+
+<!-- Новости -->
+<h3 style="color: var(--accent); margin-top: 40px; margin-bottom: 20px;">📰 Новости ({{ news|length }})</h3>
+{% if news %}
+<div class="card-grid">
+    {% for news_item in news %}
+    <div class="card">
+        <h4 class="card-title">{{ news_item[1] }}</h4>
+        <p class="card-description">{{ news_item[2][:100] }}{% if news_item[2]|length > 100 %}...{% endif %}</p>
+        <div style="display: flex; gap: 10px; margin-top: 15px;">
+            <a href="{{ url_for('admin_delete', content_type='news', content_id=news_item[0]) }}" class="admin-btn" style="background-color: #ff6b6b;" onclick="return confirm('Удалить эту новость?')">🗑 Удалить</a>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<p>Нет новостей</p>
+{% endif %}
+{% endblock %}
