@@ -1,104 +1,89 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>⚙️ Настройки доступа - Админ-панель</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-</head>
-<body>
-    <div class="container">
-        <nav class="navbar" style="margin-bottom: 30px;">
-            <h1>⚙️ Настройки доступа</h1>
-            <div>
-                <a href="{{ url_for('admin_dashboard') }}" class="tab-btn" style="margin-right: 10px;">Статистика</a>
-                <a href="{{ url_for('admin_content') }}" class="tab-btn" style="margin-right: 10px;">Управление контентом</a>
-                <a href="{{ url_for('admin_logout') }}" class="tab-btn" style="background: linear-gradient(45deg, #ff6b6b, #ff4757);">Выйти</a>
+<!-- templates/admin/access/settings.html -->
+{% extends 'admin/base.html' %}
+
+{% block title %}Настройки доступа - Админ-панель{% endblock %}
+
+{% block content %}
+<h2 style="text-align: center; margin-bottom: 30px; background: linear-gradient(45deg, var(--accent), var(--accent-secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size: 2em;">🔒 Кто может добавлять контент</h2>
+
+<div class="card-grid">
+    <!-- Моменты из кино -->
+    <div class="card">
+        <h3 style="color: var(--accent); margin-bottom: 20px;">🎬 Моменты из кино</h3>
+        <form method="POST" action="{{ url_for('admin_update_access', content_type='moment') }}">
+            <div style="margin-bottom: 15px;">
+                <div>
+                    <input type="checkbox" name="roles" value="owner" id="moment_owner"
+                           {% if 'owner' in moment_roles %}checked{% endif %}>
+                    <label for="moment_owner">Только я (владелец)</label>
+                </div>
+                <div>
+                    <input type="checkbox" name="roles" value="admin" id="moment_admin"
+                           {% if 'admin' in moment_roles %}checked{% endif %}>
+                    <label for="moment_admin">Администраторы</label>
+                </div>
+                <div>
+                    <input type="checkbox" name="roles" value="user" id="moment_user"
+                           {% if 'user' in moment_roles %}checked{% endif %}>
+                    <label for="moment_user">Все пользователи</label>
+                </div>
             </div>
-        </nav>
-        
-        <h2 style="text-align: center; margin-bottom: 30px; background: linear-gradient(45deg, var(--accent), var(--accent-secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size: 2em;">🔒 Кто может добавлять контент</h2>
-        
-        <div class="card-grid">
-            <!-- Моменты из кино -->
-            <div class="card">
-                <h3 style="color: var(--accent); margin-bottom: 20px;">🎬 Моменты из кино</h3>
-                <form method="POST" action="{{ url_for('admin_update_access', content_type='moment') }}">
-                    <div style="margin-bottom: 15px;">
-                        <div>
-                            <input type="checkbox" name="roles" value="owner" id="moment_owner"
-                                   {% if 'owner' in moment_roles %}checked{% endif %}>
-                            <label for="moment_owner">Только я (владелец)</label>
-                        </div>
-                        <div>
-                            <input type="checkbox" name="roles" value="admin" id="moment_admin"
-                                   {% if 'admin' in moment_roles %}checked{% endif %}>
-                            <label for="moment_admin">Администраторы</label>
-                        </div>
-                        <div>
-                            <input type="checkbox" name="roles" value="user" id="moment_user"
-                                   {% if 'user' in moment_roles %}checked{% endif %}>
-                            <label for="moment_user">Все пользователи</label>
-                        </div>
-                    </div>
-                    <button type="submit" class="submit-btn" style="width: 100%;">Сохранить настройки</button>
-                </form>
-            </div>
-            
-            <!-- Трейлеры -->
-            <div class="card">
-                <h3 style="color: var(--accent); margin-bottom: 20px;">🎥 Трейлеры</h3>
-                <form method="POST" action="{{ url_for('admin_update_access', content_type='trailer') }}">
-                    <div style="margin-bottom: 15px;">
-                        <div>
-                            <input type="checkbox" name="roles" value="owner" id="trailer_owner"
-                                   {% if 'owner' in trailer_roles %}checked{% endif %}>
-                            <label for="trailer_owner">Только я (владелец)</label>
-                        </div>
-                        <div>
-                            <input type="checkbox" name="roles" value="admin" id="trailer_admin"
-                                   {% if 'admin' in trailer_roles %}checked{% endif %}>
-                            <label for="trailer_admin">Администраторы</label>
-                        </div>
-                        <div>
-                            <input type="checkbox" name="roles" value="user" id="trailer_user"
-                                   {% if 'user' in trailer_roles %}checked{% endif %}>
-                            <label for="trailer_user">Все пользователи</label>
-                        </div>
-                    </div>
-                    <button type="submit" class="submit-btn" style="width: 100%;">Сохранить настройки</button>
-                </form>
-            </div>
-            
-            <!-- Новости -->
-            <div class="card">
-                <h3 style="color: var(--accent); margin-bottom: 20px;">📰 Новости</h3>
-                <form method="POST" action="{{ url_for('admin_update_access', content_type='news') }}">
-                    <div style="margin-bottom: 15px;">
-                        <div>
-                            <input type="checkbox" name="roles" value="owner" id="news_owner"
-                                   {% if 'owner' in news_roles %}checked{% endif %}>
-                            <label for="news_owner">Только я (владелец)</label>
-                        </div>
-                        <div>
-                            <input type="checkbox" name="roles" value="admin" id="news_admin"
-                                   {% if 'admin' in news_roles %}checked{% endif %}>
-                            <label for="news_admin">Администраторы</label>
-                        </div>
-                        <div>
-                            <input type="checkbox" name="roles" value="user" id="news_user"
-                                   {% if 'user' in news_roles %}checked{% endif %}>
-                            <label for="news_user">Все пользователи</label>
-                        </div>
-                    </div>
-                    <button type="submit" class="submit-btn" style="width: 100%;">Сохранить настройки</button>
-                </form>
-            </div>
-        </div>
-        
-        <div style="text-align: center; margin-top: 50px;">
-            <a href="{{ url_for('index') }}" class="tab-btn">🏠 Вернуться к приложению</a>
-        </div>
+            <button type="submit" class="submit-btn" style="width: 100%;">Сохранить настройки</button>
+        </form>
     </div>
-</body>
-</html>
+    
+    <!-- Трейлеры -->
+    <div class="card">
+        <h3 style="color: var(--accent); margin-bottom: 20px;">🎥 Трейлеры</h3>
+        <form method="POST" action="{{ url_for('admin_update_access', content_type='trailer') }}">
+            <div style="margin-bottom: 15px;">
+                <div>
+                    <input type="checkbox" name="roles" value="owner" id="trailer_owner"
+                           {% if 'owner' in trailer_roles %}checked{% endif %}>
+                    <label for="trailer_owner">Только я (владелец)</label>
+                </div>
+                <div>
+                    <input type="checkbox" name="roles" value="admin" id="trailer_admin"
+                           {% if 'admin' in trailer_roles %}checked{% endif %}>
+                    <label for="trailer_admin">Администраторы</label>
+                </div>
+                <div>
+                    <input type="checkbox" name="roles" value="user" id="trailer_user"
+                           {% if 'user' in trailer_roles %}checked{% endif %}>
+                    <label for="trailer_user">Все пользователи</label>
+                </div>
+            </div>
+            <button type="submit" class="submit-btn" style="width: 100%;">Сохранить настройки</button>
+        </form>
+    </div>
+    
+    <!-- Новости -->
+    <div class="card">
+        <h3 style="color: var(--accent); margin-bottom: 20px;">📰 Новости</h3>
+        <form method="POST" action="{{ url_for('admin_update_access', content_type='news') }}">
+            <div style="margin-bottom: 15px;">
+                <div>
+                    <input type="checkbox" name="roles" value="owner" id="news_owner"
+                           {% if 'owner' in news_roles %}checked{% endif %}>
+                    <label for="news_owner">Только я (владелец)</label>
+                </div>
+                <div>
+                    <input type="checkbox" name="roles" value="admin" id="news_admin"
+                           {% if 'admin' in news_roles %}checked{% endif %}>
+                    <label for="news_admin">Администраторы</label>
+                </div>
+                <div>
+                    <input type="checkbox" name="roles" value="user" id="news_user"
+                           {% if 'user' in news_roles %}checked{% endif %}>
+                    <label for="news_user">Все пользователи</label>
+                </div>
+            </div>
+            <button type="submit" class="submit-btn" style="width: 100%;">Сохранить настройки</button>
+        </form>
+    </div>
+</div>
+
+<div style="text-align: center; margin-top: 50px;">
+    <a href="{{ url_for('index') }}" class="tab-btn">🏠 Вернуться к приложению</a>
+</div>
+{% endblock %}
