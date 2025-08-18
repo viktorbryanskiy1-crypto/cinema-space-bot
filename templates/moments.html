@@ -107,8 +107,7 @@
             </div>
 
             <div class="comments-section">
-                <button class="load-comments tab-btn" data-id="{{ moment.id }}" data-type="moment"
-                    style="margin-bottom: 15px; padding: 8px 15px;">
+                <button class="load-comments tab-btn" data-id="{{ moment.id }}" data-type="moment" style="margin-bottom: 15px; padding: 8px 15px;">
                     💬 Показать комментарии ({{ moment.comments_count }})
                 </button>
                 <div class="comments-list"></div>
@@ -129,72 +128,96 @@
     </div>
 </div>
 
+<!-- Глобальные функции для этой страницы, если main.js еще не загрузился -->
 <script>
-// Функции открытия/закрытия модалок
-function showModal(id) {
-    const modal = document.getElementById(id);
-    if (modal) modal.style.display = 'flex';
-}
-function closeModal(id) {
-    const modal = document.getElementById(id);
-    if (modal) modal.style.display = 'none';
-}
-
-// Для moments.html
-function showAddMomentModal() {
-    showModal('add-moment-modal');
-}
-
-// Переключатель загрузки файла / URL видео
-document.addEventListener('change', (e) => {
-    if (!e.target.name || !e.target.closest('#add-moment-modal')) return;
-
-    if (e.target.name === 'video_type') {
-        if (e.target.value === 'upload') {
-            document.getElementById('moment-file-section').style.display = 'block';
-            document.getElementById('moment-url-section').style.display = 'none';
-        } else {
-            document.getElementById('moment-file-section').style.display = 'none';
-            document.getElementById('moment-url-section').style.display = 'block';
+    // Эти функции будут заменены на функции из main.js, если он загрузится
+    if (typeof showAddMomentModal === 'undefined') {
+        function showModal(id) {
+            const modal = document.getElementById(id);
+            if (modal) modal.style.display = 'flex';
         }
-    }
-});
-
-// Обработчик открытия модалки
-document.getElementById('add-moment-btn').addEventListener('click', () => showAddMomentModal());
-const altBtn = document.getElementById('add-moment-btn-alt');
-if (altBtn) altBtn.addEventListener('click', () => showAddMomentModal());
-
-// Обработка формы добавления момента
-document.getElementById('add-moment-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const form = e.target;
-    const formData = new FormData(form);
-
-    try {
-        const res = await fetch('/api/add_moment', {
-            method: 'POST',
-            body: formData
+        function closeModal(id) {
+            const modal = document.getElementById(id);
+            if (modal) modal.style.display = 'none';
+        }
+        function showAddMomentModal() {
+            showModal('add-moment-modal');
+        }
+        
+        // Простой обработчик для кнопок на этой странице
+        document.addEventListener('DOMContentLoaded', function() {
+            const addBtn = document.getElementById('add-moment-btn');
+            const addBtnAlt = document.getElementById('add-moment-btn-alt');
+            if (addBtn) addBtn.addEventListener('click', showAddMomentModal);
+            if (addBtnAlt) addBtnAlt.addEventListener('click', showAddMomentModal);
+            
+            // Переключатель загрузки файла / URL видео
+            document.addEventListener('change', function(e) {
+                if (e.target.name === 'video_type' && e.target.closest('#add-moment-modal')) {
+                    if (e.target.value === 'upload') {
+                        document.getElementById('moment-file-section').style.display = 'block';
+                        document.getElementById('moment-url-section').style.display = 'none';
+                    } else {
+                        document.getElementById('moment-file-section').style.display = 'none';
+                        document.getElementById('moment-url-section').style.display = 'block';
+                    }
+                }
+            });
+            
+            // Обработчик формы добавления момента
+            const form = document.getElementById('add-moment-form');
+            if (form) {
+                form.addEventListener('submit', async function(e) {
+                    e.preventDefault();
+                    const formData = new FormData(this);
+                    const videoType = this.querySelector('input[name="video_type"]:checked').value;
+                    
+                    try {
+                        let response;
+                        if (videoType === 'upload' && this.querySelector('input[name="video_file"]').files[0]) {
+                            // Загрузка файла
+                            response = await fetch('/api/add_moment', {
+                                method: 'POST',
+                                body: formData
+                            });
+                        } else {
+                            // Отправка URL
+                            const jsonData = {
+                                title: formData.get('title'),
+                                description: formData.get('description'),
+                                video_url: formData.get('video_url') || ''
+                            };
+                            response = await fetch('/api/add_moment', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify(jsonData)
+                            });
+                        }
+                        
+                        const result = await response.json();
+                        if (result.success) {
+                            closeModal('add-moment-modal');
+                            location.reload();
+                        } else {
+                            alert('Ошибка: ' + (result.error || 'Не удалось добавить момент'));
+                        }
+                    } catch (error) {
+                        alert('Ошибка загрузки: ' + error.message);
+                    }
+                });
+            }
+            
+            // Закрытие модального окна при клике вне его
+            window.addEventListener('click', function(e) {
+                const modals = document.querySelectorAll('.modal');
+                modals.forEach(modal => {
+                    if (e.target === modal) {
+                        modal.style.display = 'none';
+                    }
+                });
+            });
         });
-        const json = await res.json();
-        if (json.success) {
-            closeModal('add-moment-modal');
-            location.reload();
-        } else {
-            alert('Ошибка: ' + (json.error || 'Не удалось добавить момент'));
-        }
-    } catch (err) {
-        alert('Ошибка загрузки: ' + err.message);
     }
-});
-
-// Закрытие модалки при клике вне окна
-window.addEventListener('click', function(e) {
-    const modals = document.querySelectorAll('.modal');
-    modals.forEach(modal => {
-        if (e.target === modal) {
-            modal.style.display = 'none';
-        }
-    });
-});
 </script>
