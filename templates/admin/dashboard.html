@@ -1,80 +1,31 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>📊 Админ-панель - КиноВселенная</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <style>
-        .tab-content { display: none; margin-top: 30px; }
-        .tab-content.active { display: block; }
-        .form-group { margin-bottom: 15px; }
-        label { display: block; margin-bottom: 5px; font-weight: bold; }
-        input, select { width: 100%; padding: 8px; border-radius: 5px; border: 1px solid #ccc; }
-        button { padding: 10px 20px; border: none; border-radius: 5px; background: var(--accent); color: #fff; cursor: pointer; }
-        button:hover { opacity: 0.9; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <nav class="navbar" style="margin-bottom: 30px;">
-            <h1>📊 Админ-панель</h1>
-            <div>
-                <!-- Добавлена ссылка на новую страницу -->
-                <a href="{{ url_for('admin_dashboard') }}" class="tab-btn" data-tab="stats" style="margin-right: 10px;">Статистика</a>
-                <a href="{{ url_for('admin_add_video_form') }}" class="tab-btn" style="margin-right: 10px;">➕ Добавить видео</a>
-                <a href="{{ url_for('admin_content') }}" class="tab-btn" style="margin-right: 10px;">Управление контентом</a>
-                <a href="{{ url_for('admin_access_settings') }}" class="tab-btn" style="margin-right: 10px;">⚙️ Настройки доступа</a>
-                <a href="{{ url_for('admin_logout') }}" class="tab-btn" style="background: linear-gradient(45deg, #ff6b6b, #ff4757);">Выйти</a>
-            </div>
-        </nav>
+<!-- templates/admin/dashboard.html -->
+{% extends 'admin/base.html' %}
 
-        <!-- Статистика -->
-        <div id="stats" class="tab-content active">
-            <h2 class="text-center mb-4" style="background: linear-gradient(45deg, #ff6b6b, #ff4757); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">📈 Статистика</h2>
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-number">{{ moments_count }}</div>
-                    <div class="stat-label">Моментов из кино</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number">{{ trailers_count }}</div>
-                    <div class="stat-label">Трейлеров</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number">{{ news_count }}</div>
-                    <div class="stat-label">Новостей</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number">{{ comments_count }}</div>
-                    <div class="stat-label">Комментариев</div>
-                </div>
-            </div>
-        </div>
+{% block title %}Статистика - Админ-панель{% endblock %}
 
-        <!-- Примечание: Встроенная форма "Добавить видео" удалена, так как теперь есть отдельная страница -->
-
-        <div style="text-align: center; margin-top: 50px;">
-            <a href="{{ url_for('index') }}" class="tab-btn">🏠 Вернуться к приложению</a>
-        </div>
+{% block content %}
+<!-- Статистика -->
+<h2 class="text-center mb-4" style="background: linear-gradient(45deg, #ff6b6b, #ff4757); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">📈 Статистика</h2>
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-number">{{ moments_count }}</div>
+        <div class="stat-label">Моментов из кино</div>
     </div>
+    <div class="stat-card">
+        <div class="stat-number">{{ trailers_count }}</div>
+        <div class="stat-label">Трейлеров</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-number">{{ news_count }}</div>
+        <div class="stat-label">Новостей</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-number">{{ comments_count }}</div>
+        <div class="stat-label">Комментариев</div>
+    </div>
+</div>
 
-    <script>
-        // Переключение вкладок (оставляем для совместимости, хотя теперь основная навигация через ссылки)
-        document.querySelectorAll('.tab-btn[data-tab]').forEach(tab => {
-            tab.addEventListener('click', e => {
-                e.preventDefault();
-                // В реальном приложении здесь должна быть логика переключения контента
-                // Но в вашем случае ссылки ведут на разные страницы, так что это не нужно
-                // Оставляем для потенциального будущего использования
-                 const target = tab.dataset.tab;
-                 document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-                 const targetContent = document.getElementById(target);
-                 if (targetContent) {
-                     targetContent.classList.add('active');
-                 }
-            });
-        });
-    </script>
-</body>
-</html>
+<div style="text-align: center; margin-top: 50px;">
+    <a href="{{ url_for('index') }}" class="tab-btn">🏠 Вернуться к приложению</a>
+</div>
+{% endblock %}
