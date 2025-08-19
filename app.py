@@ -227,7 +227,7 @@ def set_menu_button():
         app_url = f"{WEBHOOK_URL}/?mode=fullscreen"
         logger.info(f"URL для Menu Button: {app_url}")
         menu_button = MenuButtonWebApp(
-            text="🌌 КиноВселенная",
+            text="movies",  # <-- Изменено на "movies"
             web_app=WebAppInfo(url=app_url)
         )
         logger.info("Объект MenuButtonWebApp создан")
