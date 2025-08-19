@@ -13,7 +13,9 @@ from flask import (
     redirect, url_for, session, send_from_directory, abort
 )
 from werkzeug.utils import secure_filename
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, Bot, MenuButtonWebApp
+# ИСПРАВЛЕНИЕ: Импорт MenuButtonWebApp из telegram.menu_button
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, Bot
+from telegram.menu_button import MenuButtonWebApp # <<<--- Исправлен импорт
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 import redis
 import json
@@ -66,22 +68,14 @@ app.config['UPLOAD_FOLDER'] = 'uploads'
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 ALLOWED_VIDEO_EXTENSIONS = {'mp4', 'avi', 'mov', 'wmv', 'flv', 'webm'}
 ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
-
-
 def allowed_file(filename, allowed_exts):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in allowed_exts
-
-
 # --- Telegram Bot ---
 updater = None
 dp = None
 pending_video_data = {}
-
-
 # --- НОВОЕ: Кэш для прямых ссылок ---
 video_url_cache = {}
-
-
 def get_direct_video_url(file_id):
     """Преобразует file_id в прямую ссылку для веба"""
     bot_token = TOKEN
@@ -113,8 +107,6 @@ def get_direct_video_url(file_id):
     except Exception as e:
         logger.error(f"Неизвестная ошибка при получении ссылки для file_id {file_id}: {e}")
         return None
-
-
 def get_cached_direct_video_url(file_id, cache_time=3600):
     """Кэшированное получение прямой ссылки"""
     current_time = time.time()
@@ -133,8 +125,6 @@ def get_cached_direct_video_url(file_id, cache_time=3600):
         logger.debug(f"Ссылка для file_id {file_id} закэширована")
         return url
     return None
-
-
 # --- ИСПРАВЛЕНО: Функция для извлечения видео из поста Telegram ---
 # (Обновлённая версия с исправлением для PTB v13.15)
 async def extract_video_url_from_telegram_post(post_url):
@@ -228,8 +218,6 @@ async def extract_video_url_from_telegram_post(post_url):
     except Exception as e:
         logger.error(f"Ошибка извлечения видео из поста {post_url}: {e}", exc_info=True)
         return None, f"Ошибка при обработке ссылки на пост: {str(e)}"
-
-
 # Синхронная обертка для Flask
 def extract_video_url_sync(post_url):
     """Синхронная обертка для асинхронной функции извлечения видео"""
@@ -251,66 +239,74 @@ def extract_video_url_sync(post_url):
     except Exception as e:
         logger.error(f"Ошибка в синхронной обертке extract_video_url_sync: {e}", exc_info=True)
         return None, f"Ошибка обработки запроса: {e}"
-
-
 # --- НОВОЕ: Функция для установки Menu Button ---
-def set_menu_button(bot, chat_id=None):
-    """Устанавливает кнопку меню для бота (поканально)."""
+# ИСПРАВЛЕНИЕ: Используем urljoin для корректного формирования URL
+from urllib.parse import urljoin
+
+def set_menu_button():
+    """Устанавливает кнопку меню для бота"""
     if not TOKEN:
         logger.error("TELEGRAM_TOKEN не установлен для установки Menu Button")
         return
     try:
-        # URL вашего веб-приложения (без fullscreen)
-        app_url = WEBHOOK_URL.strip('/')
+        bot = Bot(token=TOKEN)
+        # URL вашего веб-приложения
+        # Используем urljoin для корректного формирования URL
+        app_url = urljoin(WEBHOOK_URL, "/?mode=fullscreen")
+        # Убедимся, что WEBHOOK_URL не заканчивается на /, чтобы избежать двойного слеша
+        # app_url = WEBHOOK_URL.rstrip('/') + '/?mode=fullscreen' # Альтернатива
         menu_button = MenuButtonWebApp(
-            text="Movies",  # Текст на кнопке
+            text="🌌 КиноВселенная",  # Текст на кнопке
             web_app=WebAppInfo(url=app_url)  # URL веб-приложения
         )
-        # Ставим кнопку для конкретного чата после первого /start
-        bot.set_chat_menu_button(chat_id=chat_id, menu_button=menu_button)
-        logger.info(f"✅ Menu Button установлена для chat_id={chat_id}: {app_url}")
+        # Устанавливаем кнопку меню для бота
+        # Это сделает кнопку доступной для всех пользователей
+        bot.set_chat_menu_button(menu_button=menu_button)
+        logger.info(f"✅ Menu Button установлена: {app_url}")
     except Exception as e:
         logger.error(f"❌ Ошибка установки Menu Button: {e}", exc_info=True)
-
 
 if TOKEN:
     updater = Updater(TOKEN, use_context=True)
     dp = updater.dispatcher
-
     # --- ИСПРАВЛЕНО: Обработчик команды /start ---
     def start(update, context):
         """Обработчик команды /start"""
-        user = update.message.from_user
-        telegram_id = str(user.id)
-        logger.info(f"/start от {telegram_id} (@{user.username})")
-        get_or_create_user(
-            telegram_id=telegram_id,
-            username=user.username,
-            first_name=user.first_name,
-            last_name=user.last_name
-        )
-        keyboard = [[
-            InlineKeyboardButton(
-                "🌌 КиноВселенная",
-                web_app=WebAppInfo(url=f"{WEBHOOK_URL}")  # убран ?mode=fullscreen
+        try: # Добавим обработку исключений
+            user = update.message.from_user
+            telegram_id = str(user.id)
+            get_or_create_user(
+                telegram_id=telegram_id,
+                username=user.username,
+                first_name=user.first_name,
+                last_name=user.last_name
             )
-        ]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        update.message.reply_text(
-            "🚀 Добро пожаловать в КиноВселенную!\n"
-            "✨ Исследуй космос кино\n"
-            "🎬 Лучшие моменты из фильмов\n"
-            "🎥 Свежие трейлеры\n"
-            "📰 Горячие новости\n"
-            "Нажми кнопку для входа в приложение",
-            reply_markup=reply_markup
-        )
-        # После первого вызова /start — устанавливаем Menu Button (Movies) для этого чата
-        try:
-            set_menu_button(context.bot, chat_id=update.effective_chat.id)
+            # Используем urljoin для согласованности
+            web_app_url = urljoin(WEBHOOK_URL, "/?mode=fullscreen")
+            keyboard = [[
+                InlineKeyboardButton(
+                    "🌌 КиноВселенная",
+                    web_app=WebAppInfo(url=web_app_url)
+                )
+            ]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            update.message.reply_text(
+                "🚀 Добро пожаловать в КиноВселенную!\n"
+                "✨ Исследуй космос кино\n"
+                "🎬 Лучшие моменты из фильмов\n"
+                "🎥 Свежие трейлеры\n"
+                "📰 Горячие новости\n"
+                "Нажми кнопку для входа в приложение",
+                reply_markup=reply_markup
+            )
+            logger.info(f"Команда /start выполнена для пользователя {user.username} ({telegram_id})")
         except Exception as e:
-            logger.error(f"Не удалось установить Menu Button после /start: {e}", exc_info=True)
-
+            logger.error(f"Ошибка в обработчике /start для пользователя {user.username if 'user' in locals() else 'unknown'}: {e}", exc_info=True)
+            # Отправим сообщение об ошибке пользователю, если возможно
+            try:
+                update.message.reply_text("Произошла ошибка при обработке команды. Пожалуйста, попробуйте позже.")
+            except:
+                pass # Игнорируем ошибки при отправке сообщения об ошибке
 
 # --- Helpers ---
 def save_uploaded_file(file_storage, allowed_exts):
@@ -321,8 +317,6 @@ def save_uploaded_file(file_storage, allowed_exts):
         file_storage.save(path)
         return f"/uploads/{unique_name}"
     return None
-
-
 def cache_get(key):
     if not redis_client:
         return None
@@ -331,24 +325,18 @@ def cache_get(key):
         return json.loads(raw) if raw else None
     except Exception:
         return None
-
-
 def cache_set(key, value, expire=300):
     if redis_client:
         try:
             redis_client.set(key, json.dumps(value), ex=expire)
         except Exception:
             pass
-
-
 def cache_delete(key):
     if redis_client:
         try:
             redis_client.delete(key)
         except Exception:
             pass
-
-
 # --- ИСПРАВЛЕНО: Полностью исправленная функция build_extra_map ---
 def build_extra_map(data, item_type_plural):
     """Добавляет реакции и комментарии к каждому элементу данных."""
@@ -360,18 +348,19 @@ def build_extra_map(data, item_type_plural):
         comments_count = len(get_comments(item_type_plural, item_id) or [])
         extra[item_id] = {'reactions': reactions, 'comments_count': comments_count}
     return extra
-
-
 # --- Routes (пользовательские) ---
 @app.route('/')
 def index():
     return render_template('index.html')
-
-
 @app.route('/moments')
 def moments():
     try:
         logger.info("Запрос к /moments")
+        # Отключаем кэш для теста
+        # cached = cache_get('moments_list')
+        # if cached:
+        #     logger.info("moments_list загружен из кэша")
+        #     return render_template('moments.html', moments=cached, extra_by_id={})
         logger.info("Получение всех моментов из БД...")
         data = get_all_moments() or []
         logger.info(f"Получено {len(data)} моментов из БД")
@@ -382,6 +371,8 @@ def moments():
         combined_data = []
         for row in data:
             item_id = row[0]
+            # Создаем словарь для удобства работы в шаблоне
+            # Предполагаем, что row это tuple: (id, title, description, video_url, created_at)
             item_dict = {
                 'id': row[0],
                 'title': row[1] if len(row) > 1 else '',
@@ -389,7 +380,9 @@ def moments():
                 'video_url': row[3] if len(row) > 3 else '',
                 'created_at': row[4] if len(row) > 4 else None
             }
+            # Добавляем extra данные
             extra_info = extra_map.get(item_id, {'reactions': {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}, 'comments_count': 0})
+            # Убедимся, что reactions - это словарь
             if isinstance(extra_info.get('reactions'), dict):
                 item_dict['reactions'] = extra_info['reactions']
             else:
@@ -397,12 +390,12 @@ def moments():
             item_dict['comments_count'] = extra_info.get('comments_count', 0)
             combined_data.append(item_dict)
         logger.info("Данные объединены успешно")
+        # Передаем объединенный список
         return render_template('moments.html', moments=combined_data)
+        # --- ИЗМЕНЕНИЯ КОНЕЦ ---
     except Exception as e:
         logger.error(f"API add_moment error: {e}", exc_info=True)
         return jsonify(success=False, error=str(e)), 500
-
-
 @app.route('/trailers')
 def trailers():
     try:
@@ -417,6 +410,8 @@ def trailers():
         combined_data = []
         for row in data:
             item_id = row[0]
+            # Создаем словарь для удобства работы в шаблоне
+            # Предполагаем, что row это tuple: (id, title, description, video_url, created_at)
             item_dict = {
                 'id': row[0],
                 'title': row[1] if len(row) > 1 else '',
@@ -424,7 +419,9 @@ def trailers():
                 'video_url': row[3] if len(row) > 3 else '',
                 'created_at': row[4] if len(row) > 4 else None
             }
+            # Добавляем extra данные
             extra_info = extra_map.get(item_id, {'reactions': {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}, 'comments_count': 0})
+            # Убедимся, что reactions - это словарь
             if isinstance(extra_info.get('reactions'), dict):
                 item_dict['reactions'] = extra_info['reactions']
             else:
@@ -433,11 +430,10 @@ def trailers():
             combined_data.append(item_dict)
         logger.info("Данные объединены успешно")
         return render_template('trailers.html', trailers=combined_data)
+        # --- ИЗМЕНЕНИЯ КОНЕЦ ---
     except Exception as e:
         logger.error(f"API add_trailer error: {e}", exc_info=True)
         return jsonify(success=False, error=str(e)), 500
-
-
 @app.route('/news')
 def news():
     try:
@@ -452,6 +448,8 @@ def news():
         combined_data = []
         for row in data:
             item_id = row[0]
+            # Создаем словарь для удобства работы в шаблоне
+            # Предполагаем, что row это tuple: (id, title, text, image_url, created_at)
             item_dict = {
                 'id': row[0],
                 'title': row[1] if len(row) > 1 else '',
@@ -459,7 +457,9 @@ def news():
                 'image_url': row[3] if len(row) > 3 else '',
                 'created_at': row[4] if len(row) > 4 else None
             }
+            # Добавляем extra данные
             extra_info = extra_map.get(item_id, {'reactions': {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}, 'comments_count': 0})
+            # Убедимся, что reactions - это словарь
             if isinstance(extra_info.get('reactions'), dict):
                 item_dict['reactions'] = extra_info['reactions']
             else:
@@ -468,11 +468,10 @@ def news():
             combined_data.append(item_dict)
         logger.info("Данные объединены успешно")
         return render_template('news.html', news=combined_data)
+        # --- ИЗМЕНЕНИЯ КОНЕЦ ---
     except Exception as e:
         logger.error(f"API add_news error: {e}", exc_info=True)
         return jsonify(success=False, error=str(e)), 500
-
-
 # --- НОВОЕ: Детальные страницы ---
 @app.route('/moments/<int:item_id>')
 def moment_detail(item_id):
@@ -485,6 +484,7 @@ def moment_detail(item_id):
     reactions = get_reactions_count('moments', item_id)
     comments = get_comments('moments', item_id)
     logger.info(f"Момент {item_id} найден: {item[1] if len(item) > 1 else 'Без названия'}")
+    # Преобразуем кортеж item в словарь для шаблона
     item_dict = {
         'id': item[0],
         'title': item[1] if len(item) > 1 else '',
@@ -493,8 +493,6 @@ def moment_detail(item_id):
         'created_at': item[4] if len(item) > 4 else None
     }
     return render_template('moment_detail.html', item=item_dict, reactions=reactions, comments=comments)
-
-
 @app.route('/trailers/<int:item_id>')
 def trailer_detail(item_id):
     """Отображает страницу одного трейлера."""
@@ -506,6 +504,7 @@ def trailer_detail(item_id):
     reactions = get_reactions_count('trailers', item_id)
     comments = get_comments('trailers', item_id)
     logger.info(f"Трейлер {item_id} найден: {item[1] if len(item) > 1 else 'Без названия'}")
+    # Преобразуем кортеж item в словарь для шаблона
     item_dict = {
         'id': item[0],
         'title': item[1] if len(item) > 1 else '',
@@ -514,8 +513,6 @@ def trailer_detail(item_id):
         'created_at': item[4] if len(item) > 4 else None
     }
     return render_template('trailer_detail.html', item=item_dict, reactions=reactions, comments=comments)
-
-
 @app.route('/news/<int:item_id>')
 def news_detail(item_id):
     """Отображает страницу одной новости."""
@@ -527,6 +524,7 @@ def news_detail(item_id):
     reactions = get_reactions_count('news', item_id)
     comments = get_comments('news', item_id)
     logger.info(f"Новость {item_id} найдена: {item[1] if len(item) > 1 else 'Без заголовка'}")
+    # Преобразуем кортеж item в словарь для шаблона
     item_dict = {
         'id': item[0],
         'title': item[1] if len(item) > 1 else '',
@@ -535,15 +533,11 @@ def news_detail(item_id):
         'created_at': item[4] if len(item) > 4 else None
     }
     return render_template('news_detail.html', item=item_dict, reactions=reactions, comments=comments)
-
-
 # --- API: добавление контента ---
 def _get_payload():
     if request.is_json:
         return request.get_json(silent=True) or {}
     return request.form or {}
-
-
 # --- ОБНОВЛЕННЫЕ API ENDPOINTS ---
 @app.route('/api/add_moment', methods=['POST'])
 def api_add_moment():
@@ -582,8 +576,6 @@ def api_add_moment():
     except Exception as e:
         logger.error(f"API add_moment error: {e}", exc_info=True)
         return jsonify(success=False, error=str(e)), 500
-
-
 @app.route('/api/add_trailer', methods=['POST'])
 def api_add_trailer():
     try:
@@ -617,8 +609,6 @@ def api_add_trailer():
     except Exception as e:
         logger.error(f"API add_trailer error: {e}", exc_info=True)
         return jsonify(success=False, error=str(e)), 500
-
-
 @app.route('/api/add_news', methods=['POST'])
 def api_add_news():
     try:
@@ -627,6 +617,11 @@ def api_add_news():
         # В новостях может быть как text, так и description
         text = payload.get('text', payload.get('description', '')).strip()
         # --- ИЗМЕНЕНИЯ НАЧАЛО ---
+        # Для новостей видео может быть не обязательно, но если нужно:
+        # video_url = payload.get('video_url', '').strip()
+        # if video_url and ('t.me/' in video_url):
+        #     # Аналогично для новостей, если добавите блок видео
+        #     pass
         image_url = payload.get('image_url', '').strip()
         if not image_url and 'image_file' in request.files:
             saved = save_uploaded_file(request.files['image_file'], ALLOWED_IMAGE_EXTENSIONS)
@@ -640,13 +635,9 @@ def api_add_news():
     except Exception as e:
         logger.error(f"API add_news error: {e}", exc_info=True)
         return jsonify(success=False, error=str(e)), 500
-
-
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
-
-
 # --- Reactions & Comments ---
 @app.route('/api/reaction', methods=['POST'])
 def api_add_reaction():
@@ -661,8 +652,6 @@ def api_add_reaction():
     except Exception as e:
         logger.error(f"API add_reaction error: {e}", exc_info=True)
         return jsonify(success=False, error=str(e)), 500
-
-
 @app.route('/api/comments', methods=['GET'])
 def api_get_comments():
     try:
@@ -673,8 +662,6 @@ def api_get_comments():
     except Exception as e:
         logger.error(f"API get_comments error: {e}", exc_info=True)
         return jsonify(comments=[], error=str(e)), 500
-
-
 @app.route('/api/comment', methods=['POST'])
 def api_add_comment():
     try:
@@ -688,8 +675,6 @@ def api_add_comment():
     except Exception as e:
         logger.error(f"API add_comment error: {e}", exc_info=True)
         return jsonify(success=False, error=str(e)), 500
-
-
 # --- Admin ---
 @app.route('/admin/login', methods=['GET', 'POST'])
 def admin_login():
@@ -701,14 +686,10 @@ def admin_login():
             return redirect(url_for('admin_dashboard'))
         return render_template('admin/login.html', error='Неверный логин или пароль')
     return render_template('admin/login.html')
-
-
 @app.route('/admin/logout')
 def admin_logout():
     session.pop('admin', None)
     return redirect(url_for('admin_login'))
-
-
 def admin_required(func):
     from functools import wraps
     @wraps(func)
@@ -717,8 +698,6 @@ def admin_required(func):
             return redirect(url_for('admin_login'))
         return func(*args, **kwargs)
     return wrapper
-
-
 @app.route('/admin')
 @admin_required
 def admin_dashboard():
@@ -728,16 +707,12 @@ def admin_dashboard():
                            trailers_count=stats.get('trailers', 0),
                            news_count=stats.get('news', 0),
                            comments_count=stats.get('comments', 0))
-
-
 # --- НОВЫЙ МАРШРУТ: Отображение формы добавления видео ---
 @app.route('/admin/add_video')
 @admin_required
 def admin_add_video_form():
     """Отображает форму добавления видео."""
     return render_template('admin/add_video.html')
-
-
 @app.route('/admin/content')
 @admin_required
 def admin_content():
@@ -745,22 +720,13 @@ def admin_content():
     trailers = get_all_trailers() or []
     news = get_all_news() or []
     return render_template('admin/content.html', moments=moments, trailers=trailers, news=news)
-
-
 # Исправленные функции удаления (если они отсутствуют в database.py)
-
 def delete_moment(item_id):
     delete_item('moments', item_id)
-
-
 def delete_trailer(item_id):
     delete_item('trailers', item_id)
-
-
 def delete_news(item_id):
     delete_item('news', item_id)
-
-
 @app.route('/admin/delete/<content_type>/<int:content_id>')
 @admin_required
 def admin_delete(content_type, content_id):
@@ -774,8 +740,6 @@ def admin_delete(content_type, content_id):
         delete_news(content_id)
         cache_delete('news_list')
     return redirect(url_for('admin_content'))
-
-
 @app.route('/admin/access')
 @admin_required
 def admin_access_settings():
@@ -784,16 +748,12 @@ def admin_access_settings():
     news_roles = get_access_settings('news')
     return render_template('admin/access/settings.html',
                            moment_roles=moment_roles, trailer_roles=trailer_roles, news_roles=news_roles)
-
-
 @app.route('/admin/access/update/<content_type>', methods=['POST'])
 @admin_required
 def admin_update_access(content_type):
     roles = request.form.getlist('roles')
     update_access_settings(content_type, roles)
     return redirect(url_for('admin_access_settings'))
-
-
 # --- НОВЫЙ МАРШРУТ: API для формы add_video.html ---
 @app.route('/admin/add_video_json', methods=['POST'])
 @admin_required
@@ -832,6 +792,9 @@ def admin_add_video_json():
             add_trailer(title, description, video_url)
             cache_delete('trailers_list')
         elif category == 'news':
+            # Для новостей, если вы хотите добавлять видео, нужно изменить add_news
+            # Пока что добавляем как изображение, если это ссылка на изображение
+            # Или оставляем image_url пустым
             add_news(title, description, video_url if video_url.startswith(('http://', 'https://')) else None)
             cache_delete('news_list')
         logger.info(f"[JSON API] Добавлен {category}: {title}")
@@ -839,8 +802,6 @@ def admin_add_video_json():
     except Exception as e:
         logger.error(f"[JSON API] add_video error: {e}", exc_info=True)
         return jsonify(success=False, error=str(e)), 500
-
-
 # --- Telegram Add Video Command ---
 def add_video_command(update, context):
     user = update.message.from_user
@@ -859,8 +820,6 @@ def add_video_command(update, context):
         f"🎬 Добавление '{parts[1]}' с названием '{parts[2]}'. "
         f"Пришли прямой URL видео (https://...) или отправь видео файлом."
     )
-
-
 def handle_pending_video_text(update, context):
     user = update.message.from_user
     telegram_id = str(user.id)
@@ -883,8 +842,6 @@ def handle_pending_video_text(update, context):
     cache_delete('moments_list')
     cache_delete('trailers_list')
     cache_delete('news_list')
-
-
 # --- ИСПРАВЛЕННЫЙ обработчик файлов ---
 def handle_pending_video_file(update, context):
     user = update.message.from_user
@@ -904,6 +861,7 @@ def handle_pending_video_file(update, context):
     file_id = update.message.video.file_id
     logger.info(f"Получен file_id: {file_id}")
     # ✅ ИСПРАВЛЕНИЕ: Получаем ПОЛНУЮ прямую ссылку с кэшированием
+    # video_url = context.bot.get_file(file_id).file_path # Старый способ - неправильный
     video_url = get_cached_direct_video_url(file_id)  # Новый способ - правильный
     if not video_url:
         error_msg = "❌ Не удалось получить прямую ссылку на видео из Telegram"
@@ -927,31 +885,30 @@ def handle_pending_video_file(update, context):
         cache_delete('news_list')
     except Exception as e:
         error_msg = f"❌ Ошибка сохранения в БД: {e}"
-        logger.error(error_msg, exc_info=True)
+        logger.error(error_msg, exc_info=True)  # Добавлено exc_info для полного трейса
         update.message.reply_text(error_msg)
-
-
 if dp:
     # --- ИСПРАВЛЕНО: Добавлен обработчик команды /start ---
     dp.add_handler(CommandHandler('start', start))
     dp.add_handler(CommandHandler('add_video', add_video_command))
     dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_pending_video_text))
     dp.add_handler(MessageHandler(Filters.video & ~Filters.command, handle_pending_video_file))
-
-
 # --- Start Bot ---
 def start_bot():
     if updater:
+        logger.info("Запуск Telegram бота...")
+        updater.start_polling()
+        logger.info("Telegram бот запущен и_polling.")
+        # --- НОВОЕ: Установка Menu Button после запуска ---
+        logger.info("Установка Menu Button...")
         try:
-            logger.info("Запуск Telegram бота...")
-            updater.start_polling()
-            logger.info("Telegram бот запущен и работает в режиме polling.")
+            set_menu_button()
+            logger.info("Menu Button успешно установлена.")
         except Exception as e:
-            logger.error(f"Ошибка запуска бота: {e}", exc_info=True)
-        # Важно: НЕ устанавливаем глобально Menu Button здесь,
-        # чтобы первый /start сработал как команда.
-
-
+            logger.error(f"Не удалось установить Menu Button при запуске: {e}")
+        # --- КОНЕЦ НОВОГО ---
+        # updater.idle() блокирует основной поток, что не нужно в Flask приложении
+        # updater.idle()
 # --- Main ---
 if __name__ == '__main__':
     try:
