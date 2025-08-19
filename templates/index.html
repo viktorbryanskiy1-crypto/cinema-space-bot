@@ -50,6 +50,11 @@
     
     <!-- Подключаем Telegram WebApp API -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script>
+        // Фиксируем WebApp сверху, чтобы свайп не скрывал его
+        window.Telegram.WebApp.ready();
+        window.Telegram.WebApp.expand();
+    </script>
     <!-- Подключаем наш основной JS -->
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
