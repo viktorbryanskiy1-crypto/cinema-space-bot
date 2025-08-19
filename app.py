@@ -14,7 +14,7 @@ from flask import (
 )
 from werkzeug.utils import secure_filename
 # ИСПРАВЛЕНО: MenuButtonWebApp импортируется напрямую из telegram для v13.15
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, Bot, MenuButtonWebApp
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, Bot, MenuButtonWebApp, Update
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 import redis
 import json
@@ -238,34 +238,35 @@ def extract_video_url_sync(post_url):
     except Exception as e:
         logger.error(f"Ошибка в синхронной обертке extract_video_url_sync: {e}", exc_info=True)
         return None, f"Ошибка обработки запроса: {e}"
-# --- НОВОЕ: Функция для установки Menu Button ---
-# ИСПРАВЛЕНИЕ: Используем urljoin для корректного формирования URL
-from urllib.parse import urljoin
-
+# --- НОВОЕ: Функция для установки Menu Button и Webhook ---
 def set_menu_button():
-    """Устанавливает кнопку меню для бота"""
+    """Устанавливает кнопку меню для бота и настраивает webhook"""
     if not TOKEN:
         logger.error("TELEGRAM_TOKEN не установлен для установки Menu Button")
         return
     try:
-        logger.info("Начало установки Menu Button")
         bot = Bot(token=TOKEN)
-        # URL вашего веб-приложения
-        # Используем urljoin для корректного формирования URL
-        app_url = urljoin(WEBHOOK_URL, "/?mode=fullscreen")
-        logger.info(f"Сформированный URL для Menu Button: {app_url}")
+        # --- НОВОЕ: Установка Webhook ---
+        # URL для получения обновлений от Telegram
+        webhook_url = f"{WEBHOOK_URL.rstrip('/')}/{TOKEN}"
+        logger.info(f"Попытка установки Telegram Webhook на: {webhook_url}")
+        # Устанавливаем webhook
+        bot.set_webhook(url=webhook_url)
+        logger.info(f"✅ Telegram Webhook установлен на: {webhook_url}")
+        # --- КОНЕЦ НОВОГО ---
         
+        # URL вашего веб-приложения для Menu Button
+        app_url = WEBHOOK_URL.strip('/') + '/?mode=fullscreen'
         menu_button = MenuButtonWebApp(
             text="🌌 КиноВселенная",  # Текст на кнопке
             web_app=WebAppInfo(url=app_url)  # URL веб-приложения
         )
         # Устанавливаем кнопку меню для бота
         # Это сделает кнопку доступной для всех пользователей
-        logger.info("Отправка запроса set_chat_menu_button...")
         bot.set_chat_menu_button(menu_button=menu_button)
         logger.info(f"✅ Menu Button установлена: {app_url}")
     except Exception as e:
-        logger.error(f"❌ Ошибка установки Menu Button: {e}", exc_info=True)
+        logger.error(f"❌ Ошибка установки Menu Button или Webhook: {e}", exc_info=True)
 
 if TOKEN:
     updater = Updater(TOKEN, use_context=True)
@@ -287,8 +288,7 @@ if TOKEN:
             )
             logger.info("Пользователь создан/обновлен в БД")
             
-            # Используем urljoin для согласованности и корректности
-            web_app_url = urljoin(WEBHOOK_URL, "/?mode=fullscreen")
+            web_app_url = f"{WEBHOOK_URL}?mode=fullscreen"
             logger.info(f"Сформированный URL кнопки: {web_app_url}")
             
             keyboard = [[
@@ -362,6 +362,43 @@ def build_extra_map(data, item_type_plural):
 @app.route('/')
 def index():
     return render_template('index.html')
+
+# --- НОВОЕ: Маршрут для Webhook от Telegram ---
+@app.route('/<string:token>', methods=['POST']) # Путь будет /ваш_токен_бота
+def telegram_webhook(token):
+    # Проверяем, что токен в URL совпадает с токеном бота
+    if token != TOKEN:
+        logger.warning(f"Получен запрос webhook с неверным токеном: {token}")
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    # Получаем JSON-данные из запроса
+    json_string = request.get_data().decode('utf-8')
+    logger.debug(f"Получено обновление webhook: {json_string[:200]}...") # Логируем начало, чтобы не засорять логи
+
+    try:
+        # Создаем объект Update из JSON
+        update = Update.de_json(json.loads(json_string), updater.bot)
+        # Помещаем обновление в очередь обработки бота
+        updater.update_queue.put(update)
+        logger.info("Обновление из webhook помещено в очередь обработки")
+        return jsonify({'status': 'ok'}), 200
+    except Exception as e:
+        logger.error(f"Ошибка обработки webhook обновления: {e}", exc_info=True)
+        return jsonify({'error': 'Internal Server Error'}), 500
+        
+# --- НОВОЕ: Маршрут для проверки webhook ---
+@app.route('/webhook-info')
+def webhook_info():
+    if not TOKEN:
+        return jsonify({'error': 'TELEGRAM_TOKEN not set'}), 500
+    try:
+        bot = Bot(token=TOKEN)
+        info = bot.get_webhook_info()
+        return jsonify(info.to_dict())
+    except Exception as e:
+        logger.error(f"Ошибка получения информации о webhook: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/moments')
 def moments():
     try:
@@ -906,19 +943,22 @@ if dp:
 # --- Start Bot ---
 def start_bot():
     if updater:
-        logger.info("Запуск Telegram бота...")
-        updater.start_polling()
-        logger.info("Telegram бот запущен и_polling.")
-        # --- НОВОЕ: Установка Menu Button после запуска ---
-        logger.info("Установка Menu Button...")
+        logger.info("Настройка Telegram бота для работы через Webhook...")
+        # --- ИЗМЕНЕНО: Установка Menu Button и Webhook ---
+        logger.info("Установка Menu Button и Webhook...")
         try:
-            set_menu_button()
-            logger.info("Menu Button успешно установлена (или попытка завершена).")
+            set_menu_button() # Эта функция теперь также устанавливает webhook
+            logger.info("Menu Button и Webhook успешно установлены.")
         except Exception as e:
-            logger.error(f"Не удалось установить Menu Button при запуске: {e}")
-        # --- КОНЕЦ НОВОГО ---
+            logger.error(f"Не удалось установить Menu Button или Webhook при запуске: {e}")
+        # --- КОНЕЦ ИЗМЕНЕНИЙ ---
         # updater.idle() блокирует основной поток, что не нужно в Flask приложении
-        # updater.idle()
+        # updater.idle() 
+        # start_polling НЕ вызываем, так как используем webhook
+        # updater.start_polling() 
+        logger.info("Telegram бот готов принимать обновления через Webhook.")
+    # updater.idle() блокирует основной поток, что не нужно в Flask приложении
+    # updater.idle()
 # --- Main ---
 if __name__ == '__main__':
     try:
@@ -927,10 +967,8 @@ if __name__ == '__main__':
         logger.info("База данных инициализирована.")
     except Exception as e:
         logger.error(f"DB init error: {e}", exc_info=True)
-    logger.info("Запуск Telegram бота в отдельном потоке...")
-    bot_thread = threading.Thread(target=start_bot, daemon=True)
-    bot_thread.start()
-    logger.info("Поток Telegram бота запущен.")
+    logger.info("Запуск Telegram бота...")
+    start_bot() # Прямой запуск без потока
     port = int(os.environ.get('PORT', 10000))
     logger.info(f"Запуск Flask приложения на порту {port}...")
     app.run(host='0.0.0.0', port=port)
