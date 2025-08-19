@@ -13,9 +13,8 @@ from flask import (
     redirect, url_for, session, send_from_directory, abort
 )
 from werkzeug.utils import secure_filename
-# ИСПРАВЛЕНИЕ: Импорт MenuButtonWebApp из telegram.menu_button
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, Bot
-from telegram.menu_button import MenuButtonWebApp # <<<--- Исправлен импорт
+# ИСПРАВЛЕНО: MenuButtonWebApp импортируется напрямую из telegram для v13.15
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, Bot, MenuButtonWebApp
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 import redis
 import json
