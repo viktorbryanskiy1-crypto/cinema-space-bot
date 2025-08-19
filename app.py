@@ -349,8 +349,8 @@ def telegram_webhook(token):
         json_string = request.get_data().decode('utf-8')
         logger.debug(f"Получено обновление webhook: {json_string[:200]}...")
         update = Update.de_json(json.loads(json_string), updater.bot)
-        updater.update_queue.put(update)
-        logger.info("Обновление из webhook помещено в очередь обработки")
+        updater.dispatcher.process_update(update)
+        logger.info("Обновление из webhook обработано")
         return jsonify({'status': 'ok'}), 200
     except Exception as e:
         logger.error(f"Ошибка обработки webhook обновления: {e}", exc_info=True)
