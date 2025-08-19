@@ -212,22 +212,16 @@ def extract_video_url_sync(post_url):
         logger.error(f"Ошибка в синхронной обертке extract_video_url_sync: {e}", exc_info=True)
         return None, f"Ошибка обработки запроса: {e}"
 
-# --- НОВОЕ: Функция для установки Menu Button и Webhook ---
+# --- Функция для установки Menu Button ---
 def set_menu_button():
-    """Устанавливает кнопку меню для бота и настраивает webhook"""
+    """Устанавливает кнопку меню для бота"""
     if not TOKEN:
         logger.error("TELEGRAM_TOKEN не установлен для установки Menu Button")
-        return
+        return False
     try:
         logger.info("Начало выполнения set_menu_button")
         bot = Bot(token=TOKEN)
         logger.info("Объект Bot создан")
-        
-        # Установка Webhook
-        webhook_url = f"{WEBHOOK_URL}/{TOKEN}"
-        logger.info(f"Попытка установки Telegram Webhook на: {webhook_url}")
-        bot.set_webhook(url=webhook_url)
-        logger.info(f"✅ Telegram Webhook установлен на: {webhook_url}")
         
         # Установка Menu Button
         app_url = f"{WEBHOOK_URL}/?mode=fullscreen"
@@ -239,14 +233,16 @@ def set_menu_button():
         logger.info("Объект MenuButtonWebApp создан")
         bot.set_chat_menu_button(menu_button=menu_button)
         logger.info(f"✅ Menu Button установлена: {app_url}")
+        return True
     except Exception as e:
-        logger.error(f"❌ КРИТИЧЕСКАЯ ОШИБКА в set_menu_button: {e}", exc_info=True)
+        logger.error(f"❌ ОШИБКА в set_menu_button: {e}", exc_info=True)
+        return False
 
 if TOKEN:
     updater = Updater(TOKEN, use_context=True)
     dp = updater.dispatcher
     
-    # --- ИСПРАВЛЕНО: Обработчик команды /start ---
+    # --- Обработчик команды /start ---
     def start(update, context):
         """Обработчик команды /start"""
         try:
@@ -289,6 +285,19 @@ if TOKEN:
             logger.info("Сообщение отправлено успешно")
         except Exception as e:
             logger.error(f"КРИТИЧЕСКАЯ ОШИБКА в обработчике /start: {e}", exc_info=True)
+
+    # --- Обработчик команды /menu для установки Menu Button ---
+    def menu_command(update, context):
+        """Команда для установки/переустановки Menu Button"""
+        try:
+            success = set_menu_button()
+            if success:
+                update.message.reply_text("✅ Кнопка меню успешно установлена/обновлена!")
+            else:
+                update.message.reply_text("❌ Ошибка установки кнопки меню")
+        except Exception as e:
+            logger.error(f"Ошибка в /menu: {e}")
+            update.message.reply_text("❌ Ошибка при установке кнопки меню")
 
 # --- Helpers ---
 def save_uploaded_file(file_storage, allowed_exts):
@@ -338,7 +347,7 @@ def build_extra_map(data, item_type_plural):
 def index():
     return render_template('index.html')
 
-# --- НОВОЕ: Маршрут для Webhook от Telegram ---
+# --- Маршрут для Webhook от Telegram ---
 @app.route('/<string:token>', methods=['POST'])
 def telegram_webhook(token):
     if token != TOKEN:
@@ -356,7 +365,7 @@ def telegram_webhook(token):
         logger.error(f"Ошибка обработки webhook обновления: {e}", exc_info=True)
         return jsonify({'error': 'Internal Server Error'}), 500
 
-# --- НОВОЕ: Маршрут для проверки webhook ---
+# --- Маршрут для проверки webhook ---
 @app.route('/webhook-info')
 def webhook_info():
     if not TOKEN:
@@ -871,6 +880,7 @@ def handle_pending_video_file(update, context):
 
 if dp:
     dp.add_handler(CommandHandler('start', start))
+    dp.add_handler(CommandHandler('menu', menu_command))
     dp.add_handler(CommandHandler('add_video', add_video_command))
     dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_pending_video_text))
     dp.add_handler(MessageHandler(Filters.video & ~Filters.command, handle_pending_video_file))
@@ -879,12 +889,12 @@ if dp:
 def start_bot():
     if updater:
         logger.info("Настройка Telegram бота для работы через Webhook...")
-        logger.info("Установка Menu Button и Webhook...")
+        logger.info("Установка Menu Button...")
         try:
             set_menu_button()
-            logger.info("Menu Button и Webhook успешно установлены.")
+            logger.info("Menu Button успешно установлена.")
         except Exception as e:
-            logger.error(f"Не удалось установить Menu Button или Webhook при запуске: {e}")
+            logger.error(f"Не удалось установить Menu Button при запуске: {e}")
         logger.info("Telegram бот готов принимать обновления через Webhook.")
 
 # --- Main ---
