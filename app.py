@@ -34,7 +34,6 @@ logger = logging.getLogger(__name__)
 
 # --- Config ---
 TOKEN = os.environ.get('TELEGRAM_TOKEN')
-# Исправлено: убраны лишние пробелы
 WEBHOOK_URL = os.environ.get('WEBHOOK_URL', 'https://cinema-space-bot.onrender.com').strip().rstrip('/')
 REDIS_URL = os.environ.get('REDIS_URL', None)
 
@@ -79,6 +78,7 @@ pending_video_data = {}
 # --- НОВОЕ: Кэш для прямых ссылок ---
 video_url_cache = {}
 
+# --- ОПТИМИЗАЦИЯ: Увеличенное время кэширования ---
 def get_direct_video_url(file_id):
     """Преобразует file_id в прямую ссылку для веба"""
     bot_token = TOKEN
@@ -86,7 +86,6 @@ def get_direct_video_url(file_id):
         logger.error("TELEGRAM_TOKEN не установлен для генерации ссылки")
         return None
     try:
-        # ИСПРАВЛЕНО: Убраны лишние пробелы в URL
         file_info_url = f"https://api.telegram.org/bot{bot_token}/getFile?file_id={file_id}"
         logger.debug(f"Запрос к Telegram API: {file_info_url}")
         response = requests.get(file_info_url, timeout=10)
@@ -97,7 +96,6 @@ def get_direct_video_url(file_id):
             logger.error(f"Ошибка от Telegram API: {json_response}")
             return None
         file_path = json_response['result']['file_path']
-        # ИСПРАВЛЕНО: Убраны лишние пробелы в URL
         direct_url = f"https://api.telegram.org/file/bot{bot_token}/{file_path}"
         logger.info(f"Сгенерирована прямая ссылка для file_id {file_id}")
         return direct_url
@@ -111,7 +109,8 @@ def get_direct_video_url(file_id):
         logger.error(f"Неизвестная ошибка при получении ссылки для file_id {file_id}: {e}")
         return None
 
-def get_cached_direct_video_url(file_id, cache_time=3600):  # Увеличено до 1 часа
+# --- ОПТИМИЗАЦИЯ: Увеличенное время кэширования до 4 часов ---
+def get_cached_direct_video_url(file_id, cache_time=14400):  # 4 часа вместо 1
     """Кэшированное получение прямой ссылки"""
     current_time = time.time()
     if file_id in video_url_cache:
@@ -128,7 +127,6 @@ def get_cached_direct_video_url(file_id, cache_time=3600):  # Увеличено
     return None
 
 # --- ИСПРАВЛЕННАЯ Функция для извлечения видео из поста Telegram ---
-# (Обновлённая версия: пересылает сообщения только в тестовую группу)
 async def extract_video_url_from_telegram_post(post_url):
     """
     Извлекает прямую ссылку на видео из поста Telegram.
@@ -138,7 +136,6 @@ async def extract_video_url_from_telegram_post(post_url):
     try:
         logger.info(f"[ИЗВЛЕЧЕНИЕ] Попытка извлечь видео из поста: {post_url}")
         
-        # Парсим ссылку
         post_url = post_url.strip()
         public_match = re.search(r'https?://t\.me/([^/\s]+)/(\d+)', post_url)
         private_match = re.search(r'https?://t.me/c/(\d+)/(\d+)', post_url)
@@ -164,24 +161,20 @@ async def extract_video_url_from_telegram_post(post_url):
 
         bot = Bot(token=TOKEN)
 
-        # --- ИСПРАВЛЕНИЕ: Всегда пересылаем в тестовую группу ---
-        # Это предотвращает дублирование в исходном канале
-        YOUR_TEST_CHAT_ID = -1003045387627 # <<<--- ВАШ ID ТЕСТОВОЙ ГРУППЫ
+        YOUR_TEST_CHAT_ID = -1003045387627
         
         try:
             logger.debug(f"[ИЗВЛЕЧЕНИЕ] Пересылаем сообщение в тестовую группу {YOUR_TEST_CHAT_ID}...")
-            # ИСПРАВЛЕНО: Убран await, так как forward_message возвращает объект Message, а не coroutine
             forwarded_message = bot.forward_message(
-                chat_id=YOUR_TEST_CHAT_ID,        # <<<--- ВСЕГДА в тестовую группу
-                from_chat_id=chat_id_or_username, # Откуда - из исходного чата
-                message_id=message_id            # Какое сообщение
+                chat_id=YOUR_TEST_CHAT_ID,
+                from_chat_id=chat_id_or_username,
+                message_id=message_id
             )
             message = forwarded_message
             logger.info("[ИЗВЛЕЧЕНИЕ] Сообщение успешно получено через forward_message (в тестовую группу)")
         except Exception as e1:
             logger.error(f"[ИЗВЛЕЧЕНИЕ] Не удалось получить сообщение через forward: {e1}")
             return None, "Не удалось получить сообщение. Убедитесь, что бот имеет доступ к сообщению."
-        # --- КОНЕЦ ИСПРАВЛЕНИЯ ---
 
         if not message:
             logger.error("[ИЗВЛЕЧЕНИЕ] Сообщение не найдено или бот не имеет доступа")
@@ -242,7 +235,6 @@ def refresh_video_url():
             
         logger.info(f"[ОБНОВЛЕНИЕ ССЫЛКИ] Запрошено обновление для ссылки: {post_url[:50]}...")
         
-        # Извлекаем новую ссылку
         direct_url, error = extract_video_url_sync(post_url)
         if direct_url:
             logger.info(f"[ОБНОВЛЕНИЕ ССЫЛКИ] Новая ссылка успешно получена")
@@ -266,11 +258,10 @@ def set_menu_button():
         bot = Bot(token=TOKEN)
         logger.info("Объект Bot создан")
         
-        # Установка Menu Button
         app_url = f"{WEBHOOK_URL}/?mode=fullscreen"
         logger.info(f"URL для Menu Button: {app_url}")
         menu_button = MenuButtonWebApp(
-            text="movies",  # <-- Изменено на "movies"
+            text="movies",
             web_app=WebAppInfo(url=app_url)
         )
         logger.info("Объект MenuButtonWebApp создан")
@@ -285,7 +276,6 @@ if TOKEN:
     updater = Updater(TOKEN, use_context=True)
     dp = updater.dispatcher
     
-    # --- Обработчик команды /start ---
     def start(update, context):
         """Обработчик команды /start"""
         try:
@@ -329,7 +319,6 @@ if TOKEN:
         except Exception as e:
             logger.error(f"КРИТИЧЕСКАЯ ОШИБКА в обработчике /start: {e}", exc_info=True)
 
-    # --- Обработчик команды /menu для установки Menu Button ---
     def menu_command(update, context):
         """Команда для установки/переустановки Menu Button"""
         try:
@@ -361,7 +350,7 @@ def cache_get(key):
     except Exception:
         return None
 
-def cache_set(key, value, expire=300):
+def cache_set(key, value, expire=7200):  # Увеличено до 2 часов
     if redis_client:
         try:
             redis_client.set(key, json.dumps(value), ex=expire)
@@ -375,6 +364,33 @@ def cache_delete(key):
         except Exception:
             pass
 
+# --- ОПТИМИЗАЦИЯ: Улучшенная функция для подсчета просмотров ---
+def increment_view_count(item_type, item_id):
+    """Увеличивает счетчик просмотров для элемента"""
+    if not redis_client:
+        return
+        
+    try:
+        key = f"views:{item_type}:{item_id}"
+        redis_client.incr(key, 1)
+        redis_client.expire(key, 86400)  # 24 часа
+        logger.debug(f"Увеличен счетчик просмотров для {item_type}:{item_id}")
+    except Exception as e:
+        logger.error(f"Ошибка при увеличении счетчика просмотров: {e}")
+
+def get_view_count(item_type, item_id):
+    """Получает счетчик просмотров для элемента"""
+    if not redis_client:
+        return 0
+        
+    try:
+        key = f"views:{item_type}:{item_id}"
+        count = redis_client.get(key)
+        return int(count) if count else 0
+    except Exception as e:
+        logger.error(f"Ошибка при получении счетчика просмотров: {e}")
+        return 0
+
 def build_extra_map(data, item_type_plural):
     """Добавляет реакции и комментарии к каждому элементу данных."""
     extra = {}
@@ -382,7 +398,12 @@ def build_extra_map(data, item_type_plural):
         item_id = row[0]
         reactions = get_reactions_count(item_type_plural, item_id) or {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}
         comments_count = len(get_comments(item_type_plural, item_id) or [])
-        extra[item_id] = {'reactions': reactions, 'comments_count': comments_count}
+        view_count = get_view_count(item_type_plural, item_id)
+        extra[item_id] = {
+            'reactions': reactions, 
+            'comments_count': comments_count,
+            'view_count': view_count
+        }
     return extra
 
 # --- Routes (пользовательские) ---
@@ -390,7 +411,6 @@ def build_extra_map(data, item_type_plural):
 def index():
     return render_template('index.html')
 
-# --- Маршрут для Webhook от Telegram ---
 @app.route('/<string:token>', methods=['POST'])
 def telegram_webhook(token):
     if token != TOKEN:
@@ -408,7 +428,6 @@ def telegram_webhook(token):
         logger.error(f"Ошибка обработки webhook обновления: {e}", exc_info=True)
         return jsonify({'error': 'Internal Server Error'}), 500
 
-# --- Маршрут для проверки webhook ---
 @app.route('/webhook-info')
 def webhook_info():
     if not TOKEN:
@@ -441,12 +460,17 @@ def moments():
                 'video_url': row[3] if len(row) > 3 else '',
                 'created_at': row[4] if len(row) > 4 else None
             }
-            extra_info = extra_map.get(item_id, {'reactions': {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}, 'comments_count': 0})
+            extra_info = extra_map.get(item_id, {
+                'reactions': {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}, 
+                'comments_count': 0,
+                'view_count': 0
+            })
             if isinstance(extra_info.get('reactions'), dict):
                 item_dict['reactions'] = extra_info['reactions']
             else:
                 item_dict['reactions'] = {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}
             item_dict['comments_count'] = extra_info.get('comments_count', 0)
+            item_dict['view_count'] = extra_info.get('view_count', 0)
             combined_data.append(item_dict)
         logger.info("Данные объединены успешно")
         return render_template('moments.html', moments=combined_data)
@@ -474,12 +498,17 @@ def trailers():
                 'video_url': row[3] if len(row) > 3 else '',
                 'created_at': row[4] if len(row) > 4 else None
             }
-            extra_info = extra_map.get(item_id, {'reactions': {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}, 'comments_count': 0})
+            extra_info = extra_map.get(item_id, {
+                'reactions': {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}, 
+                'comments_count': 0,
+                'view_count': 0
+            })
             if isinstance(extra_info.get('reactions'), dict):
                 item_dict['reactions'] = extra_info['reactions']
             else:
                 item_dict['reactions'] = {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}
             item_dict['comments_count'] = extra_info.get('comments_count', 0)
+            item_dict['view_count'] = extra_info.get('view_count', 0)
             combined_data.append(item_dict)
         logger.info("Данные объединены успешно")
         return render_template('trailers.html', trailers=combined_data)
@@ -507,12 +536,17 @@ def news():
                 'image_url': row[3] if len(row) > 3 else '',
                 'created_at': row[4] if len(row) > 4 else None
             }
-            extra_info = extra_map.get(item_id, {'reactions': {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}, 'comments_count': 0})
+            extra_info = extra_map.get(item_id, {
+                'reactions': {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}, 
+                'comments_count': 0,
+                'view_count': 0
+            })
             if isinstance(extra_info.get('reactions'), dict):
                 item_dict['reactions'] = extra_info['reactions']
             else:
                 item_dict['reactions'] = {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}
             item_dict['comments_count'] = extra_info.get('comments_count', 0)
+            item_dict['view_count'] = extra_info.get('view_count', 0)
             combined_data.append(item_dict)
         logger.info("Данные объединены успешно")
         return render_template('news.html', news=combined_data)
@@ -524,12 +558,17 @@ def news():
 def moment_detail(item_id):
     """Отображает страницу одного момента."""
     logger.info(f"Запрос к /moments/{item_id}")
+    
+    # Увеличиваем счетчик просмотров
+    increment_view_count('moments', item_id)
+    
     item = get_item_by_id('moments', item_id)
     if not item:
         logger.warning(f"Момент с id={item_id} не найден")
         abort(404)
     reactions = get_reactions_count('moments', item_id)
     comments = get_comments('moments', item_id)
+    view_count = get_view_count('moments', item_id)
     logger.info(f"Момент {item_id} найден: {item[1] if len(item) > 1 else 'Без названия'}")
     item_dict = {
         'id': item[0],
@@ -538,18 +577,23 @@ def moment_detail(item_id):
         'video_url': item[3] if len(item) > 3 else '',
         'created_at': item[4] if len(item) > 4 else None
     }
-    return render_template('moment_detail.html', item=item_dict, reactions=reactions, comments=comments)
+    return render_template('moment_detail.html', item=item_dict, reactions=reactions, comments=comments, view_count=view_count)
 
 @app.route('/trailers/<int:item_id>')
 def trailer_detail(item_id):
     """Отображает страницу одного трейлера."""
     logger.info(f"Запрос к /trailers/{item_id}")
+    
+    # Увеличиваем счетчик просмотров
+    increment_view_count('trailers', item_id)
+    
     item = get_item_by_id('trailers', item_id)
     if not item:
         logger.warning(f"Трейлер с id={item_id} не найден")
         abort(404)
     reactions = get_reactions_count('trailers', item_id)
     comments = get_comments('trailers', item_id)
+    view_count = get_view_count('trailers', item_id)
     logger.info(f"Трейлер {item_id} найден: {item[1] if len(item) > 1 else 'Без названия'}")
     item_dict = {
         'id': item[0],
@@ -558,18 +602,23 @@ def trailer_detail(item_id):
         'video_url': item[3] if len(item) > 3 else '',
         'created_at': item[4] if len(item) > 4 else None
     }
-    return render_template('trailer_detail.html', item=item_dict, reactions=reactions, comments=comments)
+    return render_template('trailer_detail.html', item=item_dict, reactions=reactions, comments=comments, view_count=view_count)
 
 @app.route('/news/<int:item_id>')
 def news_detail(item_id):
     """Отображает страницу одной новости."""
     logger.info(f"Запрос к /news/{item_id}")
+    
+    # Увеличиваем счетчик просмотров
+    increment_view_count('news', item_id)
+    
     item = get_item_by_id('news', item_id)
     if not item:
         logger.warning(f"Новость с id={item_id} не найдена")
         abort(404)
     reactions = get_reactions_count('news', item_id)
     comments = get_comments('news', item_id)
+    view_count = get_view_count('news', item_id)
     logger.info(f"Новость {item_id} найдена: {item[1] if len(item) > 1 else 'Без заголовка'}")
     item_dict = {
         'id': item[0],
@@ -578,7 +627,7 @@ def news_detail(item_id):
         'image_url': item[3] if len(item) > 3 else '',
         'created_at': item[4] if len(item) > 4 else None
     }
-    return render_template('news_detail.html', item=item_dict, reactions=reactions, comments=comments)
+    return render_template('news_detail.html', item=item_dict, reactions=reactions, comments=comments, view_count=view_count)
 
 def _get_payload():
     if request.is_json:
@@ -928,7 +977,6 @@ if dp:
     dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_pending_video_text))
     dp.add_handler(MessageHandler(Filters.video & ~Filters.command, handle_pending_video_file))
 
-# --- Start Bot ---
 def start_bot():
     if updater:
         logger.info("Настройка Telegram бота для работы через Webhook...")
@@ -945,7 +993,6 @@ def start_bot():
 def health_check():
     """Проверка состояния приложения"""
     try:
-        # Проверяем Redis
         redis_status = "OK" if redis_client else "Not configured"
         if redis_client:
             try:
@@ -953,10 +1000,8 @@ def health_check():
             except Exception as e:
                 redis_status = f"Connection error: {str(e)}"
         
-        # Проверяем Telegram бот
         bot_status = "OK" if TOKEN else "Not configured"
         
-        # Проверяем базу данных
         db_status = "Unknown"
         try:
             from database import get_db_connection
@@ -979,7 +1024,6 @@ def health_check():
         logger.error(f"Health check error: {e}")
         return jsonify({'status': 'unhealthy', 'error': str(e)}), 500
 
-# --- Main ---
 if __name__ == '__main__':
     try:
         logger.info("Инициализация базы данных...")
