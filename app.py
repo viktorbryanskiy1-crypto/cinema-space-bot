@@ -170,7 +170,8 @@ async def extract_video_url_from_telegram_post(post_url):
         
         try:
             logger.debug(f"[ИЗВЛЕЧЕНИЕ] Пересылаем сообщение в тестовую группу {YOUR_TEST_CHAT_ID}...")
-            forwarded_message = await bot.forward_message(
+            # ИСПРАВЛЕНО: Убран await, так как forward_message возвращает объект Message, а не coroutine
+            forwarded_message = bot.forward_message(
                 chat_id=YOUR_TEST_CHAT_ID,        # <<<--- ВСЕГДА в тестовую группу
                 from_chat_id=chat_id_or_username, # Откуда - из исходного чата
                 message_id=message_id            # Какое сообщение
