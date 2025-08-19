@@ -13,10 +13,10 @@
 </div>
 
 <div class="row">
-  <div class="col-12 video-wrap">
+  <div class="col-12 video-wrap" data-trailer-id="{{ item.id }}">
     {% if item.video_url %}
       {% if item.video_url.startswith('/uploads/') %}
-        <video controls preload="metadata" style="width:100%; max-height:720px;">
+        <video controls preload="metadata" style="width:100%; max-height:720px;" data-post-url="{{ item.video_url }}">
           <source src="{{ item.video_url }}" />
           Ваш браузер не поддерживает тег video.
         </video>
@@ -38,7 +38,7 @@
             </script>
         </div>
       {% else %}
-        <video controls preload="metadata" controlsList="nodownload" style="max-width: 100%; border-radius: 10px;">
+        <video controls preload="metadata" controlsList="nodownload" style="max-width: 100%; border-radius: 10px;" data-post-url="{{ item.video_url }}">
           <source src="{{ item.video_url }}" type="video/mp4">
           Ваш браузер не поддерживает видео.
         </video>
@@ -168,5 +168,84 @@ function escapeHtml(s){
     }[c];
   });
 }
+
+// НОВАЯ ФУНКЦИЯ: Обработка ошибок воспроизведения видео
+document.addEventListener('DOMContentLoaded', function() {
+    const video = document.querySelector('video');
+    if (video) {
+        video.addEventListener('error', async function(e) {
+            console.log('Ошибка воспроизведения видео:', e);
+            
+            // Получаем родительский элемент с информацией о видео
+            const videoWrap = this.closest('.video-wrap');
+            if (!videoWrap) return;
+            
+            // Получаем ID трейлера
+            const trailerId = videoWrap.dataset.trailerId;
+            if (!trailerId) return;
+            
+            // Показываем уведомление пользователю
+            const errorNotice = document.createElement('div');
+            errorNotice.className = 'video-error-notice';
+            errorNotice.innerHTML = `
+                <div style="background: rgba(255, 0, 0, 0.2); padding: 15px; border-radius: 8px; margin: 10px 0;">
+                    <p style="margin: 0 0 10px 0;">🔄 Видео недоступно. Пытаемся обновить ссылку...</p>
+                    <div class="loading-spinner" style="width: 20px; height: 20px; border: 2px solid #fff; border-top: 2px solid #00f3ff; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                </div>
+            `;
+            errorNotice.style.cssText = 'position: relative; z-index: 10;';
+            
+            // Вставляем уведомление перед видео
+            this.parentNode.insertBefore(errorNotice, this);
+            
+            try {
+                // Отправляем запрос на обновление ссылки
+                const response = await fetch('/api/refresh_video_url', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        trailer_id: trailerId
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success && result.new_url) {
+                    // Обновляем источник видео
+                    const source = this.querySelector('source');
+                    if (source) {
+                        source.src = result.new_url;
+                    } else {
+                        this.src = result.new_url;
+                    }
+                    
+                    // Перезагружаем видео
+                    this.load();
+                    
+                    // Удаляем уведомление об ошибке
+                    errorNotice.remove();
+                    
+                    console.log('Видео успешно обновлено');
+                } else {
+                    // Показываем ошибку
+                    errorNotice.innerHTML = `
+                        <div style="background: rgba(255, 0, 0, 0.3); padding: 15px; border-radius: 8px; margin: 10px 0;">
+                            <p style="margin: 0;">❌ Не удалось обновить видео. ${result.error || 'Попробуйте позже.'}</p>
+                        </div>
+                    `;
+                }
+            } catch (refreshError) {
+                console.error('Ошибка при обновлении видео:', refreshError);
+                errorNotice.innerHTML = `
+                    <div style="background: rgba(255, 0, 0, 0.3); padding: 15px; border-radius: 8px; margin: 10px 0;">
+                        <p style="margin: 0;">❌ Ошибка сети при обновлении видео. Попробуйте позже.</p>
+                    </div>
+                `;
+            }
+        });
+    }
+});
 </script>
 {% endblock %}
