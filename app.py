@@ -111,7 +111,7 @@ def get_direct_video_url(file_id):
         logger.error(f"Неизвестная ошибка при получении ссылки для file_id {file_id}: {e}")
         return None
 
-def get_cached_direct_video_url(file_id, cache_time=3600):
+def get_cached_direct_video_url(file_id, cache_time=1800):  # Уменьшено до 30 минут
     """Кэшированное получение прямой ссылки"""
     current_time = time.time()
     if file_id in video_url_cache:
@@ -223,6 +223,37 @@ def extract_video_url_sync(post_url):
     except Exception as e:
         logger.error(f"Ошибка в синхронной обертке extract_video_url_sync: {e}", exc_info=True)
         return None, f"Ошибка обработки запроса: {e}"
+
+# --- НОВАЯ ФУНКЦИЯ: Обновление устаревшей ссылки ---
+@app.route('/api/refresh_video_url', methods=['POST'])
+def refresh_video_url():
+    """Обновляет устаревшую ссылку на видео по Telegram посту"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify(success=False, error="Неверный формат данных"), 400
+            
+        post_url = data.get('post_url', '').strip()
+        if not post_url:
+            return jsonify(success=False, error="Не указана ссылка на пост"), 400
+            
+        if 't.me/' not in post_url:
+            return jsonify(success=False, error="Неверный формат ссылки"), 400
+            
+        logger.info(f"[ОБНОВЛЕНИЕ ССЫЛКИ] Запрошено обновление для: {post_url}")
+        
+        # Извлекаем новую ссылку
+        direct_url, error = extract_video_url_sync(post_url)
+        if direct_url:
+            logger.info(f"[ОБНОВЛЕНИЕ ССЫЛКИ] Новая ссылка получена: {direct_url[:50]}...")
+            return jsonify(success=True, new_url=direct_url)
+        else:
+            logger.error(f"[ОБНОВЛЕНИЕ ССЫЛКИ] Ошибка: {error}")
+            return jsonify(success=False, error=error), 400
+            
+    except Exception as e:
+        logger.error(f"[ОБНОВЛЕНИЕ ССЫЛКИ] Ошибка: {e}", exc_info=True)
+        return jsonify(success=False, error=str(e)), 500
 
 # --- Функция для установки Menu Button ---
 def set_menu_button():
