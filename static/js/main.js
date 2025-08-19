@@ -1,5 +1,5 @@
 // main.js — полный рабочий файл с оптимизацией Telegram WebApp и fullscreen
-// Обновлен для поддержки автоматического обновления ссылок на видео
+// Обновлен для поддержки автоматического обновления ссылок на видео и масштабирования
 
 // Глобальные переменные
 let currentTab = 'moments';
@@ -9,6 +9,52 @@ let userId = 'user_' + Math.random().toString(36).substr(2, 9);
 let modalClickHandlerAdded = false;
 let formToggleHandlerAdded = false;
 
+// --- ОПТИМИЗАЦИЯ: Локальное кэширование ---
+const localCache = {
+    videos: new Map(),
+    set(key, value, ttl = 3600000) { // 1 час по умолчанию
+        const item = {
+            value: value,
+            expiry: Date.now() + ttl,
+        };
+        this.videos.set(key, item);
+        try {
+            localStorage.setItem('cinema_cache_' + key, JSON.stringify(item));
+        } catch (e) {
+            console.warn('Не удалось сохранить в localStorage:', e);
+        }
+    },
+    get(key) {
+        // Проверяем память
+        if (this.videos.has(key)) {
+            const item = this.videos.get(key);
+            if (Date.now() < item.expiry) {
+                return item.value;
+            } else {
+                this.videos.delete(key);
+            }
+        }
+        
+        // Проверяем localStorage
+        try {
+            const itemStr = localStorage.getItem('cinema_cache_' + key);
+            if (itemStr) {
+                const item = JSON.parse(itemStr);
+                if (Date.now() < item.expiry) {
+                    this.videos.set(key, item);
+                    return item.value;
+                } else {
+                    localStorage.removeItem('cinema_cache_' + key);
+                }
+            }
+        } catch (e) {
+            console.warn('Ошибка при чтении из localStorage:', e);
+        }
+        
+        return null;
+    }
+};
+
 document.addEventListener('DOMContentLoaded', function() {
     console.log("DOMContentLoaded сработал");
 
@@ -17,19 +63,17 @@ document.addEventListener('DOMContentLoaded', function() {
         const webApp = window.Telegram.WebApp;
 
         try {
-            webApp.ready(); // уведомляем Telegram, что приложение готово
-
-            // Попытка fullscreen (максимальный размер)
+            webApp.ready();
             if (webApp.requestFullscreen) {
                 webApp.requestFullscreen();
             } else {
-                webApp.expand(); // fallback
+                webApp.expand();
             }
 
             webApp.enableClosingConfirmation();
             webApp.setHeaderColor('#0f0c29');
             webApp.setBackgroundColor('#0f0c29');
-            webApp.MainButton.hide(); // скрыть нижнюю кнопку
+            webApp.MainButton.hide();
             console.log("Telegram WebApp инициализирован и расширен до полного экрана");
         } catch (error) {
             console.error("Ошибка инициализации Telegram WebApp:", error);
@@ -45,7 +89,21 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
     }
 
-    const tabBtns = document.querySelectorAll('.tab-btn[data-tab]'); // Только кнопки вкладок
+    const tabBtns = document.querySelectorAll('.tab-btn[data-tab]');
+
+    // --- ОПТИМИЗАЦИЯ: Предзагрузка популярного контента ---
+    function preloadPopularContent() {
+        // Предзагрузка ссылок на популярные видео
+        const popularVideos = document.querySelectorAll('.popular-video');
+        popularVideos.forEach(video => {
+            if (video.dataset.videoUrl) {
+                const link = document.createElement('link');
+                link.rel = 'prefetch';
+                link.href = video.dataset.videoUrl;
+                document.head.appendChild(link);
+            }
+        });
+    }
 
     async function loadTabContent(tabName) {
         try {
@@ -61,6 +119,9 @@ document.addEventListener('DOMContentLoaded', function() {
             contentArea.innerHTML = html;
             currentTab = tabName;
             addDynamicFeatures();
+            
+            // Предзагрузка после загрузки контента
+            setTimeout(preloadPopularContent, 1000);
         } catch (error) {
             console.error(`Ошибка загрузки вкладки "${tabName}":`, error);
             contentArea.innerHTML = `
@@ -122,7 +183,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // --- Инициализация вкладки ---
     if (tabBtns.length > 0) {
         tabBtns[0].classList.add('active');
         loadTabContent(tabBtns[0].dataset.tab);
@@ -130,31 +190,42 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log("Кнопки вкладок не найдены на главной странице.");
     }
 
-    // --- Обработчики форм добавления контента ---
     setupFormSubmissions();
 });
 
-// --- Динамические функции после загрузки контента ---
 function addDynamicFeatures() {
     addReactionHandlers();
     addCommentHandlers();
     addLoadCommentsHandlers();
     addModalHandlers();
     setupFormToggles();
-    initializeVideoErrorHandling(); // НОВАЯ ФУНКЦИЯ
+    initializeVideoErrorHandling();
+    
+    // --- ОПТИМИЗАЦИЯ: Ленивая загрузка изображений ---
+    const lazyImages = document.querySelectorAll('img[loading="lazy"]');
+    if ('IntersectionObserver' in window) {
+        const imageObserver = new IntersectionObserver((entries, observer) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const img = entry.target;
+                    img.src = img.dataset.src;
+                    img.classList.remove('lazy');
+                    imageObserver.unobserve(img);
+                }
+            });
+        });
+        
+        lazyImages.forEach(img => imageObserver.observe(img));
+    }
 }
 
 // --- НОВАЯ ФУНКЦИЯ: Обработка ошибок воспроизведения видео ---
 function initializeVideoErrorHandling() {
-    // Добавляем обработчики ошибок для всех видеоэлементов
     document.querySelectorAll('video').forEach(video => {
         video.addEventListener('error', async function(e) {
             console.log('Ошибка воспроизведения видео:', e);
             
-            // Получаем родительский элемент
             const parent = this.parentNode;
-            
-            // Создаем элемент прелоадера
             const loader = document.createElement('div');
             loader.className = 'video-loader';
             loader.innerHTML = `
@@ -164,14 +235,11 @@ function initializeVideoErrorHandling() {
                 </div>
             `;
             
-            // Заменяем видео на прелоадер
             parent.replaceChild(loader, this);
             
             try {
-                // Получаем источник видео
                 const videoSrc = this.querySelector('source')?.src || this.src;
                 if (videoSrc && videoSrc.includes('api.telegram.org/file')) {
-                    // Отправляем запрос на обновление ссылки
                     const response = await fetch('/api/refresh_video_url', {
                         method: 'POST',
                         headers: {
@@ -185,7 +253,6 @@ function initializeVideoErrorHandling() {
                     const result = await response.json();
                     
                     if (result.success && result.new_url) {
-                        // Создаем новый видеоэлемент с обновленной ссылкой
                         const newVideo = document.createElement('video');
                         newVideo.controls = true;
                         newVideo.preload = 'metadata';
@@ -197,7 +264,6 @@ function initializeVideoErrorHandling() {
                         
                         newVideo.appendChild(source);
                         
-                        // Добавляем обработчик ошибок для нового видео
                         newVideo.addEventListener('error', function(e) {
                             console.log('Ошибка воспроизведения обновленного видео:', e);
                             const errorNotice = document.createElement('div');
@@ -210,15 +276,11 @@ function initializeVideoErrorHandling() {
                             parent.replaceChild(errorNotice, newVideo);
                         });
                         
-                        // Заменяем прелоадер на новое видео
                         parent.replaceChild(newVideo, loader);
-                        
-                        // Загружаем и воспроизводим видео
                         newVideo.load();
                         
                         console.log('Видео успешно обновлено');
                     } else {
-                        // Показываем ошибку
                         const errorNotice = document.createElement('div');
                         errorNotice.className = 'video-error-notice';
                         errorNotice.innerHTML = `
@@ -229,7 +291,6 @@ function initializeVideoErrorHandling() {
                         parent.replaceChild(errorNotice, loader);
                     }
                 } else {
-                    // Если это не Telegram ссылка, показываем общую ошибку
                     const errorNotice = document.createElement('div');
                     errorNotice.className = 'video-error-notice';
                     errorNotice.innerHTML = `
@@ -254,7 +315,6 @@ function initializeVideoErrorHandling() {
     });
 }
 
-// --- Реакции ---
 function addReactionHandlers() {
     document.querySelectorAll('.reaction-btn').forEach(btn => {
         const clone = btn.cloneNode(true);
@@ -301,7 +361,6 @@ function addReactionHandlers() {
     });
 }
 
-// --- Комментарии ---
 function addCommentHandlers() {
     document.querySelectorAll('.comment-form').forEach(form => {
         const clone = form.cloneNode(true);
@@ -367,7 +426,6 @@ function addCommentHandlers() {
     });
 }
 
-// --- Загрузка комментариев ---
 function addLoadCommentsHandlers() {
     document.querySelectorAll('.load-comments').forEach(btn => {
         const clone = btn.cloneNode(true);
@@ -412,28 +470,29 @@ function addLoadCommentsHandlers() {
     });
 }
 
-// --- Модальные окна ---
-// Глобальные функции для открытия модалок
-function showAddMomentModal() {
-    showModal('add-moment-modal');
-}
-function showAddTrailerModal() {
-    showModal('add-trailer-modal');
-}
-function showAddNewsModal() {
-    showModal('add-news-modal');
-}
 function showModal(id) {
     const modal = document.getElementById(id);
     if (modal) modal.style.display = 'flex';
 }
+
 function closeModal(id) {
     const modal = document.getElementById(id);
     if (modal) modal.style.display = 'none';
 }
 
+function showAddMomentModal() {
+    showModal('add-moment-modal');
+}
+
+function showAddTrailerModal() {
+    showModal('add-trailer-modal');
+}
+
+function showAddNewsModal() {
+    showModal('add-news-modal');
+}
+
 function addModalHandlers() {
-    // Убираем клонирование и добавляем обработчики только если они еще не добавлены
     if (!modalClickHandlerAdded) {
         const modalButtons = [
             { id: 'add-moment-btn', handler: showAddMomentModal },
@@ -447,15 +506,13 @@ function addModalHandlers() {
         modalButtons.forEach(({ id, handler }) => {
             const element = document.getElementById(id);
             if (element) {
-                // Проверяем, не добавлен ли уже обработчик
                 if (!element.dataset.handlerAdded) {
                     element.addEventListener('click', handler);
-                    element.dataset.handlerAdded = 'true'; // Флаг для предотвращения дублирования
+                    element.dataset.handlerAdded = 'true';
                 }
             }
         });
 
-        // Обработчик закрытия модалки при клике вне окна
         document.addEventListener('click', function (e) {
             if (e.target.classList && e.target.classList.contains('modal')) {
                 e.target.style.display = 'none';
@@ -465,7 +522,6 @@ function addModalHandlers() {
     }
 }
 
-// --- Вспомогательные ---
 function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
@@ -477,7 +533,6 @@ function formatDate(dateString) {
     return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
-// --- Переключение форм ---
 function setupFormToggles() {
     if (!formToggleHandlerAdded) {
         document.addEventListener('change', function (e) {
@@ -507,16 +562,6 @@ function setupFormToggles() {
         });
         formToggleHandlerAdded = true;
     }
-}
-
-// --- Формы добавления контента ---
-function setupFormSubmissions() {
-    // Моменты
-    setupContentForm('add-moment-form', 'video_type', '/api/add_moment', 'add-moment-modal');
-    // Трейлеры
-    setupContentForm('add-trailer-form', 'video_type', '/api/add_trailer', 'add-trailer-modal');
-    // Новости
-    setupContentForm('add-news-form', 'image_type', '/api/add_news', 'add-news-modal', true);
 }
 
 function setupContentForm(formId, typeName, apiUrl, modalId, alwaysFormData=false) {
@@ -555,6 +600,12 @@ function setupContentForm(formId, typeName, apiUrl, modalId, alwaysFormData=fals
             alert('Ошибка загрузки: ' + error.message);
         }
     });
+}
+
+function setupFormSubmissions() {
+    setupContentForm('add-moment-form', 'video_type', '/api/add_moment', 'add-moment-modal');
+    setupContentForm('add-trailer-form', 'video_type', '/api/add_trailer', 'add-trailer-modal');
+    setupContentForm('add-news-form', 'image_type', '/api/add_news', 'add-news-modal', true);
 }
 
 console.log("main.js загружен и выполняется с fullscreen Telegram WebApp!");
