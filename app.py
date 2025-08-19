@@ -1,4 +1,3 @@
-```python
 import os
 import threading
 import logging
@@ -1031,5 +1030,3 @@ if __name__ == '__main__':
     logger.info(f"Запуск Flask приложения на порту {port}...")
     app.run(host='0.0.0.0', port=port)
     logger.info("Flask приложение остановлено.")
-
-```
