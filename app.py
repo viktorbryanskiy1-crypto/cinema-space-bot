@@ -248,18 +248,20 @@ def set_menu_button():
         logger.error("TELEGRAM_TOKEN не установлен для установки Menu Button")
         return
     try:
+        logger.info("Начало установки Menu Button")
         bot = Bot(token=TOKEN)
         # URL вашего веб-приложения
         # Используем urljoin для корректного формирования URL
         app_url = urljoin(WEBHOOK_URL, "/?mode=fullscreen")
-        # Убедимся, что WEBHOOK_URL не заканчивается на /, чтобы избежать двойного слеша
-        # app_url = WEBHOOK_URL.rstrip('/') + '/?mode=fullscreen' # Альтернатива
+        logger.info(f"Сформированный URL для Menu Button: {app_url}")
+        
         menu_button = MenuButtonWebApp(
             text="🌌 КиноВселенная",  # Текст на кнопке
             web_app=WebAppInfo(url=app_url)  # URL веб-приложения
         )
         # Устанавливаем кнопку меню для бота
         # Это сделает кнопку доступной для всех пользователей
+        logger.info("Отправка запроса set_chat_menu_button...")
         bot.set_chat_menu_button(menu_button=menu_button)
         logger.info(f"✅ Menu Button установлена: {app_url}")
     except Exception as e:
@@ -272,16 +274,23 @@ if TOKEN:
     def start(update, context):
         """Обработчик команды /start"""
         try: # Добавим обработку исключений
+            logger.info("Обработчик /start вызван")
             user = update.message.from_user
             telegram_id = str(user.id)
+            logger.info(f"Пользователь: {user.username} ({telegram_id})")
+            
             get_or_create_user(
                 telegram_id=telegram_id,
                 username=user.username,
                 first_name=user.first_name,
                 last_name=user.last_name
             )
-            # Используем urljoin для согласованности
+            logger.info("Пользователь создан/обновлен в БД")
+            
+            # Используем urljoin для согласованности и корректности
             web_app_url = urljoin(WEBHOOK_URL, "/?mode=fullscreen")
+            logger.info(f"Сформированный URL кнопки: {web_app_url}")
+            
             keyboard = [[
                 InlineKeyboardButton(
                     "🌌 КиноВселенная",
@@ -289,6 +298,7 @@ if TOKEN:
                 )
             ]]
             reply_markup = InlineKeyboardMarkup(keyboard)
+            
             update.message.reply_text(
                 "🚀 Добро пожаловать в КиноВселенную!\n"
                 "✨ Исследуй космос кино\n"
@@ -298,14 +308,15 @@ if TOKEN:
                 "Нажми кнопку для входа в приложение",
                 reply_markup=reply_markup
             )
-            logger.info(f"Команда /start выполнена для пользователя {user.username} ({telegram_id})")
+            logger.info(f"Команда /start выполнена успешно для пользователя {user.username} ({telegram_id})")
         except Exception as e:
             logger.error(f"Ошибка в обработчике /start для пользователя {user.username if 'user' in locals() else 'unknown'}: {e}", exc_info=True)
             # Отправим сообщение об ошибке пользователю, если возможно
             try:
                 update.message.reply_text("Произошла ошибка при обработке команды. Пожалуйста, попробуйте позже.")
-            except:
-                pass # Игнорируем ошибки при отправке сообщения об ошибке
+            except Exception as reply_error:
+                logger.error(f"Не удалось отправить сообщение об ошибке пользователю: {reply_error}")
+            # Игнорируем ошибки при отправке сообщения об ошибке
 
 # --- Helpers ---
 def save_uploaded_file(file_storage, allowed_exts):
@@ -902,7 +913,7 @@ def start_bot():
         logger.info("Установка Menu Button...")
         try:
             set_menu_button()
-            logger.info("Menu Button успешно установлена.")
+            logger.info("Menu Button успешно установлена (или попытка завершена).")
         except Exception as e:
             logger.error(f"Не удалось установить Menu Button при запуске: {e}")
         # --- КОНЕЦ НОВОГО ---
