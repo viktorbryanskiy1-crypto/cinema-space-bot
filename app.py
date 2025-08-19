@@ -728,7 +728,7 @@ def api_add_news():
         return jsonify(success=True)
     except Exception as e:
         logger.error(f"API add_news error: {e}", exc_info=True)
-                return jsonify(success=False, error=str(e)), 500
+        return jsonify(success=False, error=str(e)), 500
 
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
