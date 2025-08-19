@@ -35,7 +35,7 @@
                         <div class="mb-3">
                             <label for="video_file" class="form-label">Видеофайл *</label>
                             <input type="file" class="form-control" id="video_file" name="video_file" accept="video/*" required>
-                            <div class="form-text">Поддерживаемые форматы: MP4, AVI, MOV, WMV, FLV, WEBM, MKV. Макс. размер: 2GB</div>
+                            <div class="form-text">Поддерживаемые форматы: MP4, AVI, MOV, WMV, FLV, WEBM, MKV. Макс. размер: 50MB</div>
                         </div>
                         
                         <div class="mb-3">
@@ -221,17 +221,18 @@ document.getElementById('link-add-form').addEventListener('submit', async functi
     
     try {
         const formData = new FormData(this);
-        const jsonData = {};
-        formData.forEach((value, key) => {
-            jsonData[key] = value;
-        });
         
         const response = await fetch('/admin/add_video_json', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
             },
-            body: JSON.stringify(jsonData)
+            body: JSON.stringify({
+                title: formData.get('title'),
+                description: formData.get('description'),
+                category: formData.get('category'),
+                post_link: formData.get('post_link')
+            })
         });
         
         const result = await response.json();
