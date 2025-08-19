@@ -111,7 +111,7 @@ def get_direct_video_url(file_id):
         logger.error(f"Неизвестная ошибка при получении ссылки для file_id {file_id}: {e}")
         return None
 
-def get_cached_direct_video_url(file_id, cache_time=1800):  # Уменьшено до 30 минут
+def get_cached_direct_video_url(file_id, cache_time=3600):  # Увеличено до 1 часа
     """Кэшированное получение прямой ссылки"""
     current_time = time.time()
     if file_id in video_url_cache:
@@ -231,30 +231,29 @@ def refresh_video_url():
     """Обновляет устаревшую ссылку на видео по Telegram посту"""
     try:
         data = request.get_json()
-        if not data:
+        if not 
+            logger.warning("[ОБНОВЛЕНИЕ ССЫЛКИ] Неверный формат данных")
             return jsonify(success=False, error="Неверный формат данных"), 400
             
         post_url = data.get('post_url', '').strip()
         if not post_url:
+            logger.warning("[ОБНОВЛЕНИЕ ССЫЛКИ] Не указана ссылка на пост")
             return jsonify(success=False, error="Не указана ссылка на пост"), 400
             
-        if 't.me/' not in post_url:
-            return jsonify(success=False, error="Неверный формат ссылки"), 400
-            
-        logger.info(f"[ОБНОВЛЕНИЕ ССЫЛКИ] Запрошено обновление для: {post_url}")
+        logger.info(f"[ОБНОВЛЕНИЕ ССЫЛКИ] Запрошено обновление для ссылки: {post_url[:50]}...")
         
         # Извлекаем новую ссылку
         direct_url, error = extract_video_url_sync(post_url)
         if direct_url:
-            logger.info(f"[ОБНОВЛЕНИЕ ССЫЛКИ] Новая ссылка получена: {direct_url[:50]}...")
+            logger.info(f"[ОБНОВЛЕНИЕ ССЫЛКИ] Новая ссылка успешно получена")
             return jsonify(success=True, new_url=direct_url)
         else:
-            logger.error(f"[ОБНОВЛЕНИЕ ССЫЛКИ] Ошибка: {error}")
+            logger.error(f"[ОБНОВЛЕНИЕ ССЫЛКИ] Ошибка при извлечении: {error}")
             return jsonify(success=False, error=error), 400
             
     except Exception as e:
-        logger.error(f"[ОБНОВЛЕНИЕ ССЫЛКИ] Ошибка: {e}", exc_info=True)
-        return jsonify(success=False, error=str(e)), 500
+        logger.error(f"[ОБНОВЛЕНИЕ ССЫЛКИ] Критическая ошибка: {e}", exc_info=True)
+        return jsonify(success=False, error="Внутренняя ошибка сервера"), 500
 
 # --- Функция для установки Menu Button ---
 def set_menu_button():
@@ -379,7 +378,7 @@ def cache_delete(key):
 def build_extra_map(data, item_type_plural):
     """Добавляет реакции и комментарии к каждому элементу данных."""
     extra = {}
-    for row in data:
+    for row in 
         item_id = row[0]
         reactions = get_reactions_count(item_type_plural, item_id) or {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}
         comments_count = len(get_comments(item_type_plural, item_id) or [])
@@ -433,7 +432,7 @@ def moments():
         extra_map = build_extra_map(data, 'moments')
         logger.info("extra_map построен успешно")
         combined_data = []
-        for row in data:
+        for row in 
             item_id = row[0]
             item_dict = {
                 'id': row[0],
@@ -466,7 +465,7 @@ def trailers():
         extra_map = build_extra_map(data, 'trailers')
         logger.info("extra_map построен успешно")
         combined_data = []
-        for row in data:
+        for row in 
             item_id = row[0]
             item_dict = {
                 'id': row[0],
@@ -499,7 +498,7 @@ def news():
         extra_map = build_extra_map(data, 'news')
         logger.info("extra_map построен успешно")
         combined_data = []
-        for row in data:
+        for row in 
             item_id = row[0]
             item_dict = {
                 'id': row[0],
@@ -860,7 +859,7 @@ def add_video_command(update, context):
 def handle_pending_video_text(update, context):
     user = update.message.from_user
     telegram_id = str(user.id)
-    if telegram_id not in pending_video_data:
+    if telegram_id not in pending_video_
         return
     data = pending_video_data.pop(telegram_id)
     content_type, title = data['content_type'], data['title']
@@ -884,7 +883,7 @@ def handle_pending_video_file(update, context):
     user = update.message.from_user
     telegram_id = str(user.id)
     logger.info(f"Получен видеофайл от пользователя {telegram_id}")
-    if telegram_id not in pending_video_data:
+    if telegram_id not in pending_video_
         logger.debug("Нет ожидающих данных для видео")
         return
     data = pending_video_data.pop(telegram_id)
@@ -940,6 +939,45 @@ def start_bot():
         except Exception as e:
             logger.error(f"Не удалось установить Menu Button при запуске: {e}")
         logger.info("Telegram бот готов принимать обновления через Webhook.")
+
+# --- Health Check Endpoint ---
+@app.route('/health')
+def health_check():
+    """Проверка состояния приложения"""
+    try:
+        # Проверяем Redis
+        redis_status = "OK" if redis_client else "Not configured"
+        if redis_client:
+            try:
+                redis_client.ping()
+            except Exception as e:
+                redis_status = f"Connection error: {str(e)}"
+        
+        # Проверяем Telegram бот
+        bot_status = "OK" if TOKEN else "Not configured"
+        
+        # Проверяем базу данных
+        db_status = "Unknown"
+        try:
+            from database import get_db_connection
+            conn = get_db_connection()
+            conn.close()
+            db_status = "OK"
+        except Exception as e:
+            db_status = f"Connection error: {str(e)}"
+        
+        return jsonify({
+            'status': 'healthy',
+            'services': {
+                'redis': redis_status,
+                'bot': bot_status,
+                'database': db_status
+            },
+            'timestamp': datetime.now().isoformat()
+        })
+    except Exception as e:
+        logger.error(f"Health check error: {e}")
+        return jsonify({'status': 'unhealthy', 'error': str(e)}), 500
 
 # --- Main ---
 if __name__ == '__main__':
