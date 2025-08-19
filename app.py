@@ -127,71 +127,83 @@ def get_cached_direct_video_url(file_id, cache_time=3600):
         return url
     return None
 
+# --- ИСПРАВЛЕННАЯ Функция для извлечения видео из поста Telegram ---
+# (Обновлённая версия: пересылает сообщения только в тестовую группу)
 async def extract_video_url_from_telegram_post(post_url):
     """
     Извлекает прямую ссылку на видео из поста Telegram.
     Совместимо с python-telegram-bot v13.15.
+    Исправлено: теперь пересылает сообщения только в тестовую группу.
     """
     try:
-        logger.info(f"Попытка извлечь видео из поста: {post_url}")
+        logger.info(f"[ИЗВЛЕЧЕНИЕ] Попытка извлечь видео из поста: {post_url}")
+        
+        # Парсим ссылку
         post_url = post_url.strip()
         public_match = re.search(r'https?://t\.me/([^/\s]+)/(\d+)', post_url)
-        private_match = re.search(r'https?://t\.me/c/(\d+)/(\d+)', post_url)
+        private_match = re.search(r'https?://t.me/c/(\d+)/(\d+)', post_url)
+
         chat_id_or_username = None
         message_id = None
+
         if public_match:
             chat_id_or_username = "@" + public_match.group(1)
             message_id = int(public_match.group(2))
-            logger.debug(f"Найден публичный канал: {chat_id_or_username}, сообщение: {message_id}")
+            logger.debug(f"[ИЗВЛЕЧЕНИЕ] Найден публичный канал: {chat_id_or_username}, сообщение: {message_id}")
         elif private_match:
             raw_id = int(private_match.group(1))
             chat_id_or_username = -1000000000000 - raw_id
             message_id = int(private_match.group(2))
-            logger.debug(f"Найден приватный канал (ID): {chat_id_or_username}, сообщение: {message_id}")
+            logger.debug(f"[ИЗВЛЕЧЕНИЕ] Найден приватный канал (ID): {chat_id_or_username}, сообщение: {message_id}")
         else:
-            logger.error(f"Неверный формат ссылки на пост: {post_url}")
-            return None, "Неверный формат ссылки на пост Telegram. Используйте формат https://t.me/channel/123   или https://t.me/c/123456789/123  "
+            logger.error(f"[ИЗВЛЕЧЕНИЕ] Неверный формат ссылки на пост: {post_url}")
+            return None, "Неверный формат ссылки на пост Telegram."
+
         if chat_id_or_username is None or message_id is None:
-            return None, "Не удалось распарсить ссылку на пост"
+             return None, "Не удалось распарсить ссылку на пост"
+
         bot = Bot(token=TOKEN)
+
+        # --- ИСПРАВЛЕНИЕ: Всегда пересылаем в тестовую группу ---
+        # Это предотвращает дублирование в исходном канале
+        YOUR_TEST_CHAT_ID = -1003045387627 # <<<--- ВАШ ID ТЕСТОВОЙ ГРУППЫ
+        
         try:
-            forwarded_message = bot.forward_message(
-                chat_id=chat_id_or_username,
-                from_chat_id=chat_id_or_username,
-                message_id=message_id
+            logger.debug(f"[ИЗВЛЕЧЕНИЕ] Пересылаем сообщение в тестовую группу {YOUR_TEST_CHAT_ID}...")
+            forwarded_message = await bot.forward_message(
+                chat_id=YOUR_TEST_CHAT_ID,        # <<<--- ВСЕГДА в тестовую группу
+                from_chat_id=chat_id_or_username, # Откуда - из исходного чата
+                message_id=message_id            # Какое сообщение
             )
             message = forwarded_message
-            logger.debug("Сообщение успешно получено через forward_message (в тот же чат)")
+            logger.info("[ИЗВЛЕЧЕНИЕ] Сообщение успешно получено через forward_message (в тестовую группу)")
         except Exception as e1:
-            logger.warning(f"Не удалось получить сообщение через forward в тот же чат: {e1}")
-            YOUR_ADMIN_CHAT_ID = -1003045387627
-            try:
-                forwarded_message = bot.forward_message(
-                    chat_id=YOUR_ADMIN_CHAT_ID,
-                    from_chat_id=chat_id_or_username,
-                    message_id=message_id
-                )
-                message = forwarded_message
-                logger.debug("Сообщение успешно получено через forward_message (в админский чат)")
-            except Exception as e2:
-                logger.error(f"Не удалось получить сообщение через forward: {e1}, {e2}")
-                return None, "Не удалось получить сообщение. Убедитесь, что бот администратор канала или имеет доступ к сообщению."
+            logger.error(f"[ИЗВЛЕЧЕНИЕ] Не удалось получить сообщение через forward: {e1}")
+            return None, "Не удалось получить сообщение. Убедитесь, что бот имеет доступ к сообщению."
+        # --- КОНЕЦ ИСПРАВЛЕНИЯ ---
+
         if not message:
-            logger.error("Сообщение не найдено или бот не имеет доступа")
-            return None, "Сообщение не найдено. Убедитесь, что бот является администратором канала или имеет доступ к сообщению."
+            logger.error("[ИЗВЛЕЧЕНИЕ] Сообщение не найдено или бот не имеет доступа")
+            return None, "Сообщение не найдено."
+
         if not message.video:
-            logger.error("В посте нет видео")
+            logger.error("[ИЗВЛЕЧЕНИЕ] В посте нет видео")
             return None, "В указанном посте не найдено видео."
+
         file_id = message.video.file_id
-        logger.info(f"Найден file_id: {file_id}")
+        logger.info(f"[ИЗВЛЕЧЕНИЕ] Найден file_id: {file_id}")
+
         direct_url = get_cached_direct_video_url(file_id)
+
         if not direct_url:
-            logger.error("Не удалось получить прямую ссылку из file_id")
+            logger.error("[ИЗВЛЕЧЕНИЕ] Не удалось получить прямую ссылку из file_id")
             return None, "Не удалось получить прямую ссылку на видео из Telegram."
-        logger.info(f"Успешно извлечена прямая ссылка: {direct_url}")
+
+        logger.info(f"[ИЗВЛЕЧЕНИЕ] Успешно извлечена прямая ссылка: {direct_url[:50]}...")
         return direct_url, None
+
     except Exception as e:
-        logger.error(f"Ошибка извлечения видео из поста {post_url}: {e}", exc_info=True)
+        logger.error(f"[ИЗВЛЕЧЕНИЕ] Ошибка извлечения видео из поста {post_url}: {e}", exc_info=True)
         return None, f"Ошибка при обработке ссылки на пост: {str(e)}"
 
 def extract_video_url_sync(post_url):
