@@ -151,35 +151,26 @@ function initializeVideoErrorHandling() {
         video.addEventListener('error', async function(e) {
             console.log('Ошибка воспроизведения видео:', e);
             
-            // Получаем родительский элемент с информацией о видео
-            const card = this.closest('.card') || this.closest('.video-wrap');
-            if (!card) return;
+            // Получаем родительский элемент
+            const parent = this.parentNode;
             
-            // Ищем информацию о посте Telegram
-            const videoSrc = this.querySelector('source')?.src || this.src;
-            if (!videoSrc) return;
+            // Создаем элемент прелоадера
+            const loader = document.createElement('div');
+            loader.className = 'video-loader';
+            loader.innerHTML = `
+                <div>
+                    <div class="spinner"></div>
+                    <div class="text">Обновление видео...</div>
+                </div>
+            `;
             
-            // Проверяем, является ли это ссылкой на Telegram
-            if (videoSrc.includes('api.telegram.org/file')) {
-                // Показываем уведомление пользователю
-                const errorNotice = document.createElement('div');
-                errorNotice.className = 'video-error-notice';
-                errorNotice.innerHTML = `
-                    <div style="background: rgba(255, 0, 0, 0.2); padding: 15px; border-radius: 8px; margin: 10px 0;">
-                        <p style="margin: 0 0 10px 0;">🔄 Видео недоступно. Пытаемся обновить ссылку...</p>
-                        <div class="loading-spinner" style="width: 20px; height: 20px; border: 2px solid #fff; border-top: 2px solid #00f3ff; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                    </div>
-                `;
-                errorNotice.style.cssText = 'position: relative; z-index: 10;';
-                
-                // Вставляем уведомление перед видео
-                this.parentNode.insertBefore(errorNotice, this);
-                
-                try {
-                    // Ищем оригинальную ссылку на пост в данных карточки
-                    const cardTitle = card.querySelector('.card-title')?.textContent || '';
-                    console.log('Попытка обновления видео для:', cardTitle);
-                    
+            // Заменяем видео на прелоадер
+            parent.replaceChild(loader, this);
+            
+            try {
+                // Получаем источник видео
+                const videoSrc = this.querySelector('source')?.src || this.src;
+                if (videoSrc && videoSrc.includes('api.telegram.org/file')) {
                     // Отправляем запрос на обновление ссылки
                     const response = await fetch('/api/refresh_video_url', {
                         method: 'POST',
@@ -187,44 +178,77 @@ function initializeVideoErrorHandling() {
                             'Content-Type': 'application/json',
                         },
                         body: JSON.stringify({
-                            post_url: videoSrc // В реальной реализации нужно передавать оригинальную ссылку на пост
+                            post_url: videoSrc
                         })
                     });
                     
                     const result = await response.json();
                     
                     if (result.success && result.new_url) {
-                        // Обновляем источник видео
-                        const source = this.querySelector('source');
-                        if (source) {
-                            source.src = result.new_url;
-                        } else {
-                            this.src = result.new_url;
-                        }
+                        // Создаем новый видеоэлемент с обновленной ссылкой
+                        const newVideo = document.createElement('video');
+                        newVideo.controls = true;
+                        newVideo.preload = 'metadata';
+                        newVideo.style.cssText = 'max-width: 100%; border-radius: 10px; width: 100%; height: auto;';
                         
-                        // Перезагружаем видео
-                        this.load();
+                        const source = document.createElement('source');
+                        source.src = result.new_url;
+                        source.type = 'video/mp4';
                         
-                        // Удаляем уведомление об ошибке
-                        errorNotice.remove();
+                        newVideo.appendChild(source);
+                        
+                        // Добавляем обработчик ошибок для нового видео
+                        newVideo.addEventListener('error', function(e) {
+                            console.log('Ошибка воспроизведения обновленного видео:', e);
+                            const errorNotice = document.createElement('div');
+                            errorNotice.className = 'video-error-notice';
+                            errorNotice.innerHTML = `
+                                <div class="error-icon">❌</div>
+                                <div class="error-message">Не удалось воспроизвести видео</div>
+                                <div class="error-detail">Попробуйте обновить страницу или попробовать позже</div>
+                            `;
+                            parent.replaceChild(errorNotice, newVideo);
+                        });
+                        
+                        // Заменяем прелоадер на новое видео
+                        parent.replaceChild(newVideo, loader);
+                        
+                        // Загружаем и воспроизводим видео
+                        newVideo.load();
                         
                         console.log('Видео успешно обновлено');
                     } else {
                         // Показываем ошибку
+                        const errorNotice = document.createElement('div');
+                        errorNotice.className = 'video-error-notice';
                         errorNotice.innerHTML = `
-                            <div style="background: rgba(255, 0, 0, 0.3); padding: 15px; border-radius: 8px; margin: 10px 0;">
-                                <p style="margin: 0;">❌ Не удалось обновить видео. ${result.error || 'Попробуйте позже.'}</p>
-                            </div>
+                            <div class="error-icon">❌</div>
+                            <div class="error-message">Не удалось обновить видео</div>
+                            <div class="error-detail">${result.error || 'Попробуйте позже'}</div>
                         `;
+                        parent.replaceChild(errorNotice, loader);
                     }
-                } catch (refreshError) {
-                    console.error('Ошибка при обновлении видео:', refreshError);
+                } else {
+                    // Если это не Telegram ссылка, показываем общую ошибку
+                    const errorNotice = document.createElement('div');
+                    errorNotice.className = 'video-error-notice';
                     errorNotice.innerHTML = `
-                        <div style="background: rgba(255, 0, 0, 0.3); padding: 15px; border-radius: 8px; margin: 10px 0;">
-                            <p style="margin: 0;">❌ Ошибка сети при обновлении видео. Попробуйте позже.</p>
-                        </div>
+                        <div class="error-icon">❌</div>
+                        <div class="error-message">Ошибка воспроизведения видео</div>
+                        <div class="error-detail">Неподдерживаемый формат или файл недоступен</div>
                     `;
+                    parent.replaceChild(errorNotice, loader);
                 }
+            } catch (refreshError) {
+                console.error('Ошибка при обновлении видео:', refreshError);
+                const errorNotice = document.createElement('div');
+                errorNotice.className = 'video-error-notice';
+                errorNotice.innerHTML = `
+                    <div class="error-icon">🌐</div>
+                    <div class="error-message">Ошибка сети при обновлении</div>
+                    <div class="error-detail">Проверьте подключение и попробуйте позже</div>
+                `;
+                parent.replaceChild(errorNotice, loader);
             }
         });
     });
