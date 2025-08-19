@@ -1,96 +1,264 @@
 <!-- templates/admin/add_video.html -->
-{% extends 'admin/base.html' %}
-
-{% block title %}Добавить видео - Админ-панель{% endblock %}
+{% extends "admin/base.html" %}
+{% block title %}Добавить видео{% endblock %}
 
 {% block content %}
-<div class="container" style="max-width: 700px; margin-top: 30px;">
-    <h2 class="text-center mb-4">➕ Добавить новое видео</h2>
-
-    <form id="add-video-form">
-        <div class="mb-3">
-            <label for="video-title" class="form-label">Название *</label>
-            <input type="text" class="form-control" id="video-title" required placeholder="Введите название видео">
+<div class="container mt-4">
+    <h2>🎬 Добавить новое видео</h2>
+    <p class="text-muted">Загрузите видео напрямую или добавьте по ссылке</p>
+    
+    <!-- Навигация между способами добавления -->
+    <ul class="nav nav-tabs mb-4" id="addVideoTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="direct-tab" data-bs-toggle="tab" data-bs-target="#direct" type="button" role="tab">
+                🚀 Прямая загрузка
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="link-tab" data-bs-toggle="tab" data-bs-target="#link" type="button" role="tab">
+                🔗 По ссылке
+            </button>
+        </li>
+    </ul>
+    
+    <div class="tab-content" id="addVideoTabContent">
+        <!-- Прямая загрузка видео -->
+        <div class="tab-pane fade show active" id="direct" role="tabpanel">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">🚀 Прямая загрузка видео</h5>
+                    <p class="card-text text-muted">
+                        Загрузите видео файл напрямую. Оно будет автоматически опубликовано в ваш Telegram канал и добавлено в приложение.
+                    </p>
+                    
+                    <form id="direct-upload-form" enctype="multipart/form-data">
+                        <div class="mb-3">
+                            <label for="video_file" class="form-label">Видеофайл *</label>
+                            <input type="file" class="form-control" id="video_file" name="video_file" accept="video/*" required>
+                            <div class="form-text">Поддерживаемые форматы: MP4, AVI, MOV, WMV, FLV, WEBM, MKV. Макс. размер: 2GB</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="direct_title" class="form-label">Название *</label>
+                            <input type="text" class="form-control" id="direct_title" name="title" required>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="direct_description" class="form-label">Описание</label>
+                            <textarea class="form-control" id="direct_description" name="description" rows="3"></textarea>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="direct_category" class="form-label">Категория *</label>
+                            <select class="form-select" id="direct_category" name="category" required>
+                                <option value="">Выберите категорию</option>
+                                <option value="moment">Момент из кино</option>
+                                <option value="trailer">Трейлер</option>
+                                <option value="news">Новость</option>
+                            </select>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary" id="direct-submit-btn">
+                            <span id="direct-btn-text">📤 Загрузить и опубликовать</span>
+                            <span id="direct-loading" class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                        </button>
+                        <button type="reset" class="btn btn-secondary ms-2">Очистить</button>
+                    </form>
+                    
+                    <div id="direct-result" class="mt-3 d-none">
+                        <div class="alert alert-success" role="alert">
+                            <h5>✅ Видео успешно загружено!</h5>
+                            <p id="direct-result-message"></p>
+                            <button class="btn btn-sm btn-outline-primary" onclick="location.reload()">Добавить еще</button>
+                            <a href="/admin/content" class="btn btn-sm btn-primary">Перейти к контенту</a>
+                        </div>
+                    </div>
+                    
+                    <div id="direct-error" class="mt-3 d-none">
+                        <div class="alert alert-danger" role="alert">
+                            <h5>❌ Ошибка загрузки</h5>
+                            <p id="direct-error-message"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
-
-        <div class="mb-3">
-            <label for="video-description" class="form-label">Описание</label>
-            <textarea class="form-control" id="video-description" rows="3" placeholder="Введите описание видео"></textarea>
+        
+        <!-- Добавление по ссылке -->
+        <div class="tab-pane fade" id="link" role="tabpanel">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">🔗 Добавить видео по ссылке</h5>
+                    <p class="card-text text-muted">
+                        Добавьте видео по ссылке на пост в Telegram или прямой ссылке на видео.
+                    </p>
+                    
+                    <form id="link-add-form">
+                        <div class="mb-3">
+                            <label for="link_title" class="form-label">Название *</label>
+                            <input type="text" class="form-control" id="link_title" name="title" required>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="link_description" class="form-label">Описание</label>
+                            <textarea class="form-control" id="link_description" name="description" rows="3"></textarea>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="link_category" class="form-label">Категория *</label>
+                            <select class="form-select" id="link_category" name="category" required>
+                                <option value="">Выберите категорию</option>
+                                <option value="moment">Момент из кино</option>
+                                <option value="trailer">Трейлер</option>
+                                <option value="news">Новость</option>
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="post_link" class="form-label">Ссылка на пост в Telegram *</label>
+                            <input type="url" class="form-control" id="post_link" name="post_link" placeholder="https://t.me/yourchannel/123" required>
+                            <div class="form-text">Пример: https://t.me/kinofilmuni/12</div>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary" id="link-submit-btn">
+                            <span id="link-btn-text">➕ Добавить по ссылке</span>
+                            <span id="link-loading" class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                        </button>
+                        <button type="reset" class="btn btn-secondary ms-2">Очистить</button>
+                    </form>
+                    
+                    <div id="link-result" class="mt-3 d-none">
+                        <div class="alert alert-success" role="alert">
+                            <h5>✅ Видео успешно добавлено!</h5>
+                            <p id="link-result-message"></p>
+                            <button class="btn btn-sm btn-outline-primary" onclick="location.reload()">Добавить еще</button>
+                            <a href="/admin/content" class="btn btn-sm btn-primary">Перейти к контенту</a>
+                        </div>
+                    </div>
+                    
+                    <div id="link-error" class="mt-3 d-none">
+                        <div class="alert alert-danger" role="alert">
+                            <h5>❌ Ошибка добавления</h5>
+                            <p id="link-error-message"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
-
-        <div class="mb-3">
-            <label for="video-type" class="form-label">Тип контента *</label>
-            <select class="form-select" id="video-type" required>
-                <option value="">Выберите тип...</option>
-                <option value="moment">🎬 Момент</option>
-                <option value="trailer">🎥 Трейлер</option>
-                <option value="news">📰 Новость</option>
-            </select>
-        </div>
-
-        <div class="mb-3">
-            <label for="video-url" class="form-label">Ссылка на пост в Telegram или прямой URL видео *</label>
-            <input type="url" class="form-control" id="video-url" required placeholder="https://t.me/your_channel/123 или https://example.com/video.mp4">
-            <div class="form-text">Поддерживаются ссылки на публичные и приватные каналы Telegram.</div>
-        </div>
-
-        <button type="submit" class="btn btn-primary w-100">➕ Добавить видео</button>
-        <div id="message-area" class="mt-3"></div>
-    </form>
+    </div>
 </div>
-{% endblock %}
 
-{% block scripts %}
 <script>
-document.getElementById('add-video-form').addEventListener('submit', async (e) => {
+// Обработчик формы прямой загрузки
+document.getElementById('direct-upload-form').addEventListener('submit', async function(e) {
     e.preventDefault();
-
-    const title = document.getElementById('video-title').value.trim();
-    const description = document.getElementById('video-description').value.trim();
-    const category = document.getElementById('video-type').value;
-    const post_link = document.getElementById('video-url').value.trim();
-    const messageArea = document.getElementById('message-area');
-
-    // Очищаем предыдущие сообщения
-    messageArea.innerHTML = '';
-
-    if (!title || !post_link || !category) {
-        messageArea.innerHTML = '<div class="alert alert-danger">❌ Пожалуйста, заполните все обязательные поля.</div>';
-        return;
-    }
-
+    
+    const submitBtn = document.getElementById('direct-submit-btn');
+    const btnText = document.getElementById('direct-btn-text');
+    const loadingSpinner = document.getElementById('direct-loading');
+    const resultDiv = document.getElementById('direct-result');
+    const errorDiv = document.getElementById('direct-error');
+    const resultMessage = document.getElementById('direct-result-message');
+    const errorMessage = document.getElementById('direct-error-message');
+    
     // Показываем индикатор загрузки
-    const submitButton = document.querySelector('button[type="submit"]');
-    const originalText = submitButton.textContent;
-    submitButton.disabled = true;
-    submitButton.innerHTML = '⏳ Добавление...';
-
+    btnText.classList.add('d-none');
+    loadingSpinner.classList.remove('d-none');
+    submitBtn.disabled = true;
+    
     try {
-        // Отправляем данные на НОВЫЙ маршрут
-        const res = await fetch('/admin/add_video_json', {
+        const formData = new FormData(this);
+        
+        const response = await fetch('/api/upload_video', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ title, description, category, post_link })
+            body: formData
         });
-
-        const data = await res.json();
-
-        if (res.ok && data.success) {
-            messageArea.innerHTML = '<div class="alert alert-success">✅ Видео успешно добавлено!</div>';
-            document.getElementById('add-video-form').reset();
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            // Показываем успех
+            resultMessage.textContent = result.message || 'Видео успешно загружено и добавлено в приложение!';
+            resultDiv.classList.remove('d-none');
+            errorDiv.classList.add('d-none');
+            
+            // Сбрасываем форму
+            this.reset();
         } else {
-            const errorMsg = data.error || 'Неизвестная ошибка';
-            messageArea.innerHTML = `<div class="alert alert-danger">❌ Ошибка: ${errorMsg}</div>`;
+            // Показываем ошибку
+            errorMessage.textContent = result.error || 'Неизвестная ошибка';
+            errorDiv.classList.remove('d-none');
+            resultDiv.classList.add('d-none');
         }
-    } catch (err) {
-        console.error('Fetch error:', err);
-        messageArea.innerHTML = '<div class="alert alert-danger">❌ Ошибка соединения с сервером</div>';
+    } catch (error) {
+        errorMessage.textContent = 'Ошибка сети: ' + error.message;
+        errorDiv.classList.remove('d-none');
+        resultDiv.classList.add('d-none');
     } finally {
-        // Возвращаем кнопку в исходное состояние
-        setTimeout(() => {
-            submitButton.disabled = false;
-            submitButton.innerHTML = originalText;
-        }, 500);
+        // Скрываем индикатор загрузки
+        btnText.classList.remove('d-none');
+        loadingSpinner.classList.add('d-none');
+        submitBtn.disabled = false;
+    }
+});
+
+// Обработчик формы добавления по ссылке
+document.getElementById('link-add-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const submitBtn = document.getElementById('link-submit-btn');
+    const btnText = document.getElementById('link-btn-text');
+    const loadingSpinner = document.getElementById('link-loading');
+    const resultDiv = document.getElementById('link-result');
+    const errorDiv = document.getElementById('link-error');
+    const resultMessage = document.getElementById('link-result-message');
+    const errorMessage = document.getElementById('link-error-message');
+    
+    // Показываем индикатор загрузки
+    btnText.classList.add('d-none');
+    loadingSpinner.classList.remove('d-none');
+    submitBtn.disabled = true;
+    
+    try {
+        const formData = new FormData(this);
+        const jsonData = {};
+        formData.forEach((value, key) => {
+            jsonData[key] = value;
+        });
+        
+        const response = await fetch('/admin/add_video_json', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(jsonData)
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            // Показываем успех
+            resultMessage.textContent = result.message || 'Видео успешно добавлено!';
+            resultDiv.classList.remove('d-none');
+            errorDiv.classList.add('d-none');
+            
+            // Сбрасываем форму
+            this.reset();
+        } else {
+            // Показываем ошибку
+            errorMessage.textContent = result.error || 'Неизвестная ошибка';
+            errorDiv.classList.remove('d-none');
+            resultDiv.classList.add('d-none');
+        }
+    } catch (error) {
+        errorMessage.textContent = 'Ошибка сети: ' + error.message;
+        errorDiv.classList.remove('d-none');
+        resultDiv.classList.add('d-none');
+    } finally {
+        // Скрываем индикатор загрузки
+        btnText.classList.remove('d-none');
+        loadingSpinner.classList.add('d-none');
+        submitBtn.disabled = false;
     }
 });
 </script>
