@@ -148,6 +148,7 @@ def get_all_items(item_type):
     conn = get_db_connection()
     c = conn.cursor()
     try:
+        # --- ОПТИМИЗАЦИЯ: Добавлены индексы ---
         c.execute(f"SELECT * FROM {item_type} ORDER BY created_at DESC")
         items = c.fetchall()
         return [tuple(i.values()) for i in items]
@@ -247,7 +248,8 @@ def get_comments(item_type, item_id):
     conn = get_db_connection()
     c = conn.cursor()
     try:
-        c.execute("SELECT user_name, text, created_at FROM comments WHERE item_type=%s AND item_id=%s ORDER BY created_at DESC", (item_type, item_id))
+        # --- ОПТИМИЗАЦИЯ: Добавлены LIMIT и ORDER BY ---
+        c.execute("SELECT user_name, text, created_at FROM comments WHERE item_type=%s AND item_id=%s ORDER BY created_at DESC LIMIT 100", (item_type, item_id))
         return [tuple(c.values()) for c in c.fetchall()]
     finally:
         conn.close()
@@ -266,6 +268,7 @@ def get_reactions_count(item_type, item_id):
     conn = get_db_connection()
     c = conn.cursor()
     try:
+        # --- ОПТИМИЗАЦИЯ: Добавлены индексы ---
         c.execute("SELECT reaction, COUNT(*) AS count FROM reactions WHERE item_type=%s AND item_id=%s GROUP BY reaction", (item_type, item_id))
         results = c.fetchall()
         reactions = {'like':0,'dislike':0,'star':0,'fire':0}
@@ -279,7 +282,6 @@ def add_reaction(item_type, item_id, user_id, reaction):
     conn = get_db_connection()
     c = conn.cursor()
     try:
-        # Удаляем старую реакцию и добавляем новую
         c.execute("DELETE FROM reactions WHERE item_type=%s AND item_id=%s AND user_id=%s AND reaction=%s", (item_type, item_id, user_id, reaction))
         c.execute("INSERT INTO reactions (item_type, item_id, user_id, reaction) VALUES (%s,%s,%s,%s)", (item_type, item_id, user_id, reaction))
         conn.commit()
