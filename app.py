@@ -231,7 +231,7 @@ def refresh_video_url():
     """Обновляет устаревшую ссылку на видео по Telegram посту"""
     try:
         data = request.get_json()
-        if not 
+        if not data:
             logger.warning("[ОБНОВЛЕНИЕ ССЫЛКИ] Неверный формат данных")
             return jsonify(success=False, error="Неверный формат данных"), 400
             
@@ -403,7 +403,7 @@ def cache_delete(key):
 def build_extra_map(data, item_type_plural):
     """Добавляет реакции и комментарии к каждому элементу данных."""
     extra = {}
-    for row in 
+    for row in data:
         item_id = row[0]
         reactions = get_reactions_count(item_type_plural, item_id) or {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}
         comments_count = len(get_comments(item_type_plural, item_id) or [])
@@ -459,7 +459,7 @@ def moments():
             extra_map = build_extra_map(data, 'moments')
             logger.info("extra_map построен успешно")
             combined_data = []
-            for row in 
+            for row in data:
                 item_id = row[0]
                 item_dict = {
                     'id': row[0],
@@ -497,7 +497,7 @@ def trailers():
             extra_map = build_extra_map(data, 'trailers')
             logger.info("extra_map построен успешно")
             combined_data = []
-            for row in 
+            for row in data:
                 item_id = row[0]
                 item_dict = {
                     'id': row[0],
@@ -535,7 +535,7 @@ def news():
             extra_map = build_extra_map(data, 'news')
             logger.info("extra_map построен успешно")
             combined_data = []
-            for row in 
+            for row in data:
                 item_id = row[0]
                 item_dict = {
                     'id': row[0],
@@ -595,9 +595,9 @@ def trailer_detail(item_id):
     item_dict = {
         'id': item[0],
         'title': item[1] if len(item) > 1 else '',
-        'description': item[2] if len(item) > 2 else '',
-        'video_url': item[3] if len(item) > 3 else '',
-        'created_at': item[4] if len(item) > 4 else None
+        'description': item[2] if len(row) > 2 else '',
+        'video_url': item[3] if len(row) > 3 else '',
+        'created_at': item[4] if len(row) > 4 else None
     }
     return render_template('trailer_detail.html', item=item_dict, reactions=reactions, comments=comments)
 
@@ -850,7 +850,7 @@ def admin_add_video_json():
     """API endpoint для добавления видео через форму add_video.html"""
     try:
         data = request.get_json()
-        if not 
+        if not data:
             return jsonify(success=False, error="Неверный формат данных (ожидается JSON)"), 400
         title = data.get('title', '').strip()
         description = data.get('description', '').strip()
@@ -909,7 +909,7 @@ def add_video_command(update, context):
 def handle_pending_video_text(update, context):
     user = update.message.from_user
     telegram_id = str(user.id)
-    if telegram_id not in pending_video_
+    if telegram_id not in pending_video_data:
         return
     data = pending_video_data.pop(telegram_id)
     content_type, title = data['content_type'], data['title']
@@ -933,7 +933,7 @@ def handle_pending_video_file(update, context):
     user = update.message.from_user
     telegram_id = str(user.id)
     logger.info(f"Получен видеофайл от пользователя {telegram_id}")
-    if telegram_id not in pending_video_
+    if telegram_id not in pending_video_data:
         logger.debug("Нет ожидающих данных для видео")
         return
     data = pending_video_data.pop(telegram_id)
