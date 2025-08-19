@@ -35,6 +35,7 @@ logger = logging.getLogger(__name__)
 
 # --- Config ---
 TOKEN = os.environ.get('TELEGRAM_TOKEN')
+# Исправлено: убраны лишние пробелы
 WEBHOOK_URL = os.environ.get('WEBHOOK_URL', 'https://cinema-space-bot.onrender.com').strip().rstrip('/')
 REDIS_URL = os.environ.get('REDIS_URL', None)
 
@@ -86,6 +87,7 @@ def get_direct_video_url(file_id):
         logger.error("TELEGRAM_TOKEN не установлен для генерации ссылки")
         return None
     try:
+        # ИСПРАВЛЕНО: Убраны лишние пробелы в URL
         file_info_url = f"https://api.telegram.org/bot{bot_token}/getFile?file_id={file_id}"
         logger.debug(f"Запрос к Telegram API: {file_info_url}")
         response = requests.get(file_info_url, timeout=10)
@@ -96,6 +98,7 @@ def get_direct_video_url(file_id):
             logger.error(f"Ошибка от Telegram API: {json_response}")
             return None
         file_path = json_response['result']['file_path']
+        # ИСПРАВЛЕНО: Убраны лишние пробелы в URL
         direct_url = f"https://api.telegram.org/file/bot{bot_token}/{file_path}"
         logger.info(f"Сгенерирована прямая ссылка для file_id {file_id}")
         return direct_url
