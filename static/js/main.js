@@ -1,9 +1,11 @@
 // main.js — полный рабочий файл с оптимизацией Telegram WebApp и fullscreen
-// Обновлен для поддержки автоматического обновления ссылок на видео и улучшенной загрузки
+// Обновлен для поддержки моментального переключения между вкладками
 
 // Глобальные переменные
 let currentTab = 'moments';
 let userId = 'user_' + Math.random().toString(36).substr(2, 9);
+let tabCache = {}; // Кэш для вкладок
+let isPreloading = false; // Флаг предзагрузки
 
 // Флаги для предотвращения множественных обработчиков
 let modalClickHandlerAdded = false;
@@ -47,20 +49,60 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const tabBtns = document.querySelectorAll('.tab-btn[data-tab]'); // Только кнопки вкладок
 
-    // --- УЛУЧШЕНИЕ: Функция загрузки контента с индикатором загрузки ---
+    // --- УЛУЧШЕНИЕ: Предзагрузка всех вкладок ---
+    async function preloadAllTabs() {
+        if (isPreloading) return;
+        isPreloading = true;
+        
+        console.log("Начало предзагрузки всех вкладок...");
+        const tabsToPreload = ['moments', 'trailers', 'news'];
+        
+        for (const tabName of tabsToPreload) {
+            try {
+                if (!tabCache[tabName]) {
+                    console.log(`Предзагрузка вкладки: ${tabName}`);
+                    const response = await fetch(`/${tabName}`);
+                    if (response.ok) {
+                        const html = await response.text();
+                        tabCache[tabName] = html;
+                        console.log(`Вкладка ${tabName} предзагружена и закэширована`);
+                    }
+                }
+            } catch (error) {
+                console.error(`Ошибка предзагрузки вкладки ${tabName}:`, error);
+            }
+        }
+        
+        isPreloading = false;
+        console.log("Предзагрузка всех вкладок завершена");
+    }
+
+    // --- УЛУЧШЕНИЕ: Моментальная загрузка контента из кэша ---
     async function loadTabContent(tabName) {
         try {
-            // Показываем индикатор загрузки
+            // Проверяем кэш первым делом
+            if (tabCache[tabName]) {
+                console.log(`Загрузка вкладки ${tabName} из кэша`);
+                contentArea.innerHTML = tabCache[tabName];
+                currentTab = tabName;
+                addDynamicFeatures();
+                return;
+            }
+            
+            // Показываем минимальный индикатор загрузки
             contentArea.innerHTML = `
-                <div style="text-align: center; padding: 50px; color: var(--accent);">
-                    <div class="loading-spinner" style="margin: 0 auto 20px; width: 40px; height: 40px; border: 4px solid rgba(255,255,255,0.3); border-top-color: #00f3ff; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                    <div>🌀 Загрузка ${tabName}...</div>
+                <div style="text-align: center; padding: 20px; color: var(--accent);">
+                    <div>🌀</div>
                 </div>
             `;
 
             const response = await fetch(`/${tabName}`);
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             const html = await response.text();
+            
+            // Кэшируем контент
+            tabCache[tabName] = html;
+            
             contentArea.innerHTML = html;
             currentTab = tabName;
             addDynamicFeatures();
@@ -94,9 +136,8 @@ document.addEventListener('DOMContentLoaded', function() {
             if (query) {
                 try {
                     contentArea.innerHTML = `
-                        <div style="text-align: center; padding: 50px; color: var(--accent);">
-                            <div class="loading-spinner" style="margin: 0 auto 20px; width: 40px; height: 40px; border: 4px solid rgba(255,255,255,0.3); border-top-color: #00f3ff; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                            <div>🌀 Поиск по запросу: "${query}"...</div>
+                        <div style="text-align: center; padding: 20px; color: var(--accent);">
+                            <div>🔍</div>
                         </div>
                     `;
                     const response = await fetch(`/search?q=${encodeURIComponent(query)}`);
@@ -130,6 +171,11 @@ document.addEventListener('DOMContentLoaded', function() {
     if (tabBtns.length > 0) {
         tabBtns[0].classList.add('active');
         loadTabContent(tabBtns[0].dataset.tab);
+        
+        // Начинаем предзагрузку остальных вкладок через 1 секунду
+        setTimeout(() => {
+            preloadAllTabs();
+        }, 1000);
     } else {
         console.log("Кнопки вкладок не найдены на главной странице.");
     }
@@ -145,10 +191,10 @@ function addDynamicFeatures() {
     addLoadCommentsHandlers();
     addModalHandlers();
     setupFormToggles();
-    initializeVideoErrorHandling(); // НОВАЯ ФУНКЦИЯ
+    initializeVideoErrorHandling();
 }
 
-// --- НОВАЯ ФУНКЦИЯ: Обработка ошибок воспроизведения видео ---
+// --- УЛУЧШЕНИЕ: Обработка ошибок воспроизведения видео ---
 function initializeVideoErrorHandling() {
     // Добавляем обработчики ошибок для всех видеоэлементов
     document.querySelectorAll('video').forEach(video => {
@@ -162,9 +208,9 @@ function initializeVideoErrorHandling() {
             const loader = document.createElement('div');
             loader.className = 'video-loader';
             loader.innerHTML = `
-                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 300px; background: rgba(15, 12, 41, 0.8); border-radius: 10px; margin: 10px 0;">
-                    <div class="loading-spinner" style="width: 40px; height: 40px; border: 4px solid rgba(255,255,255,0.3); border-top-color: #00f3ff; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 15px;"></div>
-                    <div style="color: #00f3ff;">🔄 Обновление видео...</div>
+                <div>
+                    <div class="spinner"></div>
+                    <div class="text">🔄 Обновление видео...</div>
                 </div>
             `;
             
@@ -207,11 +253,9 @@ function initializeVideoErrorHandling() {
                             const errorNotice = document.createElement('div');
                             errorNotice.className = 'video-error-notice';
                             errorNotice.innerHTML = `
-                                <div style="background: rgba(255, 0, 0, 0.2); padding: 15px; border-radius: 8px; margin: 10px 0; color: #ff4444; text-align: center;">
-                                    <div style="font-size: 24px; margin-bottom: 10px;">❌</div>
-                                    <div>Не удалось воспроизвести видео</div>
-                                    <div style="font-size: 12px; margin-top: 5px;">Попробуйте обновить страницу или попробовать позже</div>
-                                </div>
+                                <div class="error-icon">❌</div>
+                                <div class="error-message">Не удалось воспроизвести видео</div>
+                                <div class="error-detail">Попробуйте обновить страницу или попробовать позже</div>
                             `;
                             parent.replaceChild(errorNotice, newVideo);
                         });
@@ -228,11 +272,9 @@ function initializeVideoErrorHandling() {
                         const errorNotice = document.createElement('div');
                         errorNotice.className = 'video-error-notice';
                         errorNotice.innerHTML = `
-                            <div style="background: rgba(255, 0, 0, 0.2); padding: 15px; border-radius: 8px; margin: 10px 0; color: #ff4444; text-align: center;">
-                                <div style="font-size: 24px; margin-bottom: 10px;">❌</div>
-                                <div>Не удалось обновить видео</div>
-                                <div style="font-size: 12px; margin-top: 5px;">${result.error || 'Попробуйте позже'}</div>
-                            </div>
+                            <div class="error-icon">❌</div>
+                            <div class="error-message">Не удалось обновить видео</div>
+                            <div class="error-detail">${result.error || 'Попробуйте позже'}</div>
                         `;
                         parent.replaceChild(errorNotice, loader);
                     }
@@ -241,11 +283,9 @@ function initializeVideoErrorHandling() {
                     const errorNotice = document.createElement('div');
                     errorNotice.className = 'video-error-notice';
                     errorNotice.innerHTML = `
-                        <div style="background: rgba(255, 0, 0, 0.2); padding: 15px; border-radius: 8px; margin: 10px 0; color: #ff4444; text-align: center;">
-                            <div style="font-size: 24px; margin-bottom: 10px;">❌</div>
-                            <div>Ошибка воспроизведения видео</div>
-                            <div style="font-size: 12px; margin-top: 5px;">Неподдерживаемый формат или файл недоступен</div>
-                        </div>
+                        <div class="error-icon">❌</div>
+                        <div class="error-message">Ошибка воспроизведения видео</div>
+                        <div class="error-detail">Неподдерживаемый формат или файл недоступен</div>
                     `;
                     parent.replaceChild(errorNotice, loader);
                 }
@@ -254,11 +294,9 @@ function initializeVideoErrorHandling() {
                 const errorNotice = document.createElement('div');
                 errorNotice.className = 'video-error-notice';
                 errorNotice.innerHTML = `
-                    <div style="background: rgba(255, 0, 0, 0.2); padding: 15px; border-radius: 8px; margin: 10px 0; color: #ff4444; text-align: center;">
-                        <div style="font-size: 24px; margin-bottom: 10px;">🌐</div>
-                        <div>Ошибка сети при обновлении</div>
-                        <div style="font-size: 12px; margin-top: 5px;">Проверьте подключение и попробуйте позже</div>
-                    </div>
+                    <div class="error-icon">🌐</div>
+                    <div class="error-message">Ошибка сети при обновлении</div>
+                    <div class="error-detail">Проверьте подключение и попробуйте позже</div>
                 `;
                 parent.replaceChild(errorNotice, loader);
             }
@@ -568,17 +606,5 @@ function setupContentForm(formId, typeName, apiUrl, modalId, alwaysFormData=fals
         }
     });
 }
-
-// --- УЛУЧШЕНИЕ: Добавляем глобальный стиль для спиннеров ---
-const spinnerStyle = document.createElement('style');
-spinnerStyle.textContent = `
-    @keyframes spin {
-        to { transform: rotate(360deg); }
-    }
-    .loading-spinner {
-        animation: spin 1s linear infinite;
-    }
-`;
-document.head.appendChild(spinnerStyle);
 
 console.log("main.js загружен и выполняется с fullscreen Telegram WebApp!");
