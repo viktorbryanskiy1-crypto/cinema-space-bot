@@ -1,4 +1,3 @@
-# app.py
 import os
 import threading
 import logging
@@ -151,7 +150,7 @@ async def extract_video_url_from_telegram_post(post_url):
             logger.debug(f"Найден приватный канал (ID): {chat_id_or_username}, сообщение: {message_id}")
         else:
             logger.error(f"Неверный формат ссылки на пост: {post_url}")
-            return None, "Неверный формат ссылки на пост Telegram. Используйте формат https://t.me/channel/123 или https://t.me/c/123456789/123"
+            return None, "Неверный формат ссылки на пост Telegram. Используйте формат https://t.me/channel/123   или https://t.me/c/123456789/123  "
         if chat_id_or_username is None or message_id is None:
             return None, "Не удалось распарсить ссылку на пост"
         bot = Bot(token=TOKEN)
