@@ -21,7 +21,7 @@
         }
         /* Стили для приветственного экрана */
         #welcome-screen {
-            display: none; /* Скрыто по умолчанию */
+            display: none;
             position: fixed;
             top: 0;
             left: 0;
@@ -63,7 +63,6 @@
     </div>
 
     <div class="container">
-        <!-- Навигация -->
         <nav class="navbar">
             <div class="nav-brand">
                 <h1>🌌 КиноВселенная</h1>
@@ -79,7 +78,6 @@
             </div>
         </nav>
         
-        <!-- Основной контент -->
         <div id="content-area">
             <div style="text-align: center; padding: 50px; color: var(--accent);">
                 <h2>🚀 Добро пожаловать в КиноВселенную!</h2>
@@ -88,13 +86,10 @@
         </div>
     </div>
     
-    <!-- Подключаем Telegram WebApp API -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script>
-        // Фиксируем WebApp сверху, чтобы свайп не скрывал его
         window.Telegram.WebApp.ready();
         window.Telegram.WebApp.expand();
-        // Отключаем вертикальные свайпы для сворачивания
         if (window.Telegram.WebApp.disableVerticalSwipes) {
             window.Telegram.WebApp.disableVerticalSwipes();
             console.log("Vertical swipes disabled.");
@@ -102,34 +97,26 @@
             console.log("disableVerticalSwipes not supported in this Telegram client version.");
         }
 
-        // Логика приветственного экрана
         document.addEventListener('DOMContentLoaded', function() {
             const welcomeScreen = document.getElementById('welcome-screen');
             const enterBtn = document.getElementById('enter-btn');
             const mainContent = document.querySelector('.container');
-
-            // Проверяем, первый ли визит
             const hasVisited = localStorage.getItem('hasVisitedCinemaSpace');
 
             if (!hasVisited) {
-                // Показываем приветственный экран
                 welcomeScreen.style.display = 'flex';
-                mainContent.style.display = 'none'; // Скрываем основной контент
-
-                // Обработчик кнопки "Войти"
+                mainContent.style.display = 'none';
                 enterBtn.addEventListener('click', function() {
                     localStorage.setItem('hasVisitedCinemaSpace', 'true');
                     welcomeScreen.style.display = 'none';
-                    mainContent.style.display = 'block'; // Показываем основной контент
+                    mainContent.style.display = 'block';
                 });
             } else {
-                // Просто показываем основной контент
-                 welcomeScreen.style.display = 'none';
-                 mainContent.style.display = 'block';
+                welcomeScreen.style.display = 'none';
+                mainContent.style.display = 'block';
             }
         });
     </script>
-    <!-- Подключаем наш основной JS -->
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
 </html>
