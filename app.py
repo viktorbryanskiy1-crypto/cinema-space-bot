@@ -12,7 +12,7 @@ from flask import (
     redirect, url_for, session, send_from_directory, abort
 )
 from werkzeug.utils import secure_filename
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, Bot, MenuButtonWebApp, Update, InputFile
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, Bot, MenuButtonWebApp, Update
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 import redis
 import json
@@ -37,7 +37,6 @@ TOKEN = os.environ.get('TELEGRAM_TOKEN')
 # Исправлено: убраны лишние пробелы
 WEBHOOK_URL = os.environ.get('WEBHOOK_URL', 'https://cinema-space-bot.onrender.com').strip().rstrip('/')
 REDIS_URL = os.environ.get('REDIS_URL', None)
-TELEGRAM_CHANNEL_ID = os.environ.get('TELEGRAM_CHANNEL_ID', '@kinofilmuni')
 
 if not TOKEN:
     logger.error("TELEGRAM_TOKEN not set!")
@@ -63,10 +62,10 @@ else:
 # --- Flask ---
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'super-secret-key')
-app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024 * 1024
-app.config['UPLOAD_FOLDER'] = 'temp_uploads'
+app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024
+app.config['UPLOAD_FOLDER'] = 'uploads'
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-ALLOWED_VIDEO_EXTENSIONS = {'mp4', 'avi', 'mov', 'wmv', 'flv', 'webm', 'mkv'}
+ALLOWED_VIDEO_EXTENSIONS = {'mp4', 'avi', 'mov', 'wmv', 'flv', 'webm'}
 ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 
 def allowed_file(filename, allowed_exts):
@@ -90,7 +89,7 @@ def get_direct_video_url(file_id):
         # ИСПРАВЛЕНО: Убраны лишние пробелы в URL
         file_info_url = f"https://api.telegram.org/bot{bot_token}/getFile?file_id={file_id}"
         logger.debug(f"Запрос к Telegram API: {file_info_url}")
-        response = requests.get(file_info_url, timeout=30)
+        response = requests.get(file_info_url, timeout=10)
         response.raise_for_status()
         json_response = response.json()
         logger.debug(f"Ответ от Telegram API: {json_response}")
@@ -112,8 +111,7 @@ def get_direct_video_url(file_id):
         logger.error(f"Неизвестная ошибка при получении ссылки для file_id {file_id}: {e}")
         return None
 
-# --- УЛУЧШЕНИЕ: Увеличено время кэширования до 24 часов ---
-def get_cached_direct_video_url(file_id, cache_time=86400):  # Было 14400 (4ч), стало 86400 (24ч)
+def get_cached_direct_video_url(file_id, cache_time=3600):  # Увеличено до 1 часа
     """Кэшированное получение прямой ссылки"""
     current_time = time.time()
     if file_id in video_url_cache:
@@ -233,7 +231,7 @@ def refresh_video_url():
     """Обновляет устаревшую ссылку на видео по Telegram посту"""
     try:
         data = request.get_json()
-        if not data:
+        if not 
             logger.warning("[ОБНОВЛЕНИЕ ССЫЛКИ] Неверный формат данных")
             return jsonify(success=False, error="Неверный формат данных"), 400
             
@@ -256,6 +254,31 @@ def refresh_video_url():
     except Exception as e:
         logger.error(f"[ОБНОВЛЕНИЕ ССЫЛКИ] Критическая ошибка: {e}", exc_info=True)
         return jsonify(success=False, error="Внутренняя ошибка сервера"), 500
+
+# --- НОВАЯ ФУНКЦИЯ: Кэширование HTML страниц ---
+def get_cached_html(key, generate_func, expire=300):
+    """Получает HTML из кэша или генерирует новый"""
+    if redis_client:
+        try:
+            cached_html = redis_client.get(key)
+            if cached_html:
+                logger.info(f"HTML для {key} получен из кэша")
+                return cached_html
+        except Exception as e:
+            logger.warning(f"Ошибка получения HTML из кэша: {e}")
+    
+    # Генерируем новый HTML
+    html = generate_func()
+    
+    # Сохраняем в кэш
+    if redis_client and html:
+        try:
+            redis_client.set(key, html, ex=expire)
+            logger.info(f"HTML для {key} закэширован на {expire} секунд")
+        except Exception as e:
+            logger.warning(f"Ошибка сохранения HTML в кэш: {e}")
+    
+    return html
 
 # --- Функция для установки Menu Button ---
 def set_menu_button():
@@ -377,29 +400,13 @@ def cache_delete(key):
         except Exception:
             pass
 
-# --- УЛУЧШЕНИЕ: Оптимизированная функция для построения extra_map ---
 def build_extra_map(data, item_type_plural):
     """Добавляет реакции и комментарии к каждому элементу данных."""
     extra = {}
-    for row in data:
+    for row in 
         item_id = row[0]
-        # --- УЛУЧШЕНИЕ: Кэширование реакций и комментариев ---
-        reactions_key = f"reactions:{item_type_plural}:{item_id}"
-        comments_key = f"comments_count:{item_type_plural}:{item_id}"
-        
-        # Проверяем кэш
-        reactions = cache_get(reactions_key)
-        comments_count = cache_get(comments_key)
-        
-        if reactions is None or comments_count is None:
-            # Если нет в кэше - получаем из БД
-            reactions = get_reactions_count(item_type_plural, item_id) or {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}
-            comments_count = len(get_comments(item_type_plural, item_id) or [])
-            
-            # Сохраняем в кэш на 10 минут
-            cache_set(reactions_key, reactions, expire=600)
-            cache_set(comments_key, comments_count, expire=600)
-        
+        reactions = get_reactions_count(item_type_plural, item_id) or {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}
+        comments_count = len(get_comments(item_type_plural, item_id) or [])
         extra[item_id] = {'reactions': reactions, 'comments_count': comments_count}
     return extra
 
@@ -439,150 +446,120 @@ def webhook_info():
         logger.error(f"Ошибка получения информации о webhook: {e}")
         return jsonify({'error': str(e)}), 500
 
-# --- УЛУЧШЕНИЕ: Кэширование списков контента ---
+# --- УЛУЧШЕНИЕ: Кэшированные маршруты для вкладок ---
 @app.route('/moments')
 def moments():
-    try:
-        logger.info("Запрос к /moments")
-        
-        # --- УЛУЧШЕНИЕ: Кэширование всего списка ---
-        cache_key = "moments_list_html"
-        cached_html = cache_get(cache_key)
-        if cached_html:
-            logger.info("moments_list получен из кэша")
-            return cached_html
-            
-        logger.info("Получение всех моментов из БД...")
-        data = get_all_moments() or []
-        logger.info(f"Получено {len(data)} моментов из БД")
-        logger.info("Построение extra_map...")
-        extra_map = build_extra_map(data, 'moments')
-        logger.info("extra_map построен успешно")
-        combined_data = []
-        for row in data:
-            item_id = row[0]
-            item_dict = {
-                'id': row[0],
-                'title': row[1] if len(row) > 1 else '',
-                'description': row[2] if len(row) > 2 else '',
-                'video_url': row[3] if len(row) > 3 else '',
-                'created_at': row[4] if len(row) > 4 else None
-            }
-            extra_info = extra_map.get(item_id, {'reactions': {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}, 'comments_count': 0})
-            if isinstance(extra_info.get('reactions'), dict):
-                item_dict['reactions'] = extra_info['reactions']
-            else:
-                item_dict['reactions'] = {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}
-            item_dict['comments_count'] = extra_info.get('comments_count', 0)
-            combined_data.append(item_dict)
-        logger.info("Данные объединены успешно")
-        
-        # Рендерим HTML
-        html = render_template('moments.html', moments=combined_data)
-        
-        # Кэшируем на 5 минут
-        cache_set(cache_key, html, expire=300)
-        
-        return html
-    except Exception as e:
-        logger.error(f"API add_moment error: {e}", exc_info=True)
-        return jsonify(success=False, error=str(e)), 500
+    def generate_moments_html():
+        try:
+            logger.info("Запрос к /moments")
+            logger.info("Получение всех моментов из БД...")
+            data = get_all_moments() or []
+            logger.info(f"Получено {len(data)} моментов из БД")
+            logger.info("Построение extra_map...")
+            extra_map = build_extra_map(data, 'moments')
+            logger.info("extra_map построен успешно")
+            combined_data = []
+            for row in 
+                item_id = row[0]
+                item_dict = {
+                    'id': row[0],
+                    'title': row[1] if len(row) > 1 else '',
+                    'description': row[2] if len(row) > 2 else '',
+                    'video_url': row[3] if len(row) > 3 else '',
+                    'created_at': row[4] if len(row) > 4 else None
+                }
+                extra_info = extra_map.get(item_id, {'reactions': {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}, 'comments_count': 0})
+                if isinstance(extra_info.get('reactions'), dict):
+                    item_dict['reactions'] = extra_info['reactions']
+                else:
+                    item_dict['reactions'] = {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}
+                item_dict['comments_count'] = extra_info.get('comments_count', 0)
+                combined_data.append(item_dict)
+            logger.info("Данные объединены успешно")
+            return render_template('moments.html', moments=combined_data)
+        except Exception as e:
+            logger.error(f"API add_moment error: {e}", exc_info=True)
+            return render_template('error.html', error=str(e))
+    
+    # Кэшируем HTML на 5 минут
+    cached_html = get_cached_html('moments_page', generate_moments_html, expire=300)
+    return cached_html
 
 @app.route('/trailers')
 def trailers():
-    try:
-        logger.info("Запрос к /trailers")
-        
-        # --- УЛУЧШЕНИЕ: Кэширование всего списка ---
-        cache_key = "trailers_list_html"
-        cached_html = cache_get(cache_key)
-        if cached_html:
-            logger.info("trailers_list получен из кэша")
-            return cached_html
-            
-        logger.info("Получение всех трейлеров из БД...")
-        data = get_all_trailers() or []
-        logger.info(f"Получено {len(data)} трейлеров из БД")
-        logger.info("Построение extra_map...")
-        extra_map = build_extra_map(data, 'trailers')
-        logger.info("extra_map построен успешно")
-        combined_data = []
-        for row in data:
-            item_id = row[0]
-            item_dict = {
-                'id': row[0],
-                'title': row[1] if len(row) > 1 else '',
-                'description': row[2] if len(row) > 2 else '',
-                'video_url': row[3] if len(row) > 3 else '',
-                'created_at': row[4] if len(row) > 4 else None
-            }
-            extra_info = extra_map.get(item_id, {'reactions': {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}, 'comments_count': 0})
-            if isinstance(extra_info.get('reactions'), dict):
-                item_dict['reactions'] = extra_info['reactions']
-            else:
-                item_dict['reactions'] = {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}
-            item_dict['comments_count'] = extra_info.get('comments_count', 0)
-            combined_data.append(item_dict)
-        logger.info("Данные объединены успешно")
-        
-        # Рендерим HTML
-        html = render_template('trailers.html', trailers=combined_data)
-        
-        # Кэшируем на 5 минут
-        cache_set(cache_key, html, expire=300)
-        
-        return html
-    except Exception as e:
-        logger.error(f"API add_trailer error: {e}", exc_info=True)
-        return jsonify(success=False, error=str(e)), 500
+    def generate_trailers_html():
+        try:
+            logger.info("Запрос к /trailers")
+            logger.info("Получение всех трейлеров из БД...")
+            data = get_all_trailers() or []
+            logger.info(f"Получено {len(data)} трейлеров из БД")
+            logger.info("Построение extra_map...")
+            extra_map = build_extra_map(data, 'trailers')
+            logger.info("extra_map построен успешно")
+            combined_data = []
+            for row in 
+                item_id = row[0]
+                item_dict = {
+                    'id': row[0],
+                    'title': row[1] if len(row) > 1 else '',
+                    'description': row[2] if len(row) > 2 else '',
+                    'video_url': row[3] if len(row) > 3 else '',
+                    'created_at': row[4] if len(row) > 4 else None
+                }
+                extra_info = extra_map.get(item_id, {'reactions': {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}, 'comments_count': 0})
+                if isinstance(extra_info.get('reactions'), dict):
+                    item_dict['reactions'] = extra_info['reactions']
+                else:
+                    item_dict['reactions'] = {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}
+                item_dict['comments_count'] = extra_info.get('comments_count', 0)
+                combined_data.append(item_dict)
+            logger.info("Данные объединены успешно")
+            return render_template('trailers.html', trailers=combined_data)
+        except Exception as e:
+            logger.error(f"API add_trailer error: {e}", exc_info=True)
+            return render_template('error.html', error=str(e))
+    
+    # Кэшируем HTML на 5 минут
+    cached_html = get_cached_html('trailers_page', generate_trailers_html, expire=300)
+    return cached_html
 
 @app.route('/news')
 def news():
-    try:
-        logger.info("Запрос к /news")
-        
-        # --- УЛУЧШЕНИЕ: Кэширование всего списка ---
-        cache_key = "news_list_html"
-        cached_html = cache_get(cache_key)
-        if cached_html:
-            logger.info("news_list получен из кэша")
-            return cached_html
-            
-        logger.info("Получение всех новостей из БД...")
-        data = get_all_news() or []
-        logger.info(f"Получено {len(data)} новостей из БД")
-        logger.info("Построение extra_map...")
-        extra_map = build_extra_map(data, 'news')
-        logger.info("extra_map построен успешно")
-        combined_data = []
-        for row in data:
-            item_id = row[0]
-            item_dict = {
-                'id': row[0],
-                'title': row[1] if len(row) > 1 else '',
-                'text': row[2] if len(row) > 2 else '',
-                'image_url': row[3] if len(row) > 3 else '',
-                'created_at': row[4] if len(row) > 4 else None
-            }
-            extra_info = extra_map.get(item_id, {'reactions': {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}, 'comments_count': 0})
-            if isinstance(extra_info.get('reactions'), dict):
-                item_dict['reactions'] = extra_info['reactions']
-            else:
-                item_dict['reactions'] = {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}
-            item_dict['comments_count'] = extra_info.get('comments_count', 0)
-            combined_data.append(item_dict)
-        logger.info("Данные объединены успешно")
-        
-        # Рендерим HTML
-        html = render_template('news.html', news=combined_data)
-        
-        # Кэшируем на 5 минут
-        cache_set(cache_key, html, expire=300)
-        
-        return html
-    except Exception as e:
-        logger.error(f"API add_news error: {e}", exc_info=True)
-        return jsonify(success=False, error=str(e)), 500
+    def generate_news_html():
+        try:
+            logger.info("Запрос к /news")
+            logger.info("Получение всех новостей из БД...")
+            data = get_all_news() or []
+            logger.info(f"Получено {len(data)} новостей из БД")
+            logger.info("Построение extra_map...")
+            extra_map = build_extra_map(data, 'news')
+            logger.info("extra_map построен успешно")
+            combined_data = []
+            for row in 
+                item_id = row[0]
+                item_dict = {
+                    'id': row[0],
+                    'title': row[1] if len(row) > 1 else '',
+                    'text': row[2] if len(row) > 2 else '',
+                    'image_url': row[3] if len(row) > 3 else '',
+                    'created_at': row[4] if len(row) > 4 else None
+                }
+                extra_info = extra_map.get(item_id, {'reactions': {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}, 'comments_count': 0})
+                if isinstance(extra_info.get('reactions'), dict):
+                    item_dict['reactions'] = extra_info['reactions']
+                else:
+                    item_dict['reactions'] = {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}
+                item_dict['comments_count'] = extra_info.get('comments_count', 0)
+                combined_data.append(item_dict)
+            logger.info("Данные объединены успешно")
+            return render_template('news.html', news=combined_data)
+        except Exception as e:
+            logger.error(f"API add_news error: {e}", exc_info=True)
+            return render_template('error.html', error=str(e))
+    
+    # Кэшируем HTML на 5 минут
+    cached_html = get_cached_html('news_page', generate_news_html, expire=300)
+    return cached_html
 
 @app.route('/moments/<int:item_id>')
 def moment_detail(item_id):
@@ -674,6 +651,7 @@ def api_add_moment():
             return jsonify(success=False, error="Укажите ссылку на видео, пост Telegram или загрузите файл"), 400
         add_moment(title, desc, video_url)
         cache_delete('moments_list')
+        cache_delete('moments_page')  # Удаляем кэш страницы
         logger.info(f"Добавлен момент: {title}")
         return jsonify(success=True)
     except Exception as e:
@@ -705,6 +683,7 @@ def api_add_trailer():
             return jsonify(success=False, error="Укажите ссылку на видео, пост Telegram или загрузите файл"), 400
         add_trailer(title, desc, video_url)
         cache_delete('trailers_list')
+        cache_delete('trailers_page')  # Удаляем кэш страницы
         logger.info(f"Добавлен трейлер: {title}")
         return jsonify(success=True)
     except Exception as e:
@@ -724,6 +703,7 @@ def api_add_news():
                 image_url = saved
         add_news(title, text, image_url)
         cache_delete('news_list')
+        cache_delete('news_page')  # Удаляем кэш страницы
         logger.info(f"Добавлена новость: {title}")
         return jsonify(success=True)
     except Exception as e:
@@ -837,12 +817,15 @@ def admin_delete(content_type, content_id):
     if content_type == 'moment':
         delete_moment(content_id)
         cache_delete('moments_list')
+        cache_delete('moments_page')  # Удаляем кэш страницы
     elif content_type == 'trailer':
         delete_trailer(content_id)
         cache_delete('trailers_list')
+        cache_delete('trailers_page')  # Удаляем кэш страницы
     elif content_type == 'news':
         delete_news(content_id)
         cache_delete('news_list')
+        cache_delete('news_page')  # Удаляем кэш страницы
     return redirect(url_for('admin_content'))
 
 @app.route('/admin/access')
@@ -867,7 +850,7 @@ def admin_add_video_json():
     """API endpoint для добавления видео через форму add_video.html"""
     try:
         data = request.get_json()
-        if not data:
+        if not 
             return jsonify(success=False, error="Неверный формат данных (ожидается JSON)"), 400
         title = data.get('title', '').strip()
         description = data.get('description', '').strip()
@@ -890,12 +873,15 @@ def admin_add_video_json():
         if category == 'moment':
             add_moment(title, description, video_url)
             cache_delete('moments_list')
+            cache_delete('moments_page')  # Удаляем кэш страницы
         elif category == 'trailer':
             add_trailer(title, description, video_url)
             cache_delete('trailers_list')
+            cache_delete('trailers_page')  # Удаляем кэш страницы
         elif category == 'news':
             add_news(title, description, video_url if video_url.startswith(('http://', 'https://')) else None)
             cache_delete('news_list')
+            cache_delete('news_page')  # Удаляем кэш страницы
         logger.info(f"[JSON API] Добавлен {category}: {title}")
         return jsonify(success=True, message="Видео успешно добавлено!")
     except Exception as e:
@@ -923,7 +909,7 @@ def add_video_command(update, context):
 def handle_pending_video_text(update, context):
     user = update.message.from_user
     telegram_id = str(user.id)
-    if telegram_id not in pending_video_data:
+    if telegram_id not in pending_video_
         return
     data = pending_video_data.pop(telegram_id)
     content_type, title = data['content_type'], data['title']
@@ -947,7 +933,7 @@ def handle_pending_video_file(update, context):
     user = update.message.from_user
     telegram_id = str(user.id)
     logger.info(f"Получен видеофайл от пользователя {telegram_id}")
-    if telegram_id not in pending_video_data:
+    if telegram_id not in pending_video_
         logger.debug("Нет ожидающих данных для видео")
         return
     data = pending_video_data.pop(telegram_id)
