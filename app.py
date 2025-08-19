@@ -34,7 +34,6 @@ logger = logging.getLogger(__name__)
 
 # --- Config ---
 TOKEN = os.environ.get('TELEGRAM_TOKEN')
-# Исправлено: убраны лишние пробелы
 WEBHOOK_URL = os.environ.get('WEBHOOK_URL', 'https://cinema-space-bot.onrender.com').strip().rstrip('/')
 REDIS_URL = os.environ.get('REDIS_URL', None)
 TELEGRAM_CHANNEL_ID = os.environ.get('TELEGRAM_CHANNEL_ID', '@kinofilmuni')
@@ -63,7 +62,7 @@ else:
 # --- Flask ---
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'super-secret-key')
-app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024 * 1024  # 2GB limit
+app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024 * 1024
 app.config['UPLOAD_FOLDER'] = 'temp_uploads'
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 ALLOWED_VIDEO_EXTENSIONS = {'mp4', 'avi', 'mov', 'wmv', 'flv', 'webm', 'mkv'}
@@ -87,7 +86,6 @@ def get_direct_video_url(file_id):
         logger.error("TELEGRAM_TOKEN не установлен для генерации ссылки")
         return None
     try:
-        # ИСПРАВЛЕНО: Убраны лишние пробелы в URL
         file_info_url = f"https://api.telegram.org/bot{bot_token}/getFile?file_id={file_id}"
         logger.debug(f"Запрос к Telegram API: {file_info_url}")
         response = requests.get(file_info_url, timeout=30)
@@ -98,7 +96,6 @@ def get_direct_video_url(file_id):
             logger.error(f"Ошибка от Telegram API: {json_response}")
             return None
         file_path = json_response['result']['file_path']
-        # ИСПРАВЛЕНО: Убраны лишние пробелы в URL
         direct_url = f"https://api.telegram.org/file/bot{bot_token}/{file_path}"
         logger.info(f"Сгенерирована прямая ссылка для file_id {file_id}")
         return direct_url
@@ -129,7 +126,6 @@ def get_cached_direct_video_url(file_id, cache_time=14400):  # Увеличен�
     return None
 
 # --- ИСПРАВЛЕННАЯ Функция для извлечения видео из поста Telegram ---
-# (Обновлённая версия: пересылает сообщения только в тестовую группу)
 async def extract_video_url_from_telegram_post(post_url):
     """
     Извлекает прямую ссылку на видео из поста Telegram.
@@ -166,12 +162,10 @@ async def extract_video_url_from_telegram_post(post_url):
         bot = Bot(token=TOKEN)
 
         # --- ИСПРАВЛЕНИЕ: Всегда пересылаем в тестовую группу ---
-        # Это предотвращает дублирование в исходном канале
         YOUR_TEST_CHAT_ID = -1003045387627 # <<<--- ВАШ ID ТЕСТОВОЙ ГРУППЫ
         
         try:
             logger.debug(f"[ИЗВЛЕЧЕНИЕ] Пересылаем сообщение в тестовую группу {YOUR_TEST_CHAT_ID}...")
-            # ИСПРАВЛЕНО: Убран await, так как forward_message возвращает объект Message, а не coroutine
             forwarded_message = bot.forward_message(
                 chat_id=YOUR_TEST_CHAT_ID,        # <<<--- ВСЕГДА в тестовую группу
                 from_chat_id=chat_id_or_username, # Откуда - из исходного чата
@@ -225,6 +219,36 @@ def extract_video_url_sync(post_url):
     except Exception as e:
         logger.error(f"Ошибка в синхронной обертке extract_video_url_sync: {e}", exc_info=True)
         return None, f"Ошибка обработки запроса: {e}"
+
+# --- НОВАЯ ФУНКЦИЯ: Обновление устаревшей ссылки ---
+@app.route('/api/refresh_video_url', methods=['POST'])
+def refresh_video_url():
+    """Обновляет устаревшую ссылку на видео по Telegram посту"""
+    try:
+        data = request.get_json()
+        if not data:
+            logger.warning("[ОБНОВЛЕНИЕ ССЫЛКИ] Неверный формат данных")
+            return jsonify(success=False, error="Неверный формат данных"), 400
+            
+        post_url = data.get('post_url', '').strip()
+        if not post_url:
+            logger.warning("[ОБНОВЛЕНИЕ ССЫЛКИ] Не указана ссылка на пост")
+            return jsonify(success=False, error="Не указана ссылка на пост"), 400
+            
+        logger.info(f"[ОБНОВЛЕНИЕ ССЫЛКИ] Запрошено обновление для ссылки: {post_url[:50]}...")
+        
+        # Извлекаем новую ссылку
+        direct_url, error = extract_video_url_sync(post_url)
+        if direct_url:
+            logger.info(f"[ОБНОВЛЕНИЕ ССЫЛКИ] Новая ссылка успешно получена")
+            return jsonify(success=True, new_url=direct_url)
+        else:
+            logger.error(f"[ОБНОВЛЕНИЕ ССЫЛКИ] Ошибка при извлечении: {error}")
+            return jsonify(success=False, error=error), 400
+            
+    except Exception as e:
+        logger.error(f"[ОБНОВЛЕНИЕ ССЫЛКИ] Критическая ошибка: {e}", exc_info=True)
+        return jsonify(success=False, error="Внутренняя ошибка сервера"), 500
 
 # --- НОВАЯ ФУНКЦИЯ: Загрузка видео в Telegram канал ---
 async def upload_video_to_telegram_channel(video_file_path, caption=""):
@@ -292,37 +316,7 @@ def upload_video_to_telegram_sync(video_file_path, caption=""):
         logger.error(f"Ошибка в синхронной обертке upload_video_to_telegram_sync: {e}", exc_info=True)
         return None, f"Ошибка загрузки видео: {e}"
 
-# --- ИСПРАВЛЕННАЯ ФУНКЦИЯ: Обновление устаревшей ссылки ---
-@app.route('/api/refresh_video_url', methods=['POST'])
-def refresh_video_url():
-    """Обновляет устаревшую ссылку на видео по Telegram посту"""
-    try:
-        data = request.get_json()
-        if not data:
-            logger.warning("[ОБНОВЛЕНИЕ ССЫЛКИ] Неверный формат данных")
-            return jsonify(success=False, error="Неверный формат данных"), 400
-            
-        post_url = data.get('post_url', '').strip()
-        if not post_url:
-            logger.warning("[ОБНОВЛЕНИЕ ССЫЛКИ] Не указана ссылка на пост")
-            return jsonify(success=False, error="Не указана ссылка на пост"), 400
-            
-        logger.info(f"[ОБНОВЛЕНИЕ ССЫЛКИ] Запрошено обновление для ссылки: {post_url[:50]}...")
-        
-        # Извлекаем новую ссылку
-        direct_url, error = extract_video_url_sync(post_url)
-        if direct_url:
-            logger.info(f"[ОБНОВЛЕНИЕ ССЫЛКИ] Новая ссылка успешно получена")
-            return jsonify(success=True, new_url=direct_url)
-        else:
-            logger.error(f"[ОБНОВЛЕНИЕ ССЫЛКИ] Ошибка при извлечении: {error}")
-            return jsonify(success=False, error=error), 400
-            
-    except Exception as e:
-        logger.error(f"[ОБНОВЛЕНИЕ ССЫЛКИ] Критическая ошибка: {e}", exc_info=True)
-        return jsonify(success=False, error="Внутренняя ошибка сервера"), 500
-
-# --- НОВАЯ ФУНКЦИЯ: Прямая загрузка видео ---
+# --- НОВАЯ ФУНКЦИЯ: Прямая загрузка видео через админ-панель ---
 @app.route('/api/upload_video', methods=['POST'])
 def api_upload_video():
     """Загружает видео файл напрямую в Telegram канал и добавляет в приложение"""
@@ -536,7 +530,7 @@ def cache_delete(key):
 def build_extra_map(data, item_type_plural):
     """Добавляет реакции и комментарии к каждому элементу данных."""
     extra = {}
-    for row in 
+    for row in data:
         item_id = row[0]
         reactions = get_reactions_count(item_type_plural, item_id) or {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}
         comments_count = len(get_comments(item_type_plural, item_id) or [])
@@ -590,7 +584,7 @@ def moments():
         extra_map = build_extra_map(data, 'moments')
         logger.info("extra_map построен успешно")
         combined_data = []
-        for row in 
+        for row in data:
             item_id = row[0]
             item_dict = {
                 'id': row[0],
@@ -623,7 +617,7 @@ def trailers():
         extra_map = build_extra_map(data, 'trailers')
         logger.info("extra_map построен успешно")
         combined_data = []
-        for row in 
+        for row in data:
             item_id = row[0]
             item_dict = {
                 'id': row[0],
@@ -656,7 +650,7 @@ def news():
         extra_map = build_extra_map(data, 'news')
         logger.info("extra_map построен успешно")
         combined_data = []
-        for row in 
+        for row in data:
             item_id = row[0]
             item_dict = {
                 'id': row[0],
