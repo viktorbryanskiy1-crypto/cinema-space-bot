@@ -148,8 +148,8 @@ def get_all_items(item_type):
     conn = get_db_connection()
     c = conn.cursor()
     try:
-        # --- ОПТИМИЗАЦИЯ: Добавлены индексы ---
-        c.execute(f"SELECT * FROM {item_type} ORDER BY created_at DESC")
+        # --- УЛУЧШЕНИЕ: Добавлены индексы и ограничения ---
+        c.execute(f"SELECT * FROM {item_type} ORDER BY created_at DESC LIMIT 100")  # Ограничиваем количество
         items = c.fetchall()
         return [tuple(i.values()) for i in items]
     finally:
@@ -226,13 +226,13 @@ def get_news_with_blocks():
     conn = get_db_connection()
     c = conn.cursor()
     try:
-        c.execute("SELECT * FROM news ORDER BY created_at DESC")
+        c.execute("SELECT * FROM news ORDER BY created_at DESC LIMIT 50")  # Ограничиваем количество
         news_items = c.fetchall()
         result = []
         for news in news_items:
             news_id = news['id']
             c.execute(
-                "SELECT block_type, content, position FROM news_blocks WHERE news_id=%s ORDER BY position ASC, created_at ASC",
+                "SELECT block_type, content, position FROM news_blocks WHERE news_id=%s ORDER BY position ASC, created_at ASC LIMIT 20",  # Ограничиваем блоки
                 (news_id,)
             )
             blocks = c.fetchall()
@@ -248,8 +248,8 @@ def get_comments(item_type, item_id):
     conn = get_db_connection()
     c = conn.cursor()
     try:
-        # --- ОПТИМИЗАЦИЯ: Добавлены LIMIT и ORDER BY ---
-        c.execute("SELECT user_name, text, created_at FROM comments WHERE item_type=%s AND item_id=%s ORDER BY created_at DESC LIMIT 100", (item_type, item_id))
+        # --- УЛУЧШЕНИЕ: Добавлены LIMIT и ORDER BY ---
+        c.execute("SELECT user_name, text, created_at FROM comments WHERE item_type=%s AND item_id=%s ORDER BY created_at DESC LIMIT 50", (item_type, item_id))  # Ограничиваем количество
         return [tuple(c.values()) for c in c.fetchall()]
     finally:
         conn.close()
@@ -268,7 +268,7 @@ def get_reactions_count(item_type, item_id):
     conn = get_db_connection()
     c = conn.cursor()
     try:
-        # --- ОПТИМИЗАЦИЯ: Добавлены индексы ---
+        # --- УЛУЧШЕНИЕ: Добавлены индексы ---
         c.execute("SELECT reaction, COUNT(*) AS count FROM reactions WHERE item_type=%s AND item_id=%s GROUP BY reaction", (item_type, item_id))
         results = c.fetchall()
         reactions = {'like':0,'dislike':0,'star':0,'fire':0}
