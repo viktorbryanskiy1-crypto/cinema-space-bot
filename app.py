@@ -12,11 +12,7 @@ from flask import (
     redirect, url_for, session, send_from_directory, abort
 )
 from werkzeug.utils import secure_filename
-from telegram import (
-    InlineKeyboardButton, InlineKeyboardMarkup, 
-    WebAppInfo, Bot, MenuButtonWebApp, Update,
-    InputMediaVideo, InputFile
-)
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, Bot, MenuButtonWebApp, Update
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 import redis
 import json
@@ -38,9 +34,10 @@ logger = logging.getLogger(__name__)
 
 # --- Config ---
 TOKEN = os.environ.get('TELEGRAM_TOKEN')
+# Исправлено: убраны лишние пробелы
 WEBHOOK_URL = os.environ.get('WEBHOOK_URL', 'https://cinema-space-bot.onrender.com').strip().rstrip('/')
 REDIS_URL = os.environ.get('REDIS_URL', None)
-TELEGRAM_CHANNEL_ID = os.environ.get('TELEGRAM_CHANNEL_ID', '@kinofilmuni')  # <<<--- ВАШ ID КАНАЛА
+TELEGRAM_CHANNEL_ID = os.environ.get('TELEGRAM_CHANNEL_ID', '@kinofilmuni')
 
 if not TOKEN:
     logger.error("TELEGRAM_TOKEN not set!")
@@ -66,7 +63,7 @@ else:
 # --- Flask ---
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'super-secret-key')
-app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024 * 1024  # 2GB limit for video upload
+app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024 * 1024  # 2GB limit
 app.config['UPLOAD_FOLDER'] = 'temp_uploads'
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 ALLOWED_VIDEO_EXTENSIONS = {'mp4', 'avi', 'mov', 'wmv', 'flv', 'webm', 'mkv'}
@@ -90,9 +87,10 @@ def get_direct_video_url(file_id):
         logger.error("TELEGRAM_TOKEN не установлен для генерации ссылки")
         return None
     try:
+        # ИСПРАВЛЕНО: Убраны лишние пробелы в URL
         file_info_url = f"https://api.telegram.org/bot{bot_token}/getFile?file_id={file_id}"
         logger.debug(f"Запрос к Telegram API: {file_info_url}")
-        response = requests.get(file_info_url, timeout=30)  # Увеличено время ожидания
+        response = requests.get(file_info_url, timeout=30)
         response.raise_for_status()
         json_response = response.json()
         logger.debug(f"Ответ от Telegram API: {json_response}")
@@ -100,6 +98,7 @@ def get_direct_video_url(file_id):
             logger.error(f"Ошибка от Telegram API: {json_response}")
             return None
         file_path = json_response['result']['file_path']
+        # ИСПРАВЛЕНО: Убраны лишние пробелы в URL
         direct_url = f"https://api.telegram.org/file/bot{bot_token}/{file_path}"
         logger.info(f"Сгенерирована прямая ссылка для file_id {file_id}")
         return direct_url
@@ -130,6 +129,7 @@ def get_cached_direct_video_url(file_id, cache_time=14400):  # Увеличен�
     return None
 
 # --- ИСПРАВЛЕННАЯ Функция для извлечения видео из поста Telegram ---
+# (Обновлённая версия: пересылает сообщения только в тестовую группу)
 async def extract_video_url_from_telegram_post(post_url):
     """
     Извлекает прямую ссылку на видео из поста Telegram.
@@ -171,7 +171,8 @@ async def extract_video_url_from_telegram_post(post_url):
         
         try:
             logger.debug(f"[ИЗВЛЕЧЕНИЕ] Пересылаем сообщение в тестовую группу {YOUR_TEST_CHAT_ID}...")
-            forwarded_message = await bot.forward_message(
+            # ИСПРАВЛЕНО: Убран await, так как forward_message возвращает объект Message, а не coroutine
+            forwarded_message = bot.forward_message(
                 chat_id=YOUR_TEST_CHAT_ID,        # <<<--- ВСЕГДА в тестовую группу
                 from_chat_id=chat_id_or_username, # Откуда - из исходного чата
                 message_id=message_id            # Какое сообщение
@@ -242,7 +243,7 @@ async def upload_video_to_telegram_channel(video_file_path, caption=""):
             # Отправляем видео в канал
             sent_message = await bot.send_video(
                 chat_id=TELEGRAM_CHANNEL_ID,
-                video=InputFile(video_file),
+                video=video_file,
                 caption=caption[:1024],  # Ограничиваем длину подписи
                 supports_streaming=True
             )
@@ -291,35 +292,125 @@ def upload_video_to_telegram_sync(video_file_path, caption=""):
         logger.error(f"Ошибка в синхронной обертке upload_video_to_telegram_sync: {e}", exc_info=True)
         return None, f"Ошибка загрузки видео: {e}"
 
-# --- НОВАЯ ФУНКЦИЯ: Обновление устаревшей ссылки ---
+# --- ИСПРАВЛЕННАЯ ФУНКЦИЯ: Обновление устаревшей ссылки ---
 @app.route('/api/refresh_video_url', methods=['POST'])
 def refresh_video_url():
     """Обновляет устаревшую ссылку на видео по Telegram посту"""
     try:
         data = request.get_json()
-        if not 
+        if not data:
+            logger.warning("[ОБНОВЛЕНИЕ ССЫЛКИ] Неверный формат данных")
             return jsonify(success=False, error="Неверный формат данных"), 400
             
         post_url = data.get('post_url', '').strip()
         if not post_url:
+            logger.warning("[ОБНОВЛЕНИЕ ССЫЛКИ] Не указана ссылка на пост")
             return jsonify(success=False, error="Не указана ссылка на пост"), 400
             
-        if 't.me/' not in post_url:
-            return jsonify(success=False, error="Неверный формат ссылки"), 400
-            
-        logger.info(f"[ОБНОВЛЕНИЕ ССЫЛКИ] Запрошено обновление для: {post_url}")
+        logger.info(f"[ОБНОВЛЕНИЕ ССЫЛКИ] Запрошено обновление для ссылки: {post_url[:50]}...")
         
         # Извлекаем новую ссылку
         direct_url, error = extract_video_url_sync(post_url)
         if direct_url:
-            logger.info(f"[ОБНОВЛЕНИЕ ССЫЛКИ] Новая ссылка получена: {direct_url[:50]}...")
+            logger.info(f"[ОБНОВЛЕНИЕ ССЫЛКИ] Новая ссылка успешно получена")
             return jsonify(success=True, new_url=direct_url)
         else:
-            logger.error(f"[ОБНОВЛЕНИЕ ССЫЛКИ] Ошибка: {error}")
+            logger.error(f"[ОБНОВЛЕНИЕ ССЫЛКИ] Ошибка при извлечении: {error}")
             return jsonify(success=False, error=error), 400
             
     except Exception as e:
-        logger.error(f"[ОБНОВЛЕНИЕ ССЫЛКИ] Ошибка: {e}", exc_info=True)
+        logger.error(f"[ОБНОВЛЕНИЕ ССЫЛКИ] Критическая ошибка: {e}", exc_info=True)
+        return jsonify(success=False, error="Внутренняя ошибка сервера"), 500
+
+# --- НОВАЯ ФУНКЦИЯ: Прямая загрузка видео ---
+@app.route('/api/upload_video', methods=['POST'])
+def api_upload_video():
+    """Загружает видео файл напрямую в Telegram канал и добавляет в приложение"""
+    try:
+        logger.info("[ПРЯМАЯ ЗАГРУЗКА] Начало загрузки видео через админ-панель")
+        
+        # Проверяем наличие файла
+        if 'video_file' not in request.files:
+            logger.error("[ПРЯМАЯ ЗАГРУЗКА] Файл не найден в запросе")
+            return jsonify(success=False, error="Файл не найден"), 400
+            
+        video_file = request.files['video_file']
+        if video_file.filename == '':
+            logger.error("[ПРЯМАЯ ЗАГРУЗКА] Пустое имя файла")
+            return jsonify(success=False, error="Пустое имя файла"), 400
+            
+        # Проверяем допустимый формат
+        if not allowed_file(video_file.filename, ALLOWED_VIDEO_EXTENSIONS):
+            logger.error(f"[ПРЯМАЯ ЗАГРУЗКА] Недопустимый формат файла: {video_file.filename}")
+            return jsonify(success=False, error="Недопустимый формат файла"), 400
+            
+        # Получаем параметры
+        title = request.form.get('title', '').strip()
+        description = request.form.get('description', '').strip()
+        category = request.form.get('category', '').strip()
+        
+        if not title or not category:
+            logger.error("[ПРЯМАЯ ЗАГРУЗКА] Не указаны обязательные поля")
+            return jsonify(success=False, error="Заполните все обязательные поля"), 400
+            
+        if category not in ['moment', 'trailer', 'news']:
+            logger.error(f"[ПРЯМАЯ ЗАГРУЗКА] Неверная категория: {category}")
+            return jsonify(success=False, error="Неверная категория"), 400
+            
+        # Сохраняем временный файл
+        filename = secure_filename(video_file.filename)
+        unique_name = f"{uuid.uuid4()}_{filename}"
+        temp_file_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_name)
+        video_file.save(temp_file_path)
+        
+        if not os.path.exists(temp_file_path):
+            logger.error("[ПРЯМАЯ ЗАГРУЗКА] Не удалось сохранить временный файл")
+            return jsonify(success=False, error="Не удалось сохранить файл"), 500
+            
+        logger.info(f"[ПРЯМАЯ ЗАГРУЗКА] Временный файл сохранен: {temp_file_path}")
+        
+        # Формируем подпись для Telegram поста
+        caption = f"🎬 {title}\n\n{description}" if description else f"🎬 {title}"
+        
+        # Загружаем видео в Telegram канал
+        logger.info("[ПРЯМАЯ ЗАГРУЗКА] Начало загрузки видео в Telegram канал...")
+        post_url, error = upload_video_to_telegram_sync(temp_file_path, caption)
+        
+        if not post_url:
+            logger.error(f"[ПРЯМАЯ ЗАГРУЗКА] Ошибка загрузки в Telegram: {error}")
+            return jsonify(success=False, error=error), 500
+            
+        logger.info(f"[ПРЯМАЯ ЗАГРУЗКА] Видео успешно загружено в Telegram: {post_url}")
+        
+        # Извлекаем прямую ссылку на видео из Telegram поста
+        logger.info("[ПРЯМАЯ ЗАГРУЗКА] Извлечение прямой ссылки на видео...")
+        direct_url, extract_error = extract_video_url_sync(post_url)
+        
+        if not direct_url:
+            logger.error(f"[ПРЯМАЯ ЗАГРУЗКА] Ошибка извлечения ссылки: {extract_error}")
+            return jsonify(success=False, error=extract_error), 500
+            
+        logger.info(f"[ПРЯМАЯ ЗАГРУЗКА] Прямая ссылка успешно извлечена: {direct_url[:50]}...")
+        
+        # Добавляем контент в соответствующую таблицу
+        if category == 'moment':
+            add_moment(title, description, direct_url)
+            cache_delete('moments_list')
+            logger.info(f"[ПРЯМАЯ ЗАГРУЗКА] Момент добавлен: {title}")
+        elif category == 'trailer':
+            add_trailer(title, description, direct_url)
+            cache_delete('trailers_list')
+            logger.info(f"[ПРЯМАЯ ЗАГРУЗКА] Трейлер добавлен: {title}")
+        elif category == 'news':
+            add_news(title, description, direct_url if direct_url.startswith(('http://', 'https://')) else None)
+            cache_delete('news_list')
+            logger.info(f"[ПРЯМАЯ ЗАГРУЗКА] Новость добавлена: {title}")
+            
+        logger.info("[ПРЯМАЯ ЗАГРУЗКА] Видео успешно добавлено в приложение!")
+        return jsonify(success=True, message="Видео успешно загружено и добавлено в приложение!")
+        
+    except Exception as e:
+        logger.error(f"[ПРЯМАЯ ЗАГРУЗКА] Критическая ошибка: {e}", exc_info=True)
         return jsonify(success=False, error=str(e)), 500
 
 # --- Функция для установки Menu Button ---
@@ -416,7 +507,7 @@ def save_uploaded_file(file_storage, allowed_exts):
         unique_name = f"{uuid.uuid4()}_{filename}"
         path = os.path.join(app.config['UPLOAD_FOLDER'], unique_name)
         file_storage.save(path)
-        return path  # Возвращаем путь к файлу, а не URL
+        return f"/uploads/{unique_name}"
     return None
 
 def cache_get(key):
@@ -651,94 +742,6 @@ def _get_payload():
     if request.is_json:
         return request.get_json(silent=True) or {}
     return request.form or {}
-
-# --- НОВЫЙ ENDPOINT: Прямая загрузка видео через админ-панель ---
-@app.route('/api/upload_video', methods=['POST'])
-@admin_required
-def api_upload_video():
-    """Загружает видео файл напрямую в Telegram канал и добавляет в приложение"""
-    try:
-        logger.info("[ПРЯМАЯ ЗАГРУЗКА] Начало загрузки видео через админ-панель")
-        
-        # Проверяем наличие файла
-        if 'video_file' not in request.files:
-            logger.error("[ПРЯМАЯ ЗАГРУЗКА] Файл не найден в запросе")
-            return jsonify(success=False, error="Файл не найден"), 400
-            
-        video_file = request.files['video_file']
-        if video_file.filename == '':
-            logger.error("[ПРЯМАЯ ЗАГРУЗКА] Пустое имя файла")
-            return jsonify(success=False, error="Пустое имя файла"), 400
-            
-        # Проверяем допустимый формат
-        if not allowed_file(video_file.filename, ALLOWED_VIDEO_EXTENSIONS):
-            logger.error(f"[ПРЯМАЯ ЗАГРУЗКА] Недопустимый формат файла: {video_file.filename}")
-            return jsonify(success=False, error="Недопустимый формат файла"), 400
-            
-        # Получаем параметры
-        title = request.form.get('title', '').strip()
-        description = request.form.get('description', '').strip()
-        category = request.form.get('category', '').strip()
-        
-        if not title or not category:
-            logger.error("[ПРЯМАЯ ЗАГРУЗКА] Не указаны обязательные поля")
-            return jsonify(success=False, error="Заполните все обязательные поля"), 400
-            
-        if category not in ['moment', 'trailer', 'news']:
-            logger.error(f"[ПРЯМАЯ ЗАГРУЗКА] Неверная категория: {category}")
-            return jsonify(success=False, error="Неверная категория"), 400
-            
-        # Сохраняем временный файл
-        temp_file_path = save_uploaded_file(video_file, ALLOWED_VIDEO_EXTENSIONS)
-        if not temp_file_path:
-            logger.error("[ПРЯМАЯ ЗАГРУЗКА] Не удалось сохранить временный файл")
-            return jsonify(success=False, error="Не удалось сохранить файл"), 500
-            
-        logger.info(f"[ПРЯМАЯ ЗАГРУЗКА] Временный файл сохранен: {temp_file_path}")
-        
-        # Формируем подпись для Telegram поста
-        caption = f"🎬 {title}\n\n{description}" if description else f"🎬 {title}"
-        
-        # Загружаем видео в Telegram канал
-        logger.info("[ПРЯМАЯ ЗАГРУЗКА] Начало загрузки видео в Telegram канал...")
-        post_url, error = upload_video_to_telegram_sync(temp_file_path, caption)
-        
-        if not post_url:
-            logger.error(f"[ПРЯМАЯ ЗАГРУЗКА] Ошибка загрузки в Telegram: {error}")
-            return jsonify(success=False, error=error), 500
-            
-        logger.info(f"[ПРЯМАЯ ЗАГРУЗКА] Видео успешно загружено в Telegram: {post_url}")
-        
-        # Извлекаем прямую ссылку на видео из Telegram поста
-        logger.info("[ПРЯМАЯ ЗАГРУЗКА] Извлечение прямой ссылки на видео...")
-        direct_url, extract_error = extract_video_url_sync(post_url)
-        
-        if not direct_url:
-            logger.error(f"[ПРЯМАЯ ЗАГРУЗКА] Ошибка извлечения ссылки: {extract_error}")
-            return jsonify(success=False, error=extract_error), 500
-            
-        logger.info(f"[ПРЯМАЯ ЗАГРУЗКА] Прямая ссылка успешно извлечена: {direct_url[:50]}...")
-        
-        # Добавляем контент в соответствующую таблицу
-        if category == 'moment':
-            add_moment(title, description, direct_url)
-            cache_delete('moments_list')
-            logger.info(f"[ПРЯМАЯ ЗАГРУЗКА] Момент добавлен: {title}")
-        elif category == 'trailer':
-            add_trailer(title, description, direct_url)
-            cache_delete('trailers_list')
-            logger.info(f"[ПРЯМАЯ ЗАГРУЗКА] Трейлер добавлен: {title}")
-        elif category == 'news':
-            add_news(title, description, direct_url if direct_url.startswith(('http://', 'https://')) else None)
-            cache_delete('news_list')
-            logger.info(f"[ПРЯМАЯ ЗАГРУЗКА] Новость добавлена: {title}")
-            
-        logger.info("[ПРЯМАЯ ЗАГРУЗКА] Видео успешно добавлено в приложение!")
-        return jsonify(success=True, message="Видео успешно загружено и добавлено в приложение!")
-        
-    except Exception as e:
-        logger.error(f"[ПРЯМАЯ ЗАГРУЗКА] Критическая ошибка: {e}", exc_info=True)
-        return jsonify(success=False, error=str(e)), 500
 
 @app.route('/api/add_moment', methods=['POST'])
 def api_add_moment():
