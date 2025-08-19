@@ -1,4 +1,5 @@
 // main.js — полный рабочий файл с оптимизацией Telegram WebApp и fullscreen
+// Обновлен для поддержки автоматического обновления ссылок на видео
 
 // Глобальные переменные
 let currentTab = 'moments';
@@ -140,6 +141,93 @@ function addDynamicFeatures() {
     addLoadCommentsHandlers();
     addModalHandlers();
     setupFormToggles();
+    initializeVideoErrorHandling(); // НОВАЯ ФУНКЦИЯ
+}
+
+// --- НОВАЯ ФУНКЦИЯ: Обработка ошибок воспроизведения видео ---
+function initializeVideoErrorHandling() {
+    // Добавляем обработчики ошибок для всех видеоэлементов
+    document.querySelectorAll('video').forEach(video => {
+        video.addEventListener('error', async function(e) {
+            console.log('Ошибка воспроизведения видео:', e);
+            
+            // Получаем родительский элемент с информацией о видео
+            const card = this.closest('.card') || this.closest('.video-wrap');
+            if (!card) return;
+            
+            // Ищем информацию о посте Telegram
+            const videoSrc = this.querySelector('source')?.src || this.src;
+            if (!videoSrc) return;
+            
+            // Проверяем, является ли это ссылкой на Telegram
+            if (videoSrc.includes('api.telegram.org/file')) {
+                // Показываем уведомление пользователю
+                const errorNotice = document.createElement('div');
+                errorNotice.className = 'video-error-notice';
+                errorNotice.innerHTML = `
+                    <div style="background: rgba(255, 0, 0, 0.2); padding: 15px; border-radius: 8px; margin: 10px 0;">
+                        <p style="margin: 0 0 10px 0;">🔄 Видео недоступно. Пытаемся обновить ссылку...</p>
+                        <div class="loading-spinner" style="width: 20px; height: 20px; border: 2px solid #fff; border-top: 2px solid #00f3ff; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                    </div>
+                `;
+                errorNotice.style.cssText = 'position: relative; z-index: 10;';
+                
+                // Вставляем уведомление перед видео
+                this.parentNode.insertBefore(errorNotice, this);
+                
+                try {
+                    // Ищем оригинальную ссылку на пост в данных карточки
+                    const cardTitle = card.querySelector('.card-title')?.textContent || '';
+                    console.log('Попытка обновления видео для:', cardTitle);
+                    
+                    // Отправляем запрос на обновление ссылки
+                    const response = await fetch('/api/refresh_video_url', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            post_url: videoSrc // В реальной реализации нужно передавать оригинальную ссылку на пост
+                        })
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success && result.new_url) {
+                        // Обновляем источник видео
+                        const source = this.querySelector('source');
+                        if (source) {
+                            source.src = result.new_url;
+                        } else {
+                            this.src = result.new_url;
+                        }
+                        
+                        // Перезагружаем видео
+                        this.load();
+                        
+                        // Удаляем уведомление об ошибке
+                        errorNotice.remove();
+                        
+                        console.log('Видео успешно обновлено');
+                    } else {
+                        // Показываем ошибку
+                        errorNotice.innerHTML = `
+                            <div style="background: rgba(255, 0, 0, 0.3); padding: 15px; border-radius: 8px; margin: 10px 0;">
+                                <p style="margin: 0;">❌ Не удалось обновить видео. ${result.error || 'Попробуйте позже.'}</p>
+                            </div>
+                        `;
+                    }
+                } catch (refreshError) {
+                    console.error('Ошибка при обновлении видео:', refreshError);
+                    errorNotice.innerHTML = `
+                        <div style="background: rgba(255, 0, 0, 0.3); padding: 15px; border-radius: 8px; margin: 10px 0;">
+                            <p style="margin: 0;">❌ Ошибка сети при обновлении видео. Попробуйте позже.</p>
+                        </div>
+                    `;
+                }
+            }
+        });
+    });
 }
 
 // --- Реакции ---
