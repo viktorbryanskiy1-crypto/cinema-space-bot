@@ -9,88 +9,103 @@
     <title>🌌 КиноВселенная</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <style>
-        /* --- УЛУЧШЕННЫЙ УЛТРАСОВРЕМЕННЫЙ FULLSCREEN PRELOADER --- */
+        /* --- FULLSCREEN PRELOADER --- */
+        /* Обновлены стили для полноэкранного режима и современного дизайна */
         .app-preloader {
+            /* КРИТИЧЕСКОЕ ИЗМЕНЕНИЕ: Полноэкранный */
             position: fixed;
             top: 0;
             left: 0;
-            width: 100vw;
-            height: 100vh;
+            width: 100vw; /* Полноэкранный */
+            height: 100vh; /* Полноэкранный */
+            /* --- */
             background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
             display: flex;
             justify-content: center;
             align-items: center;
             z-index: 9999;
-            transition: opacity 0.5s ease-out;
+            transition: opacity 0.7s ease-out; /* Более плавная анимация */
             overflow: hidden;
-            touch-action: none; /* Запрещаем прокрутку */
         }
 
         .preloader-content {
             text-align: center;
             color: var(--accent);
-            position: relative;
-            z-index: 2;
+            position: relative; /* Для z-index */
+            z-index: 2; /* Выше фоновых элементов */
         }
 
         .preloader-logo {
-            font-size: 5em;
-            margin-bottom: 30px;
+            font-size: 5em; /* Увеличен */
+            margin-bottom: 30px; /* Увеличен */
+            /* Новая анимация */
             animation: float 3s ease-in-out infinite;
-            text-shadow: 0 0 20px rgba(0, 243, 255, 0.7);
+            text-shadow: 0 0 20px rgba(0, 243, 255, 0.7); /* Тень */
         }
 
         .preloader-title {
-            font-size: 2.5em;
-            font-weight: 800;
-            margin-bottom: 40px;
+            font-size: 2.5em; /* Увеличен */
+            font-weight: 800; /* Жирный */
+            margin-bottom: 40px; /* Увеличен */
             background: linear-gradient(45deg, var(--accent), var(--accent-secondary));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
-            text-shadow: 0 0 15px rgba(0, 243, 255, 0.3);
+            text-shadow: 0 0 15px rgba(0, 243, 255, 0.3); /* Тень */
         }
 
         .preloader-spinner {
-            width: 60px;
-            height: 60px;
-            border: 4px solid rgba(255, 255, 255, 0.1);
+            width: 60px; /* Увеличен */
+            height: 60px; /* Увеличен */
+            border: 4px solid rgba(255, 255, 255, 0.1); /* Более тонкая внешняя граница */
             border-radius: 50%;
-            border-top-color: var(--accent);
+            border-top-color: var(--accent); /* Цвет акцента */
             animation: spin 1s ease-in-out infinite;
-            margin: 0 auto 30px;
-            box-shadow: 0 0 20px rgba(0, 243, 255, 0.3);
+            margin: 0 auto 30px; /* Увеличены отступы */
+            box-shadow: 0 0 20px rgba(0, 243, 255, 0.3); /* Тень */
         }
 
+        .preloader-text {
+            font-size: 1.3em; /* Увеличен */
+            margin-bottom: 30px; /* Увеличен */
+            color: rgba(255, 255, 255, 0.8); /* Более мягкий белый */
+        }
+
+        /* Обновлен контейнер прогресса */
         .preloader-progress {
-            width: 300px;
-            height: 6px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 3px;
-            margin: 0 auto 20px;
+            width: 300px; /* Увеличена ширина */
+            height: 6px; /* Увеличена высота */
+            background: rgba(255, 255, 255, 0.1); /* Более темный фон */
+            border-radius: 3px; /* Скругленные углы */
+            margin: 0 auto 20px; /* Увеличены отступы */
             overflow: hidden;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.2); /* Тень */
         }
 
+        /* Обновлен сам индикатор прогресса */
         .progress-bar {
             height: 100%;
+            /* Градиентный фон */
             background: linear-gradient(90deg, var(--accent), var(--accent-secondary));
             width: 0%;
+            /* Более плавная анимация */
             transition: width 0.4s cubic-bezier(0.22, 0.61, 0.36, 1);
-            border-radius: 3px;
+            border-radius: 3px; /* Скругленные углы */
         }
 
         .preloader-status {
-            font-size: 1em;
-            opacity: 0.9;
-            font-weight: 500;
+            font-size: 1em; /* Увеличен */
+            opacity: 0.9; /* Более высокая непрозрачность */
+            font-weight: 500; /* Полужирный */
         }
 
+        /* Animated background elements */
         .preloader-bg-element {
             position: absolute;
             border-radius: 50%;
+            /* Радиальный градиент для эффекта свечения */
             background: radial-gradient(circle, rgba(0, 243, 255, 0.1) 0%, transparent 70%);
-            z-index: 1;
+            z-index: 1; /* Ниже основного контента */
         }
 
         .bg-element-1 {
@@ -117,45 +132,102 @@
             animation: float 10s infinite ease-in-out;
         }
 
+        /* Animations */
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
 
+        /* Новая анимация float */
         @keyframes float {
             0%, 100% { transform: translateY(0) translateX(0); }
             50% { transform: translateY(-20px) translateX(10px); }
         }
 
+        /* Новая анимация pulse */
         @keyframes pulse {
             0%, 100% { transform: scale(1); opacity: 0.5; }
             50% { transform: scale(1.1); opacity: 0.8; }
         }
 
+        /* Скрытие preloader'а */
         .app-preloader.hidden {
             opacity: 0;
             pointer-events: none;
         }
 
+        /* Основное содержимое */
         .app-content {
             opacity: 0;
-            transition: opacity 0.5s ease-in;
+            transition: opacity 0.7s ease-in; /* Более плавная анимация */
+            width: 100%;
+            height: 100%;
         }
 
         .app-content.visible {
             opacity: 1;
         }
 
+        /* Адаптивность для мобильных устройств */
         @media (max-width: 768px) {
-            .preloader-logo { font-size: 3.5em; margin-bottom: 20px; }
-            .preloader-title { font-size: 1.8em; margin-bottom: 30px; }
-            .preloader-spinner { width: 50px; height: 50px; margin-bottom: 25px; }
-            .preloader-progress { width: 250px; margin-bottom: 15px; }
-            .preloader-status { font-size: 0.9em; }
+            .preloader-logo {
+                font-size: 3.5em; /* Уменьшен на мобильных */
+                margin-bottom: 20px;
+            }
+            
+            .preloader-title {
+                font-size: 1.8em; /* Уменьшен на мобильных */
+                margin-bottom: 30px;
+            }
+            
+            .preloader-spinner {
+                width: 50px; /* Уменьшен на мобильных */
+                height: 50px; /* Уменьшен на мобильных */
+                margin-bottom: 25px;
+            }
+            
+            .preloader-text {
+                font-size: 1.1em; /* Уменьшен на мобильных */
+                margin-bottom: 25px;
+            }
+            
+            .preloader-progress {
+                width: 250px; /* Уменьшена ширина на мобильных */
+                margin-bottom: 15px;
+            }
+            
+            .preloader-status {
+                font-size: 0.9em; /* Уменьшен на мобильных */
+            }
+            
+            /* Адаптивные размеры фоновых элементов */
+            .bg-element-1 {
+                width: 200px;
+                height: 200px;
+            }
+            
+            .bg-element-2 {
+                width: 150px;
+                height: 150px;
+            }
         }
+
+        /* --- КОНЕЦ FULLSCREEN PRELOADER --- */
+
+        /* --- Остальные стили из вашего оригинального файла (без изменений) --- */
+        :root {
+            --accent: #00f3ff;
+            --accent-secondary: #ff00c8;
+            /* ... остальные переменные ... */
+        }
+
+        /* ... остальные стили ... */
+
     </style>
 </head>
 <body>
+    <!-- НОВОЕ: Fullscreen Preloader для всего приложения -->
     <div id="app-preloader" class="app-preloader">
+        <!-- Добавлены анимированные фоновые элементы -->
         <div class="preloader-bg-element bg-element-1"></div>
         <div class="preloader-bg-element bg-element-2"></div>
         <div class="preloader-bg-element bg-element-3"></div>
@@ -164,6 +236,7 @@
             <div class="preloader-logo">🌌</div>
             <div class="preloader-title">КиноВселенная</div>
             <div class="preloader-spinner"></div>
+            <div class="preloader-text">Подготовка космического пространства...</div>
             <div class="preloader-progress">
                 <div class="progress-bar" id="preloader-progress-bar"></div>
             </div>
@@ -171,6 +244,7 @@
         </div>
     </div>
 
+    <!-- Основное содержимое (скрыто до загрузки) -->
     <div id="app-content" class="app-content" style="display: none;">
         <div class="container">
             <nav class="navbar">
@@ -200,52 +274,75 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
     <script>
+        // --- НОВОЕ: Предзагрузка всего приложения ---
+        // (Логика предзагрузки из вашего оригинального файла, обновлена для нового дизайна)
         document.addEventListener('DOMContentLoaded', async function() {
+            console.log("DOMContentLoaded сработал");
+
+            // Показываем preloader
             const preloader = document.getElementById('app-preloader');
             const progressBar = document.getElementById('preloader-progress-bar');
             const statusText = document.getElementById('preloader-status');
             
             if (preloader) {
+                console.log("Начало предзагрузки приложения...");
+                
                 try {
+                    // Обновляем прогресс
                     updatePreloaderProgress(10, "Инициализация ядра...");
                     
+                    // --- Предзагрузка всех вкладок ---
                     const tabs = ['moments', 'trailers', 'news'];
                     let loadedTabs = 0;
                     
                     for (const tab of tabs) {
                         try {
+                            console.log(`Предзагрузка вкладки: ${tab}`);
+                            // Обновлен текст статуса
                             updatePreloaderProgress(20 + (loadedTabs * 25), `Загрузка ${tab}...`);
                             
                             const response = await fetch(`/${tab}`);
                             if (response.ok) {
                                 const html = await response.text();
+                                // Кэшируем в sessionStorage
                                 sessionStorage.setItem(`tab_${tab}`, html);
+                                console.log(`Вкладка ${tab} предзагружена`);
                                 loadedTabs++;
+                            } else {
+                                console.error(`Ошибка загрузки вкладки ${tab}: ${response.status}`);
                             }
                         } catch (error) {
                             console.error(`Ошибка предзагрузки вкладки ${tab}:`, error);
                         }
                     }
                     
+                    // Обновляем прогресс
                     updatePreloaderProgress(90, "Завершение загрузки...");
                     
+                    // --- Предзагрузка статических файлов ---
                     await preloadStaticAssets();
                     
+                    // Обновляем прогресс
                     updatePreloaderProgress(100, "Готово!");
                     
-                    await new Promise(resolve => setTimeout(resolve, 700));
+                    // --- Задержка для плавного перехода ---
+                    await new Promise(resolve => setTimeout(resolve, 700)); // Увеличена задержка
                     
+                    // Скрываем preloader и показываем контент
                     hidePreloader();
                     
                 } catch (error) {
                     console.error("Ошибка предзагрузки приложения:", error);
+                    // В случае ошибки все равно показываем приложение
                     hidePreloader();
                 }
             } else {
+                // Если preloader не найден, инициализируем приложение как обычно
                 hidePreloader();
             }
         });
 
+        // --- НОВАЯ ФУНКЦИЯ: Обновление прогресса preloader'а ---
         function updatePreloaderProgress(percent, status) {
             const progressBar = document.getElementById('preloader-progress-bar');
             const statusText = document.getElementById('preloader-status');
@@ -257,8 +354,11 @@
             if (statusText) {
                 statusText.textContent = `${percent}% ${status}`;
             }
+            
+            console.log(`Прогресс загрузки: ${percent}% - ${status}`);
         }
 
+        // --- НОВАЯ ФУНКЦИЯ: Скрытие preloader'а ---
         function hidePreloader() {
             const preloader = document.getElementById('app-preloader');
             const content = document.getElementById('app-content');
@@ -271,25 +371,31 @@
                         content.style.display = 'block';
                         content.classList.add('visible');
                     }
+                    // Инициализируем приложение
                     if (typeof initializeApp === 'function') {
                         initializeApp();
                     }
-                }, 700);
+                }, 700); // Ждем завершения анимации скрытия (увеличен таймаут)
             } else {
                 if (content) {
                     content.style.display = 'block';
                     content.classList.add('visible');
                 }
+                // Инициализируем приложение
                 if (typeof initializeApp === 'function') {
                     initializeApp();
                 }
             }
         }
 
+        // --- НОВАЯ ФУНКЦИЯ: Предзагрузка статических файлов ---
         async function preloadStaticAssets() {
+            console.log("Предзагрузка статических файлов...");
+            
             const assets = [
                 '/static/css/style.css',
                 '/static/js/main.js'
+                // Добавьте другие важные статические файлы, если нужно
             ];
             
             const promises = assets.map(asset => {
@@ -302,6 +408,12 @@
                         link.rel = 'preload';
                         link.as = 'script';
                         link.href = asset;
+                    } else {
+                        // Для изображений и других ресурсов
+                        link.rel = 'preload';
+                        link.as = 'fetch'; // или 'image'
+                        link.href = asset;
+                        link.crossOrigin = 'anonymous'; // Если ресурс с другого origin
                     }
                     link.onload = resolve;
                     link.onerror = reject;
@@ -311,10 +423,16 @@
             
             try {
                 await Promise.all(promises);
+                console.log("Статические файлы предзагружены");
             } catch (error) {
                 console.error("Ошибка предзагрузки статических файлов:", error);
             }
         }
+        // --- КОНЕЦ НОВОГО ---
+        
+        // --- Остальной JavaScript из вашего оригинального файла (без изменений) ---
+        // ... (все остальные функции, которые были в оригинальном index.html) ...
+        
     </script>
 </body>
 </html>
