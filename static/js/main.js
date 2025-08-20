@@ -1,171 +1,16 @@
-// main.js — полный рабочий файл с оптимизацией Telegram WebApp, fullscreen и современным Preloader'ом
+// main.js — полный рабочий файл с оптимизацией Telegram WebApp и fullscreen
+// Обновлен для поддержки автоматического обновления ссылок на видео и ультрасовременного Preloader'а
 
 // Глобальные переменные
 let currentTab = 'moments';
 let userId = 'user_' + Math.random().toString(36).substr(2, 9);
-let isPreloadingComplete = false;
 
 // Флаги для предотвращения множественных обработчиков
 let modalClickHandlerAdded = false;
 let formToggleHandlerAdded = false;
 
-// --- НОВОЕ: Создание и управление полноэкранным Preloader'ом ---
-document.addEventListener('DOMContentLoaded', function () {
+document.addEventListener('DOMContentLoaded', function() {
     console.log("DOMContentLoaded сработал");
-
-    // Показываем preloader и начинаем загрузку
-    const preloader = document.getElementById('app-preloader');
-    const progressBar = document.getElementById('preloader-progress-bar');
-    const statusText = document.getElementById('preloader-status');
-
-    if (preloader && progressBar && statusText) {
-        console.log("Начало предзагрузки приложения...");
-
-        // Имитация предзагрузки (в реальном приложении здесь будет логика загрузки)
-        setTimeout(async () => {
-            try {
-                // Обновляем прогресс
-                updatePreloaderProgress(20, "Инициализация ядра...");
-
-                // --- Предзагрузка всех вкладок ---
-                const tabs = ['moments', 'trailers', 'news'];
-                let loadedTabs = 0;
-
-                for (const tab of tabs) {
-                    try {
-                        console.log(`Предзагрузка вкладки: ${tab}`);
-                        updatePreloaderProgress(20 + (loadedTabs * 25), `Загрузка ${tab}...`);
-
-                        const response = await fetch(`/${tab}`);
-                        if (response.ok) {
-                            const html = await response.text();
-                            // Кэшируем в sessionStorage
-                            sessionStorage.setItem(`tab_${tab}`, html);
-                            console.log(`Вкладка ${tab} предзагружена`);
-                            loadedTabs++;
-                        } else {
-                            console.error(`Ошибка загрузки вкладки ${tab}: ${response.status}`);
-                        }
-                    } catch (error) {
-                        console.error(`Ошибка предзагрузки вкладки ${tab}:`, error);
-                    }
-                }
-
-                // Обновляем прогресс
-                updatePreloaderProgress(90, "Завершение загрузки...");
-
-                // --- Предзагрузка статических файлов ---
-                await preloadStaticAssets();
-
-                // Обновляем прогресс
-                updatePreloaderProgress(100, "Готово!");
-
-                // --- Задержка для плавного перехода ---
-                await new Promise(resolve => setTimeout(resolve, 700));
-
-                // Скрываем preloader и показываем контент
-                hidePreloader();
-
-            } catch (error) {
-                console.error("Ошибка предзагрузки приложения:", error);
-                // В случае ошибки все равно показываем приложение
-                hidePreloader();
-            }
-        }, 100); // Небольшая задержка для отображения preloader'а
-    } else {
-        // Если preloader не найден, инициализируем приложение как обычно
-        console.warn("Preloader не найден в DOM. Инициализация приложения без него.");
-        hidePreloader(); // Просто показываем контент
-    }
-});
-
-// --- НОВАЯ ФУНКЦИЯ: Обновление прогресса preloader'а ---
-function updatePreloaderProgress(percent, status) {
-    const progressBar = document.getElementById('preloader-progress-bar');
-    const statusText = document.getElementById('preloader-status');
-
-    if (progressBar) {
-        progressBar.style.width = `${percent}%`;
-    }
-
-    if (statusText) {
-        statusText.textContent = `${percent}% ${status}`;
-    }
-
-    console.log(`Прогресс загрузки: ${percent}% - ${status}`);
-}
-
-// --- НОВАЯ ФУНКЦИЯ: Скрытие preloader'а ---
-function hidePreloader() {
-    const preloader = document.getElementById('app-preloader');
-    const content = document.getElementById('app-content');
-
-    if (preloader) {
-        preloader.classList.add('hidden');
-        setTimeout(() => {
-            preloader.style.display = 'none';
-            if (content) {
-                content.style.display = 'block';
-                content.classList.add('visible');
-            }
-            // Инициализируем приложение
-            initializeApp();
-        }, 700); // Ждем завершения анимации скрытия
-    } else {
-        if (content) {
-            content.style.display = 'block';
-            content.classList.add('visible');
-        }
-        // Инициализируем приложение
-        initializeApp();
-    }
-}
-
-// --- НОВАЯ ФУНКЦИЯ: Предзагрузка статических файлов ---
-async function preloadStaticAssets() {
-    console.log("Предзагрузка статических файлов...");
-
-    const assets = [
-        '/static/css/style.css',
-        '/static/js/main.js'
-        // Добавьте другие важные статические файлы, если нужно
-    ];
-
-    const promises = assets.map(asset => {
-        return new Promise((resolve, reject) => {
-            const link = document.createElement('link');
-            if (asset.endsWith('.css')) {
-                link.rel = 'stylesheet';
-                link.href = asset;
-            } else if (asset.endsWith('.js')) {
-                link.rel = 'preload';
-                link.as = 'script';
-                link.href = asset;
-            } else {
-                // Для изображений и других ресурсов
-                link.rel = 'preload';
-                link.as = 'fetch'; // или 'image'
-                link.href = asset;
-                link.crossOrigin = 'anonymous'; // Если ресурс с другого origin
-            }
-            link.onload = resolve;
-            link.onerror = reject;
-            document.head.appendChild(link);
-        });
-    });
-
-    try {
-        await Promise.all(promises);
-        console.log("Статические файлы предзагружены");
-    } catch (error) {
-        console.error("Ошибка предзагрузки статических файлов:", error);
-    }
-}
-
-
-// --- Основная инициализация приложения ---
-function initializeApp() {
-    console.log("Инициализация приложения...");
 
     // --- Telegram WebApp ---
     if (window.Telegram && window.Telegram.WebApp) {
@@ -204,18 +49,9 @@ function initializeApp() {
 
     async function loadTabContent(tabName) {
         try {
-            // Проверяем кэш первым делом
-            const cachedContent = sessionStorage.getItem(`tab_${tabName}`);
-            if (cachedContent) {
-                console.log(`Загрузка вкладки ${tabName} из кэша`);
-                contentArea.innerHTML = cachedContent;
-                currentTab = tabName;
-                addDynamicFeatures();
-                return;
-            }
-
             contentArea.innerHTML = `
                 <div style="text-align: center; padding: 50px; color: var(--accent);">
+                    <div class="ultra-modern-spinner" style="margin: 0 auto 20px;"></div>
                     <div>🌀 Загрузка ${tabName}...</div>
                 </div>
             `;
@@ -226,9 +62,6 @@ function initializeApp() {
             contentArea.innerHTML = html;
             currentTab = tabName;
             addDynamicFeatures();
-
-            // Кэшируем в sessionStorage для следующих загрузок
-            sessionStorage.setItem(`tab_${tabName}`, html);
         } catch (error) {
             console.error(`Ошибка загрузки вкладки "${tabName}":`, error);
             contentArea.innerHTML = `
@@ -260,6 +93,7 @@ function initializeApp() {
                 try {
                     contentArea.innerHTML = `
                         <div style="text-align: center; padding: 50px; color: var(--accent);">
+                            <div class="ultra-modern-spinner" style="margin: 0 auto 20px;"></div>
                             <div>🌀 Поиск по запросу: "${query}"...</div>
                         </div>
                     `;
@@ -300,7 +134,23 @@ function initializeApp() {
 
     // --- Обработчики форм добавления контента ---
     setupFormSubmissions();
-}
+    
+    // --- НОВОЕ: Скрытие preloader'а после загрузки контента ---
+    setTimeout(() => {
+        const preloader = document.getElementById('app-preloader');
+        if (preloader) {
+            preloader.classList.add('hidden');
+            setTimeout(() => {
+                preloader.style.display = 'none';
+                const content = document.getElementById('app-content');
+                if (content) {
+                    content.style.display = 'block';
+                    content.classList.add('visible');
+                }
+            }, 500); // Ждем завершения анимации скрытия
+        }
+    }, 1000); // Минимальное время показа preloader'а
+});
 
 // --- Динамические функции после загрузки контента ---
 function addDynamicFeatures() {
@@ -316,25 +166,25 @@ function addDynamicFeatures() {
 function initializeVideoErrorHandling() {
     // Добавляем обработчики ошибок для всех видеоэлементов
     document.querySelectorAll('video').forEach(video => {
-        video.addEventListener('error', async function (e) {
+        video.addEventListener('error', async function(e) {
             console.log('Ошибка воспроизведения видео:', e);
-
+            
             // Получаем родительский элемент
             const parent = this.parentNode;
-
+            
             // Создаем элемент прелоадера
             const loader = document.createElement('div');
             loader.className = 'video-loader';
             loader.innerHTML = `
                 <div>
-                    <div class="spinner"></div>
-                    <div class="text">Обновление видео...</div>
+                    <div class="ultra-modern-spinner"></div>
+                    <div class="text">🔄 Обновление видео...</div>
                 </div>
             `;
-
+            
             // Заменяем видео на прелоадер
             parent.replaceChild(loader, this);
-
+            
             try {
                 // Получаем источник видео
                 const videoSrc = this.querySelector('source')?.src || this.src;
@@ -349,24 +199,24 @@ function initializeVideoErrorHandling() {
                             post_url: videoSrc
                         })
                     });
-
+                    
                     const result = await response.json();
-
+                    
                     if (result.success && result.new_url) {
                         // Создаем новый видеоэлемент с обновленной ссылкой
                         const newVideo = document.createElement('video');
                         newVideo.controls = true;
                         newVideo.preload = 'metadata';
                         newVideo.style.cssText = 'max-width: 100%; border-radius: 10px; width: 100%; height: auto;';
-
+                        
                         const source = document.createElement('source');
                         source.src = result.new_url;
                         source.type = 'video/mp4';
-
+                        
                         newVideo.appendChild(source);
-
+                        
                         // Добавляем обработчик ошибок для нового видео
-                        newVideo.addEventListener('error', function (e) {
+                        newVideo.addEventListener('error', function(e) {
                             console.log('Ошибка воспроизведения обновленного видео:', e);
                             const errorNotice = document.createElement('div');
                             errorNotice.className = 'video-error-notice';
@@ -377,13 +227,13 @@ function initializeVideoErrorHandling() {
                             `;
                             parent.replaceChild(errorNotice, newVideo);
                         });
-
+                        
                         // Заменяем прелоадер на новое видео
                         parent.replaceChild(newVideo, loader);
-
+                        
                         // Загружаем и воспроизводим видео
                         newVideo.load();
-
+                        
                         console.log('Видео успешно обновлено');
                     } else {
                         // Показываем ошибку
@@ -439,7 +289,7 @@ function addReactionHandlers() {
             try {
                 const response = await fetch('/api/reaction', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
                         item_type: itemType,
                         item_id: parseInt(itemId),
@@ -493,7 +343,7 @@ function addCommentHandlers() {
                 try {
                     const response = await fetch('/api/comment', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({
                             item_type: itemType,
                             item_id: parseInt(itemId),
@@ -623,7 +473,7 @@ function addModalHandlers() {
             }
         });
 
-        // Обработчик закрытия модалки при клике вне окна
+        // Обработчик закрытия модального окна при клике вне окна
         document.addEventListener('click', function (e) {
             if (e.target.classList && e.target.classList.contains('modal')) {
                 e.target.style.display = 'none';
@@ -687,7 +537,7 @@ function setupFormSubmissions() {
     setupContentForm('add-news-form', 'image_type', '/api/add_news', 'add-news-modal', true);
 }
 
-function setupContentForm(formId, typeName, apiUrl, modalId, alwaysFormData = false) {
+function setupContentForm(formId, typeName, apiUrl, modalId, alwaysFormData=false) {
     const form = document.getElementById(formId);
     if (!form) return;
 
@@ -726,96 +576,3 @@ function setupContentForm(formId, typeName, apiUrl, modalId, alwaysFormData = fa
 }
 
 console.log("main.js загружен и выполняется с fullscreen Telegram WebApp!");
-
-// --- Обработка ошибок загрузки видео в Telegram ---
-document.addEventListener('DOMContentLoaded', function () {
-    // Добавляем обработчик ошибок для всех форм загрузки видео
-    document.querySelectorAll('form[id$="-upload-form"]').forEach(form => {
-        form.addEventListener('submit', async function (e) {
-            e.preventDefault();
-
-            const submitBtn = this.querySelector('button[type="submit"]');
-            const originalText = submitBtn ? submitBtn.textContent : 'Загрузить';
-            const loadingSpinner = this.querySelector('.spinner-border');
-
-            // Показываем индикатор загрузки
-            if (submitBtn) {
-                submitBtn.disabled = true;
-                submitBtn.textContent = 'Загрузка...';
-            }
-            if (loadingSpinner) {
-                loadingSpinner.classList.remove('d-none');
-            }
-
-            try {
-                const formData = new FormData(this);
-
-                const response = await fetch('/api/upload_video', {
-                    method: 'POST',
-                    body: formData
-                });
-
-                const result = await response.json();
-
-                if (result.success) {
-                    // Показываем успех
-                    const resultDiv = this.querySelector('[id$="-result"]');
-                    const resultMessage = this.querySelector('[id$="-result-message"]');
-                    if (resultDiv && resultMessage) {
-                        resultMessage.textContent = result.message || 'Видео успешно загружено и добавлено в приложение!';
-                        resultDiv.classList.remove('d-none');
-                    }
-
-                    // Скрываем ошибку
-                    const errorDiv = this.querySelector('[id$="-error"]');
-                    const errorMessage = this.querySelector('[id$="-error-message"]');
-                    if (errorDiv && errorMessage) {
-                        errorDiv.classList.add('d-none');
-                    }
-
-                    // Сбрасываем форму
-                    this.reset();
-                } else {
-                    // Показываем ошибку
-                    const errorDiv = this.querySelector('[id$="-error"]');
-                    const errorMessage = this.querySelector('[id$="-error-message"]');
-                    if (errorDiv && errorMessage) {
-                        errorMessage.textContent = result.error || 'Неизвестная ошибка';
-                        errorDiv.classList.remove('d-none');
-                    }
-
-                    // Скрываем успех
-                    const resultDiv = this.querySelector('[id$="-result"]');
-                    const resultMessage = this.querySelector('[id$="-result-message"]');
-                    if (resultDiv && resultMessage) {
-                        resultDiv.classList.add('d-none');
-                    }
-                }
-            } catch (error) {
-                // Показываем ошибку сети
-                const errorDiv = this.querySelector('[id$="-error"]');
-                const errorMessage = this.querySelector('[id$="-error-message"]');
-                if (errorDiv && errorMessage) {
-                    errorMessage.textContent = 'Ошибка сети: ' + error.message;
-                    errorDiv.classList.remove('d-none');
-                }
-
-                // Скрываем успех
-                const resultDiv = this.querySelector('[id$="-result"]');
-                const resultMessage = this.querySelector('[id$="-result-message"]');
-                if (resultDiv && resultMessage) {
-                    resultDiv.classList.add('d-none');
-                }
-            } finally {
-                // Скрываем индикатор загрузки
-                if (submitBtn) {
-                    submitBtn.disabled = false;
-                    submitBtn.textContent = originalText;
-                }
-                if (loadingSpinner) {
-                    loadingSpinner.classList.add('d-none');
-                }
-            }
-        });
-    });
-});
