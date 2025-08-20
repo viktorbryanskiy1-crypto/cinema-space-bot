@@ -9,13 +9,13 @@
     <title>🌌 КиноВселенная</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <style>
-        /* --- FULLSCREEN PRELOADER --- */
+        /* --- FULLSCREEN PRELOADER STYLES (интегрированы в style.css, но оставлены для совместимости) --- */
         .app-preloader {
             position: fixed;
             top: 0;
             left: 0;
-            width: 100vw;
-            height: 100vh;
+            width: 100vw; /* Полноэкранный */
+            height: 100vh; /* Полноэкранный */
             background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
             display: flex;
             justify-content: center;
@@ -33,14 +33,14 @@
         }
 
         .preloader-logo {
-            font-size: 5em;
+            font-size: 5em; /* Увеличен */
             margin-bottom: 30px;
-            animation: float 3s ease-in-out infinite;
+            animation: float 3s ease-in-out infinite; /* Новая анимация */
             text-shadow: 0 0 20px rgba(0, 243, 255, 0.7);
         }
 
         .preloader-title {
-            font-size: 2.5em;
+            font-size: 2.5em; /* Увеличен */
             font-weight: 800;
             margin-bottom: 40px;
             background: linear-gradient(45deg, var(--accent), var(--accent-secondary));
@@ -51,42 +51,42 @@
         }
 
         .preloader-spinner {
-            width: 60px;
-            height: 60px;
+            width: 60px; /* Увеличен */
+            height: 60px; /* Увеличен */
             border: 4px solid rgba(255, 255, 255, 0.1);
             border-radius: 50%;
             border-top-color: var(--accent);
             animation: spin 1s ease-in-out infinite;
-            margin: 0 auto 30px;
+            margin: 0 auto 30px; /* Увеличены отступы */
             box-shadow: 0 0 20px rgba(0, 243, 255, 0.3);
         }
 
         .preloader-text {
-            font-size: 1.3em;
-            margin-bottom: 30px;
+            font-size: 1.3em; /* Увеличен */
+            margin-bottom: 30px; /* Увеличен */
             color: rgba(255, 255, 255, 0.8);
         }
 
-        .preloader-progress-container {
-            width: 300px;
-            height: 6px;
+        .preloader-progress {
+            width: 300px; /* Увеличена ширина */
+            height: 6px; /* Увеличена высота */
             background: rgba(255, 255, 255, 0.1);
             border-radius: 3px;
-            margin: 0 auto 20px;
+            margin: 0 auto 20px; /* Увеличены отступы */
             overflow: hidden;
             box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
         }
 
-        .preloader-progress-bar {
+        .progress-bar {
             height: 100%;
             background: linear-gradient(90deg, var(--accent), var(--accent-secondary));
             width: 0%;
-            transition: width 0.4s cubic-bezier(0.22, 0.61, 0.36, 1);
+            transition: width 0.4s cubic-bezier(0.22, 0.61, 0.36, 1); /* Более плавная анимация */
             border-radius: 3px;
         }
 
         .preloader-status {
-            font-size: 1em;
+            font-size: 1em; /* Увеличен */
             opacity: 0.9;
             font-weight: 500;
         }
@@ -179,7 +179,7 @@
                 margin-bottom: 25px;
             }
             
-            .preloader-progress-container {
+            .preloader-progress {
                 width: 250px;
                 margin-bottom: 15px;
             }
@@ -201,8 +201,9 @@
     </style>
 </head>
 <body>
-    <!-- FULLSCREEN PRELOADER -->
+    <!-- НОВОЕ: Полноэкранный Preloader для всего приложения -->
     <div id="app-preloader" class="app-preloader">
+        <!-- Animated background elements -->
         <div class="preloader-bg-element bg-element-1"></div>
         <div class="preloader-bg-element bg-element-2"></div>
         <div class="preloader-bg-element bg-element-3"></div>
@@ -212,8 +213,8 @@
             <div class="preloader-title">КиноВселенная</div>
             <div class="preloader-spinner"></div>
             <div class="preloader-text">Подготовка космического пространства...</div>
-            <div class="preloader-progress-container">
-                <div class="preloader-progress-bar" id="preloader-progress-bar"></div>
+            <div class="preloader-progress">
+                <div class="progress-bar" id="preloader-progress-bar"></div>
             </div>
             <div class="preloader-status" id="preloader-status">0% Инициализация...</div>
         </div>
@@ -249,7 +250,7 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
     <script>
-        // --- FULLSCREEN PRELOADER LOGIC ---
+        // --- НОВОЕ: Предзагрузка всего приложения ---
         document.addEventListener('DOMContentLoaded', async function() {
             console.log("DOMContentLoaded сработал");
 
@@ -272,7 +273,7 @@
                     for (const tab of tabs) {
                         try {
                             console.log(`Предзагрузка вкладки: ${tab}`);
-                            updatePreloaderProgress(20 + (loadedTabs * 20), `Загрузка ${tab}...`);
+                            updatePreloaderProgress(20 + (loadedTabs * 25), `Загрузка ${tab}...`);
                             
                             const response = await fetch(`/${tab}`);
                             if (response.ok) {
@@ -290,19 +291,16 @@
                     }
                     
                     // Обновляем прогресс
-                    updatePreloaderProgress(80, "Завершение загрузки...");
+                    updatePreloaderProgress(90, "Завершение загрузки...");
                     
                     // --- Предзагрузка статических файлов ---
                     await preloadStaticAssets();
                     
                     // Обновляем прогресс
-                    updatePreloaderProgress(90, "Финализация...");
+                    updatePreloaderProgress(100, "Готово!");
                     
                     // --- Задержка для плавного перехода ---
                     await new Promise(resolve => setTimeout(resolve, 700));
-                    
-                    // Обновляем прогресс
-                    updatePreloaderProgress(100, "Готово!");
                     
                     // Скрываем preloader и показываем контент
                     hidePreloader();
@@ -385,8 +383,9 @@
                         link.href = asset;
                     } else {
                         link.rel = 'preload';
-                        link.as = 'image';
+                        link.as = 'fetch'; // или 'image'
                         link.href = asset;
+                        link.crossOrigin = 'anonymous';
                     }
                     link.onload = resolve;
                     link.onerror = reject;
