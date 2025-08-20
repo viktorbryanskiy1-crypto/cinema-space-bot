@@ -13,37 +13,12 @@ let formToggleHandlerAdded = false;
 document.addEventListener('DOMContentLoaded', function () {
     console.log("DOMContentLoaded сработал");
 
-    // Создаем элемент Preloader'а
-    const preloaderHTML = `
-        <div id="app-preloader" class="app-preloader">
-            <div class="preloader-bg-element bg-element-1"></div>
-            <div class="preloader-bg-element bg-element-2"></div>
-            <div class="preloader-bg-element bg-element-3"></div>
-            
-            <div class="preloader-content">
-                <div class="preloader-logo">🌌</div>
-                <div class="preloader-title">КиноВселенная</div>
-                <div class="preloader-spinner"></div>
-                <div class="preloader-text">Подготовка космического пространства...</div>
-                <div class="preloader-progress-container">
-                    <div class="preloader-progress-bar" id="preloader-progress-bar"></div>
-                </div>
-                <div class="preloader-status" id="preloader-status">0% Инициализация...</div>
-            </div>
-        </div>
-    `;
-
-    // Добавляем Preloader в DOM перед контентом
-    const body = document.body;
-    const preloaderElement = document.createElement('div');
-    preloaderElement.innerHTML = preloaderHTML;
-    body.insertBefore(preloaderElement.firstChild, body.firstChild);
-
     // Показываем preloader и начинаем загрузку
     const preloader = document.getElementById('app-preloader');
-    const content = document.getElementById('app-content');
+    const progressBar = document.getElementById('preloader-progress-bar');
+    const statusText = document.getElementById('preloader-status');
 
-    if (preloader && content) {
+    if (preloader && progressBar && statusText) {
         console.log("Начало предзагрузки приложения...");
 
         // Имитация предзагрузки (в реальном приложении здесь будет логика загрузки)
@@ -97,6 +72,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 hidePreloader();
             }
         }, 100); // Небольшая задержка для отображения preloader'а
+    } else {
+        // Если preloader не найден, инициализируем приложение как обычно
+        console.warn("Preloader не найден в DOM. Инициализация приложения без него.");
+        hidePreloader(); // Просто показываем контент
     }
 });
 
@@ -165,7 +144,7 @@ async function preloadStaticAssets() {
             } else {
                 // Для изображений и других ресурсов
                 link.rel = 'preload';
-                link.as = 'fetch'; // или 'image' для изображений
+                link.as = 'fetch'; // или 'image'
                 link.href = asset;
                 link.crossOrigin = 'anonymous'; // Если ресурс с другого origin
             }
