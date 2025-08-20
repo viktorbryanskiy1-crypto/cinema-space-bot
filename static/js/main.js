@@ -1,19 +1,169 @@
 // main.js — полный рабочий файл с оптимизацией Telegram WebApp и fullscreen
-// Обновлен для поддержки моментального переключения между вкладками
+// Обновлен для поддержки предзагрузки всего приложения
 
 // Глобальные переменные
 let currentTab = 'moments';
 let userId = 'user_' + Math.random().toString(36).substr(2, 9);
-let tabCache = {}; // Кэш для вкладок
-let isPreloading = false; // Флаг предзагрузки
+let isPreloadingComplete = false;
 
 // Флаги для предотвращения множественных обработчиков
 let modalClickHandlerAdded = false;
 let formToggleHandlerAdded = false;
 
-document.addEventListener('DOMContentLoaded', function() {
+// --- НОВОЕ: Предзагрузка всего приложения ---
+document.addEventListener('DOMContentLoaded', async function() {
     console.log("DOMContentLoaded сработал");
+    
+    // Показываем preloader
+    const preloader = document.getElementById('app-preloader');
+    const progressBar = document.getElementById('preloader-progress-bar');
+    const statusText = document.getElementById('preloader-status');
+    
+    if (preloader) {
+        console.log("Начало предзагрузки приложения...");
+        
+        try {
+            // Обновляем прогресс
+            updatePreloaderProgress(10, "Инициализация...");
+            
+            // --- Предзагрузка всех вкладок ---
+            const tabs = ['moments', 'trailers', 'news'];
+            let loadedTabs = 0;
+            
+            for (const tab of tabs) {
+                try {
+                    console.log(`Предзагрузка вкладки: ${tab}`);
+                    updatePreloaderProgress(20 + (loadedTabs * 20), `Загрузка ${tab}...`);
+                    
+                    const response = await fetch(`/${tab}`);
+                    if (response.ok) {
+                        const html = await response.text();
+                        // Кэшируем в sessionStorage
+                        sessionStorage.setItem(`tab_${tab}`, html);
+                        console.log(`Вкладка ${tab} предзагружена`);
+                        loadedTabs++;
+                    } else {
+                        console.error(`Ошибка загрузки вкладки ${tab}: ${response.status}`);
+                    }
+                } catch (error) {
+                    console.error(`Ошибка предзагрузки вкладки ${tab}:`, error);
+                }
+            }
+            
+            // Обновляем прогресс
+            updatePreloaderProgress(80, "Завершение загрузки...");
+            
+            // --- Предзагрузка статических файлов ---
+            await preloadStaticAssets();
+            
+            // Обновляем прогресс
+            updatePreloaderProgress(90, "Финализация...");
+            
+            // --- Задержка для плавного перехода ---
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            // Обновляем прогресс
+            updatePreloaderProgress(100, "Готово!");
+            
+            // Скрываем preloader и показываем контент
+            hidePreloader();
+            
+        } catch (error) {
+            console.error("Ошибка предзагрузки приложения:", error);
+            // В случае ошибки все равно показываем приложение
+            hidePreloader();
+        }
+    } else {
+        // Если preloader не найден, инициализируем приложение как обычно
+        initializeApp();
+    }
+});
 
+// --- НОВАЯ ФУНКЦИЯ: Обновление прогресса preloader'а ---
+function updatePreloaderProgress(percent, status) {
+    const progressBar = document.getElementById('preloader-progress-bar');
+    const statusText = document.getElementById('preloader-status');
+    
+    if (progressBar) {
+        progressBar.style.width = `${percent}%`;
+    }
+    
+    if (statusText) {
+        statusText.textContent = `${percent}% ${status}`;
+    }
+    
+    console.log(`Прогресс загрузки: ${percent}% - ${status}`);
+}
+
+// --- НОВАЯ ФУНКЦИЯ: Скрытие preloader'а ---
+function hidePreloader() {
+    const preloader = document.getElementById('app-preloader');
+    const content = document.getElementById('app-content');
+    
+    if (preloader) {
+        preloader.classList.add('hidden');
+        setTimeout(() => {
+            preloader.style.display = 'none';
+            if (content) {
+                content.style.display = 'block';
+                content.classList.add('visible');
+            }
+            // Инициализируем приложение
+            initializeApp();
+        }, 500); // Ждем завершения анимации скрытия
+    } else {
+        if (content) {
+            content.style.display = 'block';
+            content.classList.add('visible');
+        }
+        // Инициализируем приложение
+        initializeApp();
+    }
+}
+
+// --- НОВАЯ ФУНКЦИЯ: Предзагрузка статических файлов ---
+async function preloadStaticAssets() {
+    console.log("Предзагрузка статических файлов...");
+    
+    const assets = [
+        '/static/css/style.css',
+        '/static/js/main.js',
+        '/static/images/favicon.ico'
+    ];
+    
+    const promises = assets.map(asset => {
+        return new Promise((resolve, reject) => {
+            const link = document.createElement('link');
+            if (asset.endsWith('.css')) {
+                link.rel = 'stylesheet';
+                link.href = asset;
+            } else if (asset.endsWith('.js')) {
+                link.rel = 'preload';
+                link.as = 'script';
+                link.href = asset;
+            } else {
+                link.rel = 'preload';
+                link.as = 'image';
+                link.href = asset;
+            }
+            link.onload = resolve;
+            link.onerror = reject;
+            document.head.appendChild(link);
+        });
+    });
+    
+    try {
+        await Promise.all(promises);
+        console.log("Статические файлы предзагружены");
+    } catch (error) {
+        console.error("Ошибка предзагрузки статических файлов:", error);
+    }
+}
+
+// --- Основная инициализация приложения ---
+function initializeApp() {
+    console.log("Инициализация приложения...");
+    
     // --- Telegram WebApp ---
     if (window.Telegram && window.Telegram.WebApp) {
         const webApp = window.Telegram.WebApp;
@@ -49,63 +199,33 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const tabBtns = document.querySelectorAll('.tab-btn[data-tab]'); // Только кнопки вкладок
 
-    // --- УЛУЧШЕНИЕ: Предзагрузка всех вкладок ---
-    async function preloadAllTabs() {
-        if (isPreloading) return;
-        isPreloading = true;
-        
-        console.log("Начало предзагрузки всех вкладок...");
-        const tabsToPreload = ['moments', 'trailers', 'news'];
-        
-        for (const tabName of tabsToPreload) {
-            try {
-                if (!tabCache[tabName]) {
-                    console.log(`Предзагрузка вкладки: ${tabName}`);
-                    const response = await fetch(`/${tabName}`);
-                    if (response.ok) {
-                        const html = await response.text();
-                        tabCache[tabName] = html;
-                        console.log(`Вкладка ${tabName} предзагружена и закэширована`);
-                    }
-                }
-            } catch (error) {
-                console.error(`Ошибка предзагрузки вкладки ${tabName}:`, error);
-            }
-        }
-        
-        isPreloading = false;
-        console.log("Предзагрузка всех вкладок завершена");
-    }
-
-    // --- УЛУЧШЕНИЕ: Моментальная загрузка контента из кэша ---
     async function loadTabContent(tabName) {
         try {
             // Проверяем кэш первым делом
-            if (tabCache[tabName]) {
+            const cachedContent = sessionStorage.getItem(`tab_${tabName}`);
+            if (cachedContent) {
                 console.log(`Загрузка вкладки ${tabName} из кэша`);
-                contentArea.innerHTML = tabCache[tabName];
+                contentArea.innerHTML = cachedContent;
                 currentTab = tabName;
                 addDynamicFeatures();
                 return;
             }
             
-            // Показываем минимальный индикатор загрузки
             contentArea.innerHTML = `
-                <div style="text-align: center; padding: 20px; color: var(--accent);">
-                    <div>🌀</div>
+                <div style="text-align: center; padding: 50px; color: var(--accent);">
+                    <div>🌀 Загрузка ${tabName}...</div>
                 </div>
             `;
 
             const response = await fetch(`/${tabName}`);
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             const html = await response.text();
-            
-            // Кэшируем контент
-            tabCache[tabName] = html;
-            
             contentArea.innerHTML = html;
             currentTab = tabName;
             addDynamicFeatures();
+            
+            // Кэшируем в sessionStorage для следующих загрузок
+            sessionStorage.setItem(`tab_${tabName}`, html);
         } catch (error) {
             console.error(`Ошибка загрузки вкладки "${tabName}":`, error);
             contentArea.innerHTML = `
@@ -136,8 +256,8 @@ document.addEventListener('DOMContentLoaded', function() {
             if (query) {
                 try {
                     contentArea.innerHTML = `
-                        <div style="text-align: center; padding: 20px; color: var(--accent);">
-                            <div>🔍</div>
+                        <div style="text-align: center; padding: 50px; color: var(--accent);">
+                            <div>🌀 Поиск по запросу: "${query}"...</div>
                         </div>
                     `;
                     const response = await fetch(`/search?q=${encodeURIComponent(query)}`);
@@ -171,18 +291,13 @@ document.addEventListener('DOMContentLoaded', function() {
     if (tabBtns.length > 0) {
         tabBtns[0].classList.add('active');
         loadTabContent(tabBtns[0].dataset.tab);
-        
-        // Начинаем предзагрузку остальных вкладок через 1 секунду
-        setTimeout(() => {
-            preloadAllTabs();
-        }, 1000);
     } else {
         console.log("Кнопки вкладок не найдены на главной странице.");
     }
 
     // --- Обработчики форм добавления контента ---
     setupFormSubmissions();
-});
+}
 
 // --- Динамические функции после загрузки контента ---
 function addDynamicFeatures() {
@@ -191,10 +306,10 @@ function addDynamicFeatures() {
     addLoadCommentsHandlers();
     addModalHandlers();
     setupFormToggles();
-    initializeVideoErrorHandling();
+    initializeVideoErrorHandling(); // НОВАЯ ФУНКЦИЯ
 }
 
-// --- УЛУЧШЕНИЕ: Обработка ошибок воспроизведения видео ---
+// --- НОВАЯ ФУНКЦИЯ: Обработка ошибок воспроизведения видео ---
 function initializeVideoErrorHandling() {
     // Добавляем обработчики ошибок для всех видеоэлементов
     document.querySelectorAll('video').forEach(video => {
@@ -210,7 +325,7 @@ function initializeVideoErrorHandling() {
             loader.innerHTML = `
                 <div>
                     <div class="spinner"></div>
-                    <div class="text">🔄 Обновление видео...</div>
+                    <div class="text">Обновление видео...</div>
                 </div>
             `;
             
@@ -608,3 +723,96 @@ function setupContentForm(formId, typeName, apiUrl, modalId, alwaysFormData=fals
 }
 
 console.log("main.js загружен и выполняется с fullscreen Telegram WebApp!");
+
+// --- Обработка ошибок загрузки видео в Telegram ---
+document.addEventListener('DOMContentLoaded', function() {
+    // Добавляем обработчик ошибок для всех форм загрузки видео
+    document.querySelectorAll('form[id$="-upload-form"]').forEach(form => {
+        form.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const submitBtn = this.querySelector('button[type="submit"]');
+            const originalText = submitBtn ? submitBtn.textContent : 'Загрузить';
+            const loadingSpinner = this.querySelector('.spinner-border');
+            
+            // Показываем индикатор загрузки
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Загрузка...';
+            }
+            if (loadingSpinner) {
+                loadingSpinner.classList.remove('d-none');
+            }
+            
+            try {
+                const formData = new FormData(this);
+                
+                const response = await fetch('/api/upload_video', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    // Показываем успех
+                    const resultDiv = this.querySelector('[id$="-result"]');
+                    const resultMessage = this.querySelector('[id$="-result-message"]');
+                    if (resultDiv && resultMessage) {
+                        resultMessage.textContent = result.message || 'Видео успешно загружено и добавлено в приложение!';
+                        resultDiv.classList.remove('d-none');
+                    }
+                    
+                    // Скрываем ошибку
+                    const errorDiv = this.querySelector('[id$="-error"]');
+                    const errorMessage = this.querySelector('[id$="-error-message"]');
+                    if (errorDiv && errorMessage) {
+                        errorDiv.classList.add('d-none');
+                    }
+                    
+                    // Сбрасываем форму
+                    this.reset();
+                } else {
+                    // Показываем ошибку
+                    const errorDiv = this.querySelector('[id$="-error"]');
+                    const errorMessage = this.querySelector('[id$="-error-message"]');
+                    if (errorDiv && errorMessage) {
+                        errorMessage.textContent = result.error || 'Неизвестная ошибка';
+                        errorDiv.classList.remove('d-none');
+                    }
+                    
+                    // Скрываем успех
+                    const resultDiv = this.querySelector('[id$="-result"]');
+                    const resultMessage = this.querySelector('[id$="-result-message"]');
+                    if (resultDiv && resultMessage) {
+                        resultDiv.classList.add('d-none');
+                    }
+                }
+            } catch (error) {
+                // Показываем ошибку сети
+                const errorDiv = this.querySelector('[id$="-error"]');
+                const errorMessage = this.querySelector('[id$="-error-message"]');
+                if (errorDiv && errorMessage) {
+                    errorMessage.textContent = 'Ошибка сети: ' + error.message;
+                    errorDiv.classList.remove('d-none');
+                }
+                
+                // Скрываем успех
+                const resultDiv = this.querySelector('[id$="-result"]');
+                const resultMessage = this.querySelector('[id$="-result-message"]');
+                if (resultDiv && resultMessage) {
+                    resultDiv.classList.add('d-none');
+                }
+            } finally {
+                // Скрываем индикатор загрузки
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = originalText;
+                }
+                if (loadingSpinner) {
+                    loadingSpinner.classList.add('d-none');
+                }
+            }
+        });
+    });
+});
