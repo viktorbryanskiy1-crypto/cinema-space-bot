@@ -1,195 +1,3 @@
-/* --- FULLSCREEN PRELOADER STYLES --- */
-.app-preloader {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 9999;
-    transition: opacity 0.7s ease-out;
-    overflow: hidden;
-}
-
-.preloader-content {
-    text-align: center;
-    color: var(--accent);
-    position: relative;
-    z-index: 2;
-}
-
-.preloader-logo {
-    font-size: 5em;
-    margin-bottom: 30px;
-    animation: float 3s ease-in-out infinite;
-    text-shadow: 0 0 20px rgba(0, 243, 255, 0.7);
-}
-
-.preloader-title {
-    font-size: 2.5em;
-    font-weight: 800;
-    margin-bottom: 40px;
-    background: linear-gradient(45deg, var(--accent), var(--accent-secondary));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    text-shadow: 0 0 15px rgba(0, 243, 255, 0.3);
-}
-
-.preloader-spinner {
-    width: 60px;
-    height: 60px;
-    border: 4px solid rgba(255, 255, 255, 0.1);
-    border-radius: 50%;
-    border-top-color: var(--accent);
-    animation: spin 1s ease-in-out infinite;
-    margin: 0 auto 30px;
-    box-shadow: 0 0 20px rgba(0, 243, 255, 0.3);
-}
-
-.preloader-text {
-    font-size: 1.3em;
-    margin-bottom: 30px;
-    color: rgba(255, 255, 255, 0.8);
-}
-
-.preloader-progress-container {
-    width: 300px;
-    height: 6px;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 3px;
-    margin: 0 auto 20px;
-    overflow: hidden;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
-}
-
-.preloader-progress-bar {
-    height: 100%;
-    background: linear-gradient(90deg, var(--accent), var(--accent-secondary));
-    width: 0%;
-    transition: width 0.4s cubic-bezier(0.22, 0.61, 0.36, 1);
-    border-radius: 3px;
-}
-
-.preloader-status {
-    font-size: 1em;
-    opacity: 0.9;
-    font-weight: 500;
-}
-
-/* Animated background elements */
-.preloader-bg-element {
-    position: absolute;
-    border-radius: 50%;
-    background: radial-gradient(circle, rgba(0, 243, 255, 0.1) 0%, transparent 70%);
-    z-index: 1;
-}
-
-.bg-element-1 {
-    width: 300px;
-    height: 300px;
-    top: -100px;
-    right: -100px;
-    animation: pulse 8s infinite ease-in-out;
-}
-
-.bg-element-2 {
-    width: 200px;
-    height: 200px;
-    bottom: -80px;
-    left: -80px;
-    animation: pulse 6s infinite ease-in-out reverse;
-}
-
-.bg-element-3 {
-    width: 150px;
-    height: 150px;
-    top: 30%;
-    left: 10%;
-    animation: float 10s infinite ease-in-out;
-}
-
-/* Animations */
-@keyframes spin {
-    to { transform: rotate(360deg); }
-}
-
-@keyframes float {
-    0%, 100% { transform: translateY(0) translateX(0); }
-    50% { transform: translateY(-20px) translateX(10px); }
-}
-
-@keyframes pulse {
-    0%, 100% { transform: scale(1); opacity: 0.5; }
-    50% { transform: scale(1.1); opacity: 0.8; }
-}
-
-/* Hidden state */
-.app-preloader.hidden {
-    opacity: 0;
-    pointer-events: none;
-}
-
-/* Main content */
-.app-content {
-    opacity: 0;
-    transition: opacity 0.7s ease-in;
-    width: 100%;
-    height: 100%;
-}
-
-.app-content.visible {
-    opacity: 1;
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-    .preloader-logo {
-        font-size: 3.5em;
-        margin-bottom: 20px;
-    }
-    
-    .preloader-title {
-        font-size: 1.8em;
-        margin-bottom: 30px;
-    }
-    
-    .preloader-spinner {
-        width: 50px;
-        height: 50px;
-        margin-bottom: 25px;
-    }
-    
-    .preloader-text {
-        font-size: 1.1em;
-        margin-bottom: 25px;
-    }
-    
-    .preloader-progress-container {
-        width: 250px;
-        margin-bottom: 15px;
-    }
-    
-    .preloader-status {
-        font-size: 0.9em;
-    }
-    
-    .bg-element-1 {
-        width: 200px;
-        height: 200px;
-    }
-    
-    .bg-element-2 {
-        width: 150px;
-        height: 150px;
-    }
-}
-
-
-/* --- Остальные стили из вашего оригинального файла --- */
 :root {
     --space-bg: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
     --card-bg: rgba(25, 25, 60, 0.8);
@@ -214,6 +22,24 @@ html, body {
     -webkit-overflow-scrolling: touch;
 }
 
+body.fullscreen {
+    height: 100vh;
+    width: 100vw;
+    overflow: hidden;
+    position: fixed;
+    top: 0;
+    left: 0;
+}
+
+.container.fullscreen {
+    height: 100vh;
+    width: 100vw;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 0;
+    padding: 0;
+}
+
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     background: var(--space-bg);
@@ -233,7 +59,6 @@ body {
     width: 100%;
     min-height: 100vh;
 }
-/* --- КОНЕЦ ПОЛНОЭКРАННОГО РЕЖИМА --- */
 
 /* Навигация - прилипает к верху */
 .navbar {
@@ -252,6 +77,13 @@ body {
     width: 100%;
     z-index: 1000;
     box-sizing: border-box;
+}
+
+.navbar.fullscreen {
+    position: sticky;
+    top: 0;
+    width: 100%;
+    z-index: 1000;
 }
 
 .nav-brand {
@@ -398,7 +230,103 @@ body {
     }
 }
 
-/* Статистика */
+/* --- УЛТРАСОВРЕМЕННЫЙ ПОЛНОЭКРАННЫЙ PRELOADER --- */
+.app-preloader {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+    transition: opacity 0.5s ease-out;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+}
+
+.app-preloader.fullscreen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    margin: 0;
+    padding: 0;
+}
+
+.preloader-content {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+}
+
+/* УЛТРАСОВРЕМЕННЫЙ СПИННЕР БЕЗ НАДПИСЕЙ */
+.ultra-modern-spinner {
+    position: relative;
+    width: 80px;
+    height: 80px;
+}
+
+.ultra-modern-spinner::before,
+.ultra-modern-spinner::after {
+    content: '';
+    position: absolute;
+    border-radius: 50%;
+    opacity: 0.8;
+}
+
+.ultra-modern-spinner::before {
+    width: 100%;
+    height: 100%;
+    border: 6px solid transparent;
+    border-top-color: #00f3ff;
+    border-bottom-color: #ff00c8;
+    animation: ultraSpin 1.2s cubic-bezier(0.68, -0.55, 0.265, 1.55) infinite;
+}
+
+.ultra-modern-spinner::after {
+    width: 70%;
+    height: 70%;
+    border: 4px solid transparent;
+    border-left-color: #ff00c8;
+    border-right-color: #00f3ff;
+    animation: ultraSpinReverse 1s cubic-bezier(0.68, -0.55, 0.265, 1.55) infinite reverse;
+    top: 15%;
+    left: 15%;
+}
+
+@keyframes ultraSpin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+@keyframes ultraSpinReverse {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(-360deg); }
+}
+
+/* Плавное скрытие preloader'а */
+.app-preloader.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* Основное содержимое */
+.app-content {
+    opacity: 0;
+    transition: opacity 0.5s ease-in;
+}
+
+.app-content.visible {
+    opacity: 1;
+}
+
+/* --- Остальные стили --- */
 .stats-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -435,7 +363,6 @@ body {
     margin-top: 8px;
 }
 
-/* Админ-кнопки */
 .admin-btn {
     background: linear-gradient(45deg, var(--warning), #ff4757);
     color: white;
@@ -455,7 +382,6 @@ body {
     box-shadow: 0 4px 12px rgba(255, 107, 107, 0.4);
 }
 
-/* --- ДОПОЛНИТЕЛЬНЫЕ СТИЛИ ДЛЯ КАРТОЧЕК И КОНТЕНТА --- */
 .content-section {
     margin-top: 20px;
 }
@@ -563,7 +489,6 @@ body {
     box-shadow: 0 5px 15px rgba(0, 243, 255, 0.4);
 }
 
-/* Модальные окна */
 .modal {
     position: fixed;
     top: 0;
@@ -589,7 +514,6 @@ body {
     position: relative;
 }
 
-/* Закрытие модального окна */
 .close-modal {
     position: absolute;
     top: 15px;
@@ -605,9 +529,6 @@ body {
     color: var(--accent);
 }
 
-/* --- НОВЫЕ СТИЛИ ДЛЯ УЛУЧШЕНИЯ UX --- */
-
-/* Прелоадер для видео */
 .video-loader {
     display: flex;
     justify-content: center;
@@ -638,7 +559,6 @@ body {
     to { transform: rotate(360deg); }
 }
 
-/* Уведомления об ошибках */
 .video-error-notice {
     background: linear-gradient(45deg, rgba(255, 0, 0, 0.2), rgba(255, 0, 0, 0.1));
     padding: 20px;
@@ -664,7 +584,6 @@ body {
     opacity: 0.8;
 }
 
-/* Улучшенные карточки */
 .card {
     background: linear-gradient(145deg, rgba(30, 30, 46, 0.8), rgba(15, 12, 41, 0.9));
     border-radius: 15px;
@@ -689,7 +608,6 @@ body {
     font-weight: bold;
 }
 
-/* Адаптивность для мобильных устройств */
 @media (max-width: 768px) {
     .card {
         padding: 15px;
@@ -706,7 +624,6 @@ body {
     }
 }
 
-/* Анимации */
 @keyframes fadeIn {
     from { opacity: 0; transform: translateY(20px); }
     to { opacity: 1; transform: translateY(0); }
@@ -716,7 +633,6 @@ body {
     animation: fadeIn 0.5s ease-out;
 }
 
-/* Кнопки с улучшенным дизайном */
 .tab-btn, .submit-btn {
     background: linear-gradient(45deg, #6a11cb, #2575fc);
     border: none;
