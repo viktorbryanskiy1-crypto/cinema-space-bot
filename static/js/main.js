@@ -1,5 +1,5 @@
 // main.js — полный рабочий файл с оптимизацией Telegram WebApp и fullscreen
-// Обновлен для поддержки автоматического обновления ссылок на видео и ультрасовременного Preloader'а
+// Обновлен для поддержки автоматического обновления ссылок на видео и улучшенного UX
 
 // Глобальные переменные
 let currentTab = 'moments';
@@ -8,6 +8,9 @@ let userId = 'user_' + Math.random().toString(36).substr(2, 9);
 // Флаги для предотвращения множественных обработчиков
 let modalClickHandlerAdded = false;
 let formToggleHandlerAdded = false;
+
+// --- НОВОЕ: Кэш для вкладок ---
+let tabCache = {};
 
 document.addEventListener('DOMContentLoaded', function() {
     console.log("DOMContentLoaded сработал");
@@ -47,8 +50,19 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const tabBtns = document.querySelectorAll('.tab-btn[data-tab]'); // Только кнопки вкладок
 
+    // --- НОВОЕ: Асинхронная функция загрузки контента вкладки с кэшированием ---
     async function loadTabContent(tabName) {
         try {
+            // Проверяем кэш первым делом
+            if (tabCache[tabName]) {
+                console.log(`Загрузка вкладки ${tabName} из кэша`);
+                contentArea.innerHTML = tabCache[tabName];
+                currentTab = tabName;
+                addDynamicFeatures();
+                return;
+            }
+            
+            // Показываем индикатор загрузки только если нет кэша
             contentArea.innerHTML = `
                 <div style="text-align: center; padding: 50px; color: var(--accent);">
                     <div class="ultra-modern-spinner" style="margin: 0 auto 20px;"></div>
@@ -59,6 +73,10 @@ document.addEventListener('DOMContentLoaded', function() {
             const response = await fetch(`/${tabName}`);
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             const html = await response.text();
+            
+            // Кэшируем HTML для следующих загрузок
+            tabCache[tabName] = html;
+            
             contentArea.innerHTML = html;
             currentTab = tabName;
             addDynamicFeatures();
@@ -135,21 +153,20 @@ document.addEventListener('DOMContentLoaded', function() {
     // --- Обработчики форм добавления контента ---
     setupFormSubmissions();
     
-    // --- НОВОЕ: Скрытие preloader'а после загрузки контента ---
+    // --- НОВОЕ: Предзагрузка популярных вкладок ---
     setTimeout(() => {
-        const preloader = document.getElementById('app-preloader');
-        if (preloader) {
-            preloader.classList.add('hidden');
-            setTimeout(() => {
-                preloader.style.display = 'none';
-                const content = document.getElementById('app-content');
-                if (content) {
-                    content.style.display = 'block';
-                    content.classList.add('visible');
-                }
-            }, 500); // Ждем завершения анимации скрытия
-        }
-    }, 1000); // Минимальное время показа preloader'а
+        // Предзагружаем остальные вкладки в фоне
+        const otherTabs = ['trailers', 'news'];
+        otherTabs.forEach(tabName => {
+            fetch(`/${tabName}`)
+                .then(response => response.text())
+                .then(html => {
+                    tabCache[tabName] = html;
+                    console.log(`Вкладка ${tabName} предзагружена и закэширована`);
+                })
+                .catch(error => console.log(`Ошибка предзагрузки ${tabName}:`, error));
+        });
+    }, 2000); // Небольшая задержка, чтобы не перегружать сеть
 });
 
 // --- Динамические функции после загрузки контента ---
@@ -159,7 +176,7 @@ function addDynamicFeatures() {
     addLoadCommentsHandlers();
     addModalHandlers();
     setupFormToggles();
-    initializeVideoErrorHandling(); // НОВАЯ ФУНКЦИЯ
+    initializeVideoErrorHandling();
 }
 
 // --- НОВАЯ ФУНКЦИЯ: Обработка ошибок воспроизведения видео ---
@@ -176,9 +193,9 @@ function initializeVideoErrorHandling() {
             const loader = document.createElement('div');
             loader.className = 'video-loader';
             loader.innerHTML = `
-                <div>
+                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 300px; background: rgba(15, 12, 41, 0.8); border-radius: 10px; margin: 10px 0;">
                     <div class="ultra-modern-spinner"></div>
-                    <div class="text">🔄 Обновление видео...</div>
+                    <div style="margin-top: 15px; color: #00f3ff;">🔄 Обновление видео...</div>
                 </div>
             `;
             
@@ -221,9 +238,11 @@ function initializeVideoErrorHandling() {
                             const errorNotice = document.createElement('div');
                             errorNotice.className = 'video-error-notice';
                             errorNotice.innerHTML = `
-                                <div class="error-icon">❌</div>
-                                <div class="error-message">Не удалось воспроизвести видео</div>
-                                <div class="error-detail">Попробуйте обновить страницу или попробовать позже</div>
+                                <div style="background: rgba(255, 0, 0, 0.2); padding: 15px; border-radius: 8px; margin: 10px 0; color: #ff4444; text-align: center;">
+                                    <div style="font-size: 24px; margin-bottom: 10px;">❌</div>
+                                    <div>Не удалось воспроизвести видео</div>
+                                    <div style="font-size: 12px; margin-top: 5px;">Попробуйте обновить страницу или попробовать позже</div>
+                                </div>
                             `;
                             parent.replaceChild(errorNotice, newVideo);
                         });
@@ -240,9 +259,11 @@ function initializeVideoErrorHandling() {
                         const errorNotice = document.createElement('div');
                         errorNotice.className = 'video-error-notice';
                         errorNotice.innerHTML = `
-                            <div class="error-icon">❌</div>
-                            <div class="error-message">Не удалось обновить видео</div>
-                            <div class="error-detail">${result.error || 'Попробуйте позже'}</div>
+                            <div style="background: rgba(255, 0, 0, 0.2); padding: 15px; border-radius: 8px; margin: 10px 0; color: #ff4444; text-align: center;">
+                                <div style="font-size: 24px; margin-bottom: 10px;">❌</div>
+                                <div>Не удалось обновить видео</div>
+                                <div style="font-size: 12px; margin-top: 5px;">${result.error || 'Попробуйте позже'}</div>
+                            </div>
                         `;
                         parent.replaceChild(errorNotice, loader);
                     }
@@ -251,9 +272,11 @@ function initializeVideoErrorHandling() {
                     const errorNotice = document.createElement('div');
                     errorNotice.className = 'video-error-notice';
                     errorNotice.innerHTML = `
-                        <div class="error-icon">❌</div>
-                        <div class="error-message">Ошибка воспроизведения видео</div>
-                        <div class="error-detail">Неподдерживаемый формат или файл недоступен</div>
+                        <div style="background: rgba(255, 0, 0, 0.2); padding: 15px; border-radius: 8px; margin: 10px 0; color: #ff4444; text-align: center;">
+                            <div style="font-size: 24px; margin-bottom: 10px;">❌</div>
+                            <div>Ошибка воспроизведения видео</div>
+                            <div style="font-size: 12px; margin-top: 5px;">Неподдерживаемый формат или файл недоступен</div>
+                        </div>
                     `;
                     parent.replaceChild(errorNotice, loader);
                 }
@@ -262,9 +285,11 @@ function initializeVideoErrorHandling() {
                 const errorNotice = document.createElement('div');
                 errorNotice.className = 'video-error-notice';
                 errorNotice.innerHTML = `
-                    <div class="error-icon">🌐</div>
-                    <div class="error-message">Ошибка сети при обновлении</div>
-                    <div class="error-detail">Проверьте подключение и попробуйте позже</div>
+                    <div style="background: rgba(255, 0, 0, 0.2); padding: 15px; border-radius: 8px; margin: 10px 0; color: #ff4444; text-align: center;">
+                        <div style="font-size: 24px; margin-bottom: 10px;">🌐</div>
+                        <div>Ошибка сети при обновлении</div>
+                        <div style="font-size: 12px; margin-top: 5px;">Проверьте подключение и попробуйте позже</div>
+                    </div>
                 `;
                 parent.replaceChild(errorNotice, loader);
             }
@@ -473,7 +498,7 @@ function addModalHandlers() {
             }
         });
 
-        // Обработчик закрытия модального окна при клике вне окна
+        // Обработчик закрытия модалки при клике вне окна
         document.addEventListener('click', function (e) {
             if (e.target.classList && e.target.classList.contains('modal')) {
                 e.target.style.display = 'none';
