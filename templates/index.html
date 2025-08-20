@@ -8,30 +8,334 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>🌌 КиноВселенная</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <!-- Стили Preloader'а теперь находятся в static/css/style.css -->
+    <style>
+        /* --- УЛТРАСОВРЕМЕННЫЙ FULLSCREEN PRELOADER --- */
+        .app-preloader {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            transition: opacity 0.5s ease-out;
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+
+        .preloader-content {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        /* УЛТРАСОВРЕМЕННЫЙ СПИННЕР БЕЗ НАДПИСЕЙ */
+        .ultra-modern-spinner {
+            position: relative;
+            width: 80px;
+            height: 80px;
+        }
+
+        .ultra-modern-spinner::before,
+        .ultra-modern-spinner::after {
+            content: '';
+            position: absolute;
+            border-radius: 50%;
+            opacity: 0.8;
+        }
+
+        .ultra-modern-spinner::before {
+            width: 100%;
+            height: 100%;
+            border: 6px solid transparent;
+            border-top-color: #00f3ff;
+            border-bottom-color: #ff00c8;
+            animation: ultraSpin 1.2s cubic-bezier(0.68, -0.55, 0.265, 1.55) infinite;
+        }
+
+        .ultra-modern-spinner::after {
+            width: 70%;
+            height: 70%;
+            border: 4px solid transparent;
+            border-left-color: #ff00c8;
+            border-right-color: #00f3ff;
+            animation: ultraSpinReverse 1s cubic-bezier(0.68, -0.55, 0.265, 1.55) infinite reverse;
+            top: 15%;
+            left: 15%;
+        }
+
+        /* Дополнительные элементы для ультрасовременного эффекта */
+        .ultra-modern-spinner .dot {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background: #00f3ff;
+            border-radius: 50%;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            animation: dotPulse 2s ease-in-out infinite;
+        }
+
+        .ultra-modern-spinner .dot:nth-child(2) {
+            background: #ff00c8;
+            top: auto;
+            bottom: 0;
+            animation-delay: 1s;
+        }
+
+        @keyframes ultraSpin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes ultraSpinReverse {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(-360deg); }
+        }
+
+        @keyframes dotPulse {
+            0%, 100% { 
+                transform: translateX(-50%) scale(1);
+                opacity: 1;
+            }
+            50% { 
+                transform: translateX(-50%) scale(1.5);
+                opacity: 0.5;
+            }
+        }
+
+        /* Плавное скрытие preloader'а */
+        .app-preloader.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        /* Основное содержимое */
+        .app-content {
+            opacity: 0;
+            transition: opacity 0.5s ease-in;
+        }
+
+        .app-content.visible {
+            opacity: 1;
+        }
+
+        /* Полноэкранный режим */
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            width: 100%;
+            overflow-x: hidden;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+            color: #ffffff;
+            min-height: 100vh;
+            background-attachment: fixed;
+            background-size: cover;
+            overflow-x: hidden;
+            padding: 0;
+            margin: 0;
+        }
+
+        .container {
+            max-width: 100%;
+            margin: 0;
+            padding: 10px;
+            width: 100%;
+            min-height: 100vh;
+        }
+
+        /* Навигация - прилипает к верху */
+        .navbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(15, 12, 41, 0.95);
+            padding: 15px;
+            border-radius: 0;
+            margin-bottom: 20px;
+            border: 1px solid rgba(0, 243, 255, 0.3);
+            backdrop-filter: blur(20px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            position: sticky;
+            top: 0;
+            width: 100%;
+            z-index: 1000;
+            box-sizing: border-box;
+        }
+
+        .nav-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .nav-brand h1 {
+            background: linear-gradient(45deg, #00f3ff, #ff00c8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-size: 1.8em;
+            font-weight: 800;
+            text-shadow: 0 0 15px rgba(0, 243, 255, 0.5);
+            margin: 0;
+            padding: 0;
+        }
+
+        .nav-tabs {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .tab-btn {
+            background: transparent;
+            border: 2px solid #00f3ff;
+            color: #00f3ff;
+            padding: 10px 20px;
+            border-radius: 30px;
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            font-weight: 600;
+            font-size: 14px;
+            position: relative;
+            overflow: hidden;
+            white-space: nowrap;
+        }
+
+        .tab-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(0, 243, 255, 0.2), transparent);
+            transition: 0.5s;
+        }
+
+        .tab-btn:hover::before {
+            left: 100%;
+        }
+
+        .tab-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 243, 255, 0.4);
+        }
+
+        .tab-btn.active {
+            background: #00f3ff;
+            color: #0f0c29;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 243, 255, 0.6);
+        }
+
+        /* Поиск */
+        .search-container {
+            position: relative;
+            width: 100%;
+            max-width: 300px;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 10px 15px;
+            border: 2px solid #00f3ff;
+            border-radius: 30px;
+            background: rgba(25, 25, 60, 0.8);
+            color: white;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            box-sizing: border-box;
+        }
+
+        .search-input:focus {
+            outline: none;
+            box-shadow: 0 0 15px rgba(0, 243, 255, 0.5);
+            border-color: #00d0ff;
+        }
+
+        .search-btn {
+            position: absolute;
+            right: 5px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: #00f3ff;
+            border: none;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+        }
+
+        .search-btn:hover {
+            transform: translateY(-50%) scale(1.1);
+            box-shadow: 0 0 12px rgba(0, 243, 255, 0.7);
+        }
+
+        /* Адаптивность */
+        @media (max-width: 768px) {
+            .navbar {
+                flex-direction: column;
+                gap: 15px;
+                padding: 10px;
+            }
+            
+            .nav-tabs {
+                flex-wrap: wrap;
+                justify-content: center;
+                width: 100%;
+            }
+            
+            .search-container {
+                width: 100%;
+                max-width: 100%;
+            }
+            
+            .nav-brand h1 {
+                font-size: 1.5em;
+            }
+            
+            .tab-btn {
+                padding: 8px 15px;
+                font-size: 13px;
+            }
+        }
+    </style>
 </head>
-<body>
-    <!-- FULLSCREEN PRELOADER -->
-    <div id="app-preloader" class="app-preloader">
-        <div class="preloader-bg-element bg-element-1"></div>
-        <div class="preloader-bg-element bg-element-2"></div>
-        <div class="preloader-bg-element bg-element-3"></div>
-        
+<body class="fullscreen">
+    <!-- УЛТРАСОВРЕМЕННЫЙ FULLSCREEN PRELOADER БЕЗ НАДПИСЕЙ -->
+    <div id="app-preloader" class="app-preloader fullscreen">
         <div class="preloader-content">
-            <div class="preloader-logo">🌌</div>
-            <div class="preloader-title">КиноВселенная</div>
-            <div class="preloader-spinner"></div>
-            <div class="preloader-text">Подготовка космического пространства...</div>
-            <div class="preloader-progress-container">
-                <div class="preloader-progress-bar" id="preloader-progress-bar"></div>
+            <div class="ultra-modern-spinner">
+                <div class="dot"></div>
+                <div class="dot"></div>
             </div>
-            <div class="preloader-status" id="preloader-status">0% Инициализация...</div>
         </div>
     </div>
 
     <!-- Основное содержимое (скрыто до загрузки) -->
-    <div id="app-content" class="app-content" style="display: none;">
-        <div class="container">
+    <div id="app-content" class="app-content fullscreen" style="display: none;">
+        <div class="container fullscreen">
             <nav class="navbar">
                 <div class="nav-brand">
                     <h1>🌌 КиноВселенная</h1>
