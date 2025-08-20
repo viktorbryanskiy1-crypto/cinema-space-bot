@@ -40,26 +40,6 @@ body.fullscreen {
     padding: 0;
 }
 
-body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: var(--space-bg);
-    color: var(--text);
-    min-height: 100vh;
-    background-attachment: fixed;
-    background-size: cover;
-    overflow-x: hidden;
-    padding: 0;
-    margin: 0;
-}
-
-.container {
-    max-width: 100%;
-    margin: 0;
-    padding: 10px;
-    width: 100%;
-    min-height: 100vh;
-}
-
 /* Навигация - прилипает к верху */
 .navbar {
     display: flex;
@@ -230,103 +210,7 @@ body {
     }
 }
 
-/* --- УЛТРАСОВРЕМЕННЫЙ ПОЛНОЭКРАННЫЙ PRELOADER --- */
-.app-preloader {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 9999;
-    transition: opacity 0.5s ease-out;
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-}
-
-.app-preloader.fullscreen {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    margin: 0;
-    padding: 0;
-}
-
-.preloader-content {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    width: 100%;
-    height: 100%;
-}
-
-/* УЛТРАСОВРЕМЕННЫЙ СПИННЕР БЕЗ НАДПИСЕЙ */
-.ultra-modern-spinner {
-    position: relative;
-    width: 80px;
-    height: 80px;
-}
-
-.ultra-modern-spinner::before,
-.ultra-modern-spinner::after {
-    content: '';
-    position: absolute;
-    border-radius: 50%;
-    opacity: 0.8;
-}
-
-.ultra-modern-spinner::before {
-    width: 100%;
-    height: 100%;
-    border: 6px solid transparent;
-    border-top-color: #00f3ff;
-    border-bottom-color: #ff00c8;
-    animation: ultraSpin 1.2s cubic-bezier(0.68, -0.55, 0.265, 1.55) infinite;
-}
-
-.ultra-modern-spinner::after {
-    width: 70%;
-    height: 70%;
-    border: 4px solid transparent;
-    border-left-color: #ff00c8;
-    border-right-color: #00f3ff;
-    animation: ultraSpinReverse 1s cubic-bezier(0.68, -0.55, 0.265, 1.55) infinite reverse;
-    top: 15%;
-    left: 15%;
-}
-
-@keyframes ultraSpin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
-
-@keyframes ultraSpinReverse {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(-360deg); }
-}
-
-/* Плавное скрытие preloader'а */
-.app-preloader.hidden {
-    opacity: 0;
-    pointer-events: none;
-}
-
-/* Основное содержимое */
-.app-content {
-    opacity: 0;
-    transition: opacity 0.5s ease-in;
-}
-
-.app-content.visible {
-    opacity: 1;
-}
-
-/* --- Остальные стили --- */
+/* Статистика */
 .stats-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -363,6 +247,7 @@ body {
     margin-top: 8px;
 }
 
+/* Админ-кнопки */
 .admin-btn {
     background: linear-gradient(45deg, var(--warning), #ff4757);
     color: white;
@@ -382,6 +267,7 @@ body {
     box-shadow: 0 4px 12px rgba(255, 107, 107, 0.4);
 }
 
+/* --- ДОПОЛНИТЕЛЬНЫЕ СТИЛИ ДЛЯ КАРТОЧЕК И КОНТЕНТА --- */
 .content-section {
     margin-top: 20px;
 }
@@ -489,6 +375,7 @@ body {
     box-shadow: 0 5px 15px rgba(0, 243, 255, 0.4);
 }
 
+/* Модальные окна */
 .modal {
     position: fixed;
     top: 0;
@@ -514,6 +401,7 @@ body {
     position: relative;
 }
 
+/* Закрытие модального окна */
 .close-modal {
     position: absolute;
     top: 15px;
@@ -529,6 +417,9 @@ body {
     color: var(--accent);
 }
 
+/* --- НОВЫЕ СТИЛИ ДЛЯ УЛУЧШЕНИЯ UX --- */
+
+/* Прелоадер для видео */
 .video-loader {
     display: flex;
     justify-content: center;
@@ -559,6 +450,7 @@ body {
     to { transform: rotate(360deg); }
 }
 
+/* Уведомления об ошибках */
 .video-error-notice {
     background: linear-gradient(45deg, rgba(255, 0, 0, 0.2), rgba(255, 0, 0, 0.1));
     padding: 20px;
@@ -584,6 +476,7 @@ body {
     opacity: 0.8;
 }
 
+/* Улучшенные карточки */
 .card {
     background: linear-gradient(145deg, rgba(30, 30, 46, 0.8), rgba(15, 12, 41, 0.9));
     border-radius: 15px;
@@ -608,6 +501,7 @@ body {
     font-weight: bold;
 }
 
+/* Адаптивность для мобильных устройств */
 @media (max-width: 768px) {
     .card {
         padding: 15px;
@@ -624,6 +518,7 @@ body {
     }
 }
 
+/* Анимации */
 @keyframes fadeIn {
     from { opacity: 0; transform: translateY(20px); }
     to { opacity: 1; transform: translateY(0); }
@@ -633,6 +528,7 @@ body {
     animation: fadeIn 0.5s ease-out;
 }
 
+/* Кнопки с улучшенным дизайном */
 .tab-btn, .submit-btn {
     background: linear-gradient(45deg, #6a11cb, #2575fc);
     border: none;
@@ -653,4 +549,159 @@ body {
 .tab-btn.active {
     background: linear-gradient(45deg, #ff00c8, #00f3ff);
     box-shadow: 0 4px 20px rgba(255, 0, 200, 0.4);
+}
+
+/* --- УЛТРАСОВРЕМЕННЫЙ АДАПТИВНЫЙ PRELOADER БЕЗ НАДПИСЕЙ --- */
+.app-preloader {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+    transition: opacity 0.5s ease-out;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+}
+
+.app-preloader.fullscreen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    margin: 0;
+    padding: 0;
+}
+
+.preloader-content {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+}
+
+/* УЛТРАСОВРЕМЕННЫЙ СПИННЕР БЕЗ НАДПИСЕЙ */
+.ultra-modern-spinner {
+    position: relative;
+    width: 80px;
+    height: 80px;
+}
+
+.ultra-modern-spinner::before,
+.ultra-modern-spinner::after {
+    content: '';
+    position: absolute;
+    border-radius: 50%;
+    opacity: 0.8;
+}
+
+.ultra-modern-spinner::before {
+    width: 100%;
+    height: 100%;
+    border: 6px solid transparent;
+    border-top-color: #00f3ff;
+    border-bottom-color: #ff00c8;
+    animation: ultraSpin 1.2s cubic-bezier(0.68, -0.55, 0.265, 1.55) infinite;
+}
+
+.ultra-modern-spinner::after {
+    width: 70%;
+    height: 70%;
+    border: 4px solid transparent;
+    border-left-color: #ff00c8;
+    border-right-color: #00f3ff;
+    animation: ultraSpinReverse 1s cubic-bezier(0.68, -0.55, 0.265, 1.55) infinite reverse;
+    top: 15%;
+    left: 15%;
+}
+
+/* Дополнительные элементы для ультрасовременного эффекта */
+.ultra-modern-spinner .dot {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    background: #00f3ff;
+    border-radius: 50%;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    animation: dotPulse 2s ease-in-out infinite;
+}
+
+.ultra-modern-spinner .dot:nth-child(2) {
+    background: #ff00c8;
+    top: auto;
+    bottom: 0;
+    animation-delay: 1s;
+}
+
+@keyframes ultraSpin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+@keyframes ultraSpinReverse {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(-360deg); }
+}
+
+@keyframes dotPulse {
+    0%, 100% { 
+        transform: translateX(-50%) scale(1);
+        opacity: 1;
+    }
+    50% { 
+        transform: translateX(-50%) scale(1.5);
+        opacity: 0.5;
+    }
+}
+
+/* Плавное скрытие preloader'а */
+.app-preloader.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* Основное содержимое */
+.app-content {
+    opacity: 0;
+    transition: opacity 0.5s ease-in;
+}
+
+.app-content.visible {
+    opacity: 1;
+}
+
+/* Полноэкранный режим */
+html, body.fullscreen {
+    margin: 0;
+    padding: 0;
+    height: 100vh;
+    width: 100vw;
+    overflow: hidden;
+    position: fixed;
+    top: 0;
+    left: 0;
+}
+
+.container.fullscreen {
+    height: 100vh;
+    width: 100vw;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 0;
+    padding: 0;
+}
+
+.navbar.fullscreen {
+    position: sticky;
+    top: 0;
+    width: 100%;
+    z-index: 1000;
 }
