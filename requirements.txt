@@ -26,3 +26,4 @@ idna==3.10
 charset-normalizer==3.4.3
 yt-dlp
 opencv-python-headless
+instaloader
