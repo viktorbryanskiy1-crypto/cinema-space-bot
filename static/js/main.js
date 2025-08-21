@@ -9,82 +9,14 @@ let userId = 'user_' + Math.random().toString(36).substr(2, 9);
 let modalClickHandlerAdded = false;
 let formToggleHandlerAdded = false;
 
-// --- Кэш для вкладок ---
+// --- НОВОЕ: Кэш для вкладок ---
 let tabCache = {};
 
-// === MODERN PRELOADER LOGIC ===
-document.addEventListener('DOMContentLoaded', async function () {
-    const preloader = document.getElementById("app-preloader");
-    const progressBar = document.querySelector(".progress-fill");
-    const content = document.getElementById("app-content");
+// === УЛЬТРАСОВРЕМЕННЫЙ КОСМИЧЕСКИЙ PRELOADER LOGIC ===
+document.addEventListener('DOMContentLoaded', async function() {
+    console.log("DOMContentLoaded сработал");
 
-    if (!preloader || !progressBar || !content) return;
-
-    let progress = 0;
-
-    function setProgress(value, status = "") {
-        progress = value;
-        progressBar.style.width = value + "%";
-        console.log(`Preloader: ${value}% — ${status}`);
-    }
-
-    setProgress(10, "Инициализация...");
-
-    // 1. Проверка API
-    try {
-        const res = await fetch("/health");
-        if (res.ok) {
-            const data = await res.json();
-            console.log("API готов:", data);
-            setProgress(40, "API инициализирован");
-        } else {
-            setProgress(40, "API недоступен, продолжаем...");
-        }
-    } catch (err) {
-        console.warn("API недоступен:", err);
-        setProgress(40, "API недоступен");
-    }
-
-    // 2. Предзагрузка вкладок
-    const tabs = ['moments', 'trailers', 'news'];
-    let loaded = 0;
-
-    for (const tab of tabs) {
-        try {
-            const res = await fetch(`/${tab}`);
-            if (res.ok) {
-                const html = await res.text();
-                sessionStorage.setItem(`tab_${tab}`, html);
-                loaded++;
-            }
-        } catch (err) {
-            console.warn(`Ошибка загрузки ${tab}:`, err);
-        }
-        setProgress(40 + (loaded / tabs.length) * 50, `Загрузка: ${loaded}/${tabs.length}`);
-    }
-
-    // 3. Завершение
-    setProgress(100, "Готово!");
-
-    setTimeout(() => {
-        preloader.classList.add("fade-out");
-        setTimeout(() => {
-            preloader.style.display = "none";
-            content.style.display = "block";
-            setTimeout(() => {
-                content.classList.add("visible");
-            }, 50);
-        }, 600);
-    }, 500);
-
-    // === ORIGINAL MAIN LOGIC (остаётся после preloader) ===
-    initializeApp();
-});
-
-function initializeApp() {
-    console.log("App initialized, running main logic...");
-
-    // --- Telegram WebApp ---
+    // Инициализация Telegram WebApp (как было)
     if (window.Telegram && window.Telegram.WebApp) {
         const webApp = window.Telegram.WebApp;
         try {
@@ -98,25 +30,146 @@ function initializeApp() {
             webApp.setHeaderColor('#0f0c29');
             webApp.setBackgroundColor('#0f0c29');
             webApp.MainButton.hide();
-            console.log("Telegram WebApp инициализирован");
+            console.log("Telegram WebApp инициализирован и расширен до полного экрана");
         } catch (error) {
             console.error("Ошибка инициализации Telegram WebApp:", error);
         }
+    } else {
+        console.warn("Telegram WebApp API недоступен");
     }
+
+    // === ЛОГИКА КОСМИЧЕСКОГО PRELOADER'А ===
+    const preloader = document.getElementById('cosmic-preloader');
+    const progressBar = document.getElementById('cosmic-progress-bar');
+    const statusText = document.getElementById('cosmic-status');
+    const content = document.getElementById('app-content');
+
+    if (!preloader) {
+        // Если preloader не найден, просто показываем контент
+        if (content) {
+            content.style.display = 'block';
+            initializeApp();
+        }
+        return;
+    }
+
+    function updatePreloaderProgress(percent, status) {
+        if (progressBar) {
+            progressBar.style.width = `${percent}%`;
+        }
+        if (statusText) {
+            statusText.textContent = `${percent}% ${status}`;
+        }
+        console.log(`Космический прогресс: ${percent}% - ${status}`);
+    }
+
+    try {
+        // 0% - Начало
+        updatePreloaderProgress(0, "Инициализация ядра...");
+
+        // 10% - Проверка API
+        updatePreloaderProgress(10, "Проверка квантовых связей...");
+        await new Promise(resolve => setTimeout(resolve, 300));
+
+        // 20% - Проверка состояния приложения
+        try {
+            const healthResponse = await fetch('/health');
+            if (healthResponse.ok) {
+                const healthData = await healthResponse.json();
+                console.log("API готов:", healthData);
+                updatePreloaderProgress(30, "Квантовые связи установлены");
+            } else {
+                updatePreloaderProgress(30, "Квантовые связи нестабильны, продолжаем...");
+            }
+        } catch (err) {
+            console.warn("API недоступен:", err);
+            updatePreloaderProgress(30, "Квантовые связи нестабильны");
+        }
+
+        // 40% - Предзагрузка вкладок
+        updatePreloaderProgress(40, "Сканирование галактик...");
+        const tabs = ['moments', 'trailers', 'news'];
+        let loadedTabs = 0;
+
+        // Параллельная загрузка вкладок
+        const tabPromises = tabs.map(async (tab) => {
+            try {
+                const response = await fetch(`/${tab}`);
+                if (response.ok) {
+                    const html = await response.text();
+                    tabCache[tab] = html;
+                    console.log(`Вкладка ${tab} предзагружена`);
+                }
+            } catch (error) {
+                console.error(`Ошибка предзагрузки вкладки ${tab}:`, error);
+            }
+            loadedTabs++;
+            const progress = 40 + Math.floor((loadedTabs / tabs.length) * 50);
+            updatePreloaderProgress(progress, `Сканирование: ${loadedTabs}/${tabs.length} галактик`);
+        });
+
+        await Promise.all(tabPromises);
+
+        // 90% - Финальная подготовка
+        updatePreloaderProgress(90, "Активация двигателей...");
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        // 100% - Готово
+        updatePreloaderProgress(100, "Готово! Вход в КиноВселенную...");
+
+        // Плавное скрытие preloader'а
+        setTimeout(() => {
+            preloader.classList.add('fade-out');
+            setTimeout(() => {
+                preloader.style.display = 'none';
+                if (content) {
+                    content.style.display = 'block';
+                    // Инициализируем основное приложение
+                    initializeApp();
+                }
+            }, 800);
+        }, 700);
+
+    } catch (error) {
+        console.error("Критическая ошибка загрузки:", error);
+        // В случае ошибки всё равно показываем приложение
+        preloader.classList.add('fade-out');
+        setTimeout(() => {
+            preloader.style.display = 'none';
+            if (content) {
+                content.style.display = 'block';
+                initializeApp();
+            }
+        }, 800);
+    }
+});
+
+// === ORIGINAL MAIN LOGIC (остаётся после preloader) ===
+function initializeApp() {
+    console.log("Основное приложение инициализировано");
 
     // --- Вкладки ---
     const contentArea = document.getElementById('content-area');
+    if (!contentArea) {
+        console.error('Элемент content-area не найден');
+        return;
+    }
+
     const tabBtns = document.querySelectorAll('.tab-btn[data-tab]');
 
+    // --- НОВОЕ: Асинхронная функция загрузки контента вкладки с кэшированием ---
     async function loadTabContent(tabName) {
         try {
+            // Проверяем кэш первым делом
             if (tabCache[tabName]) {
+                console.log(`Загрузка вкладки ${tabName} из кэша`);
                 contentArea.innerHTML = tabCache[tabName];
                 currentTab = tabName;
                 addDynamicFeatures();
                 return;
             }
-
+            
+            // Показываем индикатор загрузки только если нет кэша
             contentArea.innerHTML = `
                 <div style="text-align: center; padding: 50px; color: var(--accent);">
                     <div class="ultra-modern-spinner" style="margin: 0 auto 20px;"></div>
@@ -125,16 +178,22 @@ function initializeApp() {
             `;
 
             const response = await fetch(`/${tabName}`);
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             const html = await response.text();
+            
+            // Кэшируем HTML для следующих загрузок
             tabCache[tabName] = html;
+            
             contentArea.innerHTML = html;
             currentTab = tabName;
             addDynamicFeatures();
         } catch (error) {
+            console.error(`Ошибка загрузки вкладки "${tabName}":`, error);
             contentArea.innerHTML = `
                 <div style="text-align: center; padding: 50px; color: var(--warning);">
                     <h2>❌ Ошибка загрузки</h2>
                     <p>Не удалось загрузить контент "${tabName}". Попробуйте позже.</p>
+                    <small>${error.message}</small>
                 </div>
             `;
         }
@@ -148,27 +207,76 @@ function initializeApp() {
         });
     });
 
+    // --- Поиск ---
+    const searchBtn = document.getElementById('search-btn');
+    const searchInput = document.getElementById('search-input');
+
+    if (searchBtn) {
+        searchBtn.addEventListener('click', async function () {
+            const query = searchInput ? searchInput.value.trim() : '';
+            if (query) {
+                try {
+                    contentArea.innerHTML = `
+                        <div style="text-align: center; padding: 50px; color: var(--accent);">
+                            <div class="ultra-modern-spinner" style="margin: 0 auto 20px;"></div>
+                            <div>🌀 Поиск по запросу: "${query}"...</div>
+                        </div>
+                    `;
+                    const response = await fetch(`/search?q=${encodeURIComponent(query)}`);
+                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                    const html = await response.text();
+                    contentArea.innerHTML = html;
+                    addDynamicFeatures();
+                } catch (error) {
+                    console.error('Ошибка поиска:', error);
+                    contentArea.innerHTML = `
+                        <div style="text-align: center; padding: 50px; color: var(--warning);">
+                            <h2>❌ Ошибка поиска</h2>
+                            <p>Не удалось выполнить поиск. Попробуйте позже.</p>
+                            <small>${error.message}</small>
+                        </div>
+                    `;
+                }
+            }
+        });
+    }
+
+    if (searchInput) {
+        searchInput.addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                if (searchBtn) searchBtn.click();
+            }
+        });
+    }
+
+    // --- Инициализация вкладки ---
     if (tabBtns.length > 0) {
         tabBtns[0].classList.add('active');
         loadTabContent(tabBtns[0].dataset.tab);
+    } else {
+        console.log("Кнопки вкладок не найдены на главной странице.");
     }
 
+    // --- Обработчики форм добавления контента ---
     setupFormSubmissions();
-
+    
+    // --- НОВОЕ: Предзагрузка популярных вкладок ---
     setTimeout(() => {
-        ['trailers', 'news'].forEach(tabName => {
-            fetch(`/${tabName}`).then(r => r.text()).then(html => {
-                tabCache[tabName] = html;
-            });
+        // Предзагружаем остальные вкладки в фоне
+        const otherTabs = ['trailers', 'news'];
+        otherTabs.forEach(tabName => {
+            fetch(`/${tabName}`)
+                .then(response => response.text())
+                .then(html => {
+                    tabCache[tabName] = html;
+                    console.log(`Вкладка ${tabName} предзагружена и закэширована`);
+                })
+                .catch(error => console.log(`Ошибка предзагрузки ${tabName}:`, error));
         });
-    }, 2000);
+    }, 2000); // Небольшая задержка, чтобы не перегружать сеть
 }
 
-// === ОСТАЛЬНЫЕ ФУНКЦИИ (addReactionHandlers, addCommentHandlers и т.д.) ===
-// ... (все твои функции: addDynamicFeatures, addReactionHandlers и т.д.) ...
-// ВСЁ ОСТАЁТСЯ БЕЗ ИЗМЕНЕНИЙ — просто вставь свой полный код сюда
-
-// Пример (вставь ВЕСЬ оставшийся код):
+// --- Динамические функции после загрузки контента ---
 function addDynamicFeatures() {
     addReactionHandlers();
     addCommentHandlers();
@@ -178,6 +286,125 @@ function addDynamicFeatures() {
     initializeVideoErrorHandling();
 }
 
+// --- НОВАЯ ФУНКЦИЯ: Обработка ошибок воспроизведения видео ---
+function initializeVideoErrorHandling() {
+    // Добавляем обработчики ошибок для всех видеоэлементов
+    document.querySelectorAll('video').forEach(video => {
+        video.addEventListener('error', async function(e) {
+            console.log('Ошибка воспроизведения видео:', e);
+            
+            // Получаем родительский элемент
+            const parent = this.parentNode;
+            
+            // Создаем элемент прелоадера
+            const loader = document.createElement('div');
+            loader.className = 'video-loader';
+            loader.innerHTML = `
+                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 300px; background: rgba(15, 12, 41, 0.8); border-radius: 10px; margin: 10px 0;">
+                    <div class="ultra-modern-spinner"></div>
+                    <div style="margin-top: 15px; color: #00f3ff;">🔄 Обновление видео...</div>
+                </div>
+            `;
+            
+            // Заменяем видео на прелоадер
+            parent.replaceChild(loader, this);
+            
+            try {
+                // Получаем источник видео
+                const videoSrc = this.querySelector('source')?.src || this.src;
+                if (videoSrc && videoSrc.includes('api.telegram.org/file')) {
+                    // Отправляем запрос на обновление ссылки
+                    const response = await fetch('/api/refresh_video_url', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            post_url: videoSrc
+                        })
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success && result.new_url) {
+                        // Создаем новый видеоэлемент с обновленной ссылкой
+                        const newVideo = document.createElement('video');
+                        newVideo.controls = true;
+                        newVideo.preload = 'metadata';
+                        newVideo.style.cssText = 'max-width: 100%; border-radius: 10px; width: 100%; height: auto;';
+                        
+                        const source = document.createElement('source');
+                        source.src = result.new_url;
+                        source.type = 'video/mp4';
+                        
+                        newVideo.appendChild(source);
+                        
+                        // Добавляем обработчик ошибок для нового видео
+                        newVideo.addEventListener('error', function(e) {
+                            console.log('Ошибка воспроизведения обновленного видео:', e);
+                            const errorNotice = document.createElement('div');
+                            errorNotice.className = 'video-error-notice';
+                            errorNotice.innerHTML = `
+                                <div style="background: rgba(255, 0, 0, 0.2); padding: 15px; border-radius: 8px; margin: 10px 0; color: #ff4444; text-align: center;">
+                                    <div style="font-size: 24px; margin-bottom: 10px;">❌</div>
+                                    <div>Не удалось воспроизвести видео</div>
+                                    <div style="font-size: 12px; margin-top: 5px;">Попробуйте обновить страницу или попробовать позже</div>
+                                </div>
+                            `;
+                            parent.replaceChild(errorNotice, newVideo);
+                        });
+                        
+                        // Заменяем прелоадер на новое видео
+                        parent.replaceChild(newVideo, loader);
+                        
+                        // Загружаем и воспроизводим видео
+                        newVideo.load();
+                        
+                        console.log('Видео успешно обновлено');
+                    } else {
+                        // Показываем ошибку
+                        const errorNotice = document.createElement('div');
+                        errorNotice.className = 'video-error-notice';
+                        errorNotice.innerHTML = `
+                            <div style="background: rgba(255, 0, 0, 0.2); padding: 15px; border-radius: 8px; margin: 10px 0; color: #ff4444; text-align: center;">
+                                <div style="font-size: 24px; margin-bottom: 10px;">❌</div>
+                                <div>Не удалось обновить видео</div>
+                                <div style="font-size: 12px; margin-top: 5px;">${result.error || 'Попробуйте позже'}</div>
+                            </div>
+                        `;
+                        parent.replaceChild(errorNotice, loader);
+                    }
+                } else {
+                    // Если это не Telegram ссылка, показываем общую ошибку
+                    const errorNotice = document.createElement('div');
+                    errorNotice.className = 'video-error-notice';
+                    errorNotice.innerHTML = `
+                        <div style="background: rgba(255, 0, 0, 0.2); padding: 15px; border-radius: 8px; margin: 10px 0; color: #ff4444; text-align: center;">
+                            <div style="font-size: 24px; margin-bottom: 10px;">❌</div>
+                            <div>Ошибка воспроизведения видео</div>
+                            <div style="font-size: 12px; margin-top: 5px;">Неподдерживаемый формат или файл недоступен</div>
+                        </div>
+                    `;
+                    parent.replaceChild(errorNotice, loader);
+                }
+            } catch (refreshError) {
+                console.error('Ошибка при обновлении видео:', refreshError);
+                const errorNotice = document.createElement('div');
+                errorNotice.className = 'video-error-notice';
+                errorNotice.innerHTML = `
+                    <div style="background: rgba(255, 0, 0, 0.2); padding: 15px; border-radius: 8px; margin: 10px 0; color: #ff4444; text-align: center;">
+                        <div style="font-size: 24px; margin-bottom: 10px;">🌐</div>
+                        <div>Ошибка сети при обновлении</div>
+                        <div style="font-size: 12px; margin-top: 5px;">Проверьте подключение и попробуйте позже</div>
+                    </div>
+                `;
+                parent.replaceChild(errorNotice, loader);
+            }
+        });
+    });
+}
+
+// --- Реакции ---
 function addReactionHandlers() {
     document.querySelectorAll('.reaction-btn').forEach(btn => {
         const clone = btn.cloneNode(true);
@@ -224,6 +451,7 @@ function addReactionHandlers() {
     });
 }
 
+// --- Комментарии ---
 function addCommentHandlers() {
     document.querySelectorAll('.comment-form').forEach(form => {
         const clone = form.cloneNode(true);
@@ -289,6 +517,7 @@ function addCommentHandlers() {
     });
 }
 
+// --- Загрузка комментариев ---
 function addLoadCommentsHandlers() {
     document.querySelectorAll('.load-comments').forEach(btn => {
         const clone = btn.cloneNode(true);
@@ -475,124 +704,6 @@ function setupContentForm(formId, typeName, apiUrl, modalId, alwaysFormData=fals
             console.error('Ошибка загрузки:', error);
             alert('Ошибка загрузки: ' + error.message);
         }
-    });
-}
-
-// --- НОВАЯ ФУНКЦИЯ: Обработка ошибок воспроизведения видео ---
-function initializeVideoErrorHandling() {
-    // Добавляем обработчики ошибок для всех видеоэлементов
-    document.querySelectorAll('video').forEach(video => {
-        video.addEventListener('error', async function(e) {
-            console.log('Ошибка воспроизведения видео:', e);
-            
-            // Получаем родительский элемент
-            const parent = this.parentNode;
-            
-            // Создаем элемент прелоадера
-            const loader = document.createElement('div');
-            loader.className = 'video-loader';
-            loader.innerHTML = `
-                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 300px; background: rgba(15, 12, 41, 0.8); border-radius: 10px; margin: 10px 0;">
-                    <div class="ultra-modern-spinner"></div>
-                    <div style="margin-top: 15px; color: #00f3ff;">🔄 Обновление видео...</div>
-                </div>
-            `;
-            
-            // Заменяем видео на прелоадер
-            parent.replaceChild(loader, this);
-            
-            try {
-                // Получаем источник видео
-                const videoSrc = this.querySelector('source')?.src || this.src;
-                if (videoSrc && videoSrc.includes('api.telegram.org/file')) {
-                    // Отправляем запрос на обновление ссылки
-                    const response = await fetch('/api/refresh_video_url', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            post_url: videoSrc
-                        })
-                    });
-                    
-                    const result = await response.json();
-                    
-                    if (result.success && result.new_url) {
-                        // Создаем новый видеоэлемент с обновленной ссылкой
-                        const newVideo = document.createElement('video');
-                        newVideo.controls = true;
-                        newVideo.preload = 'metadata';
-                        newVideo.style.cssText = 'max-width: 100%; border-radius: 10px; width: 100%; height: auto;';
-                        
-                        const source = document.createElement('source');
-                        source.src = result.new_url;
-                        source.type = 'video/mp4';
-                        
-                        newVideo.appendChild(source);
-                        
-                        // Добавляем обработчик ошибок для нового видео
-                        newVideo.addEventListener('error', function(e) {
-                            console.log('Ошибка воспроизведения обновленного видео:', e);
-                            const errorNotice = document.createElement('div');
-                            errorNotice.className = 'video-error-notice';
-                            errorNotice.innerHTML = `
-                                <div style="background: rgba(255, 0, 0, 0.2); padding: 15px; border-radius: 8px; margin: 10px 0; color: #ff4444; text-align: center;">
-                                    <div style="font-size: 24px; margin-bottom: 10px;">❌</div>
-                                    <div>Не удалось воспроизвести видео</div>
-                                    <div style="font-size: 12px; margin-top: 5px;">Попробуйте обновить страницу или попробовать позже</div>
-                                </div>
-                            `;
-                            parent.replaceChild(errorNotice, newVideo);
-                        });
-                        
-                        // Заменяем прелоадер на новое видео
-                        parent.replaceChild(newVideo, loader);
-                        
-                        // Загружаем и воспроизводим видео
-                        newVideo.load();
-                        
-                        console.log('Видео успешно обновлено');
-                    } else {
-                        // Показываем ошибку
-                        const errorNotice = document.createElement('div');
-                        errorNotice.className = 'video-error-notice';
-                        errorNotice.innerHTML = `
-                            <div style="background: rgba(255, 0, 0, 0.2); padding: 15px; border-radius: 8px; margin: 10px 0; color: #ff4444; text-align: center;">
-                                <div style="font-size: 24px; margin-bottom: 10px;">❌</div>
-                                <div>Не удалось обновить видео</div>
-                                <div style="font-size: 12px; margin-top: 5px;">${result.error || 'Попробуйте позже'}</div>
-                            </div>
-                        `;
-                        parent.replaceChild(errorNotice, loader);
-                    }
-                } else {
-                    // Если это не Telegram ссылка, показываем общую ошибку
-                    const errorNotice = document.createElement('div');
-                    errorNotice.className = 'video-error-notice';
-                    errorNotice.innerHTML = `
-                        <div style="background: rgba(255, 0, 0, 0.2); padding: 15px; border-radius: 8px; margin: 10px 0; color: #ff4444; text-align: center;">
-                            <div style="font-size: 24px; margin-bottom: 10px;">❌</div>
-                            <div>Ошибка воспроизведения видео</div>
-                            <div style="font-size: 12px; margin-top: 5px;">Неподдерживаемый формат или файл недоступен</div>
-                        </div>
-                    `;
-                    parent.replaceChild(errorNotice, loader);
-                }
-            } catch (refreshError) {
-                console.error('Ошибка при обновлении видео:', refreshError);
-                const errorNotice = document.createElement('div');
-                errorNotice.className = 'video-error-notice';
-                errorNotice.innerHTML = `
-                    <div style="background: rgba(255, 0, 0, 0.2); padding: 15px; border-radius: 8px; margin: 10px 0; color: #ff4444; text-align: center;">
-                        <div style="font-size: 24px; margin-bottom: 10px;">🌐</div>
-                        <div>Ошибка сети при обновлении</div>
-                        <div style="font-size: 12px; margin-top: 5px;">Проверьте подключение и попробуйте позже</div>
-                    </div>
-                `;
-                parent.replaceChild(errorNotice, loader);
-            }
-        });
     });
 }
 
