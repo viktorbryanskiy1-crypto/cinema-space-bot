@@ -1,5 +1,6 @@
-// main.js — полный рабочий файл с оптимизацией Telegram WebApp и fullscreen
+// static/js/main.js — полный рабочий файл с оптимизацией Telegram WebApp и fullscreen
 // Обновлен для поддержки автоматического обновления ссылок на видео и улучшенного UX
+// Исправлен конфликт обработчиков событий для search_by_link.html
 
 // Глобальные переменные
 let currentTab = 'moments';
@@ -299,6 +300,14 @@ function addDynamicFeatures() {
     addModalHandlers();
     setupFormToggles();
     initializeVideoErrorHandling();
+    
+    // --- Добавлено: Инициализация обработчиков для search_by_link, если это та страница ---
+    // Это предотвратит конфликты с глобальными обработчиками
+    const currentPagePath = window.location.pathname;
+    if (currentPagePath === '/search_by_link') {
+        console.log("На странице search_by_link, не добавляем глобальные обработчики модалок.");
+        // Здесь можно добавить специфичные для этой страницы обработчики, если понадобятся
+    }
 }
 
 // --- НОВАЯ ФУНКЦИЯ: Обработка ошибок воспроизведения видео ---
@@ -599,6 +608,13 @@ function closeModal(id) {
 
 function addModalHandlers() {
     // Убираем клонирование и добавляем обработчики только если они еще не добавлены
+    // И только если мы НЕ на странице search_by_link
+    const currentPagePath = window.location.pathname;
+    if (currentPagePath === '/search_by_link') {
+        console.log("На странице search_by_link, пропускаем добавление глобальных обработчиков модалок.");
+        return;
+    }
+
     if (!modalClickHandlerAdded) {
         const modalButtons = [
             { id: 'add-moment-btn', handler: showAddMomentModal },
@@ -620,10 +636,34 @@ function addModalHandlers() {
             }
         });
 
-        // Обработчик закрытия модалки при клике вне окна
+        // --- ИСПРАВЛЕНО: Безопасный обработчик клика для закрытия модалок ---
+        // Используем делегирование событий и проверку на клик вне содержимого
         document.addEventListener('click', function (e) {
+            // Проверяем, является ли цель клика элементом модального окна (.modal)
             if (e.target.classList && e.target.classList.contains('modal')) {
-                e.target.style.display = 'none';
+                // Проверяем, что клик был НЕ на содержимом модального окна
+                // Предполагаем, что содержимое обернуто в .modal-content
+                const modalContent = e.target.querySelector('.modal-content');
+                if (modalContent) {
+                    // Проверяем, находится ли цель клика (или его родитель) внутри .modal-content
+                    let isClickInsideContent = false;
+                    let currentElement = e.target;
+                    while (currentElement && currentElement !== e.target) { // Ограничиваем поиск текущим .modal
+                        if (currentElement === modalContent) {
+                            isClickInsideContent = true;
+                            break;
+                        }
+                        currentElement = currentElement.parentElement;
+                    }
+                    
+                    // Если клик был НЕ внутри содержимого, закрываем модалку
+                    if (!isClickInsideContent) {
+                        e.target.style.display = 'none';
+                    }
+                } else {
+                    // Если .modal-content не найден, закрываем по клику на .modal
+                    e.target.style.display = 'none';
+                }
             }
         });
         modalClickHandlerAdded = true;
