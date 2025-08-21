@@ -112,5 +112,75 @@
     </div>
 </div>
 
-<!-- Скрипт удален, логика перенесена в main.js -->
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const searchBtn = document.getElementById('search-film-btn');
+    const inputField = document.getElementById('video-link-input');
+    const resultDiv = document.getElementById('search-result');
+
+    if (searchBtn && inputField && resultDiv) {
+        searchBtn.addEventListener('click', async function () {
+            const url = inputField.value.trim();
+            if (!url) {
+                resultDiv.innerHTML = '<p class="result-error">Пожалуйста, введите ссылку на видео.</p>';
+                return;
+            }
+
+            resultDiv.innerHTML = '<p class="result-loading">🔍 Ищем фильм... Это может занять немного времени.</p>';
+
+            try {
+                const response = await fetch('/api/search_film_by_link', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ url: url })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Отображаем результат
+                    let html = `<h2 class="film-title">${data.film.title || 'Название не найдено'}</h2>`;
+                    if (data.film.year) html += `<p class="film-year">Год: ${data.film.year}</p>`;
+                    if (data.film.description) html += `<p class="film-description">${data.film.description}</p>`;
+                    if (data.film.poster_path) html += `<img src="${data.film.poster_path}" alt="Постер" class="film-poster">`;
+                    
+                    // Отображаем информацию от TinEye, если она есть
+                    if (data.tineye_match_info) {
+                        html += `<hr style="margin: 1rem 0; border-color: var(--border);">`;
+                        html += `<h3 style="color: var(--accent);">Информация из TinEye:</h3>`;
+                        html += `<p><a href="${data.tineye_match_info.url}" target="_blank" style="color: var(--accent-secondary);">${data.tineye_match_info.domain}</a> - Совпадение: ${data.tineye_match_info.score}</p>`;
+                    } else if (data.tineye_matches) {
+                        html += `<hr style="margin: 1rem 0; border-color: var(--border);">`;
+                        html += `<h3 style="color: var(--accent);">Найденные совпадения изображений (TinEye):</h3><ul>`;
+                        data.tineye_matches.slice(0, 5).forEach(match => {
+                            html += `<li><a href="${match.url}" target="_blank" style="color: var(--accent-secondary);">${match.domain}</a> (score: ${match.score})</li>`;
+                        });
+                        html += `</ul>`;
+                    }
+                    resultDiv.innerHTML = html;
+                } else {
+                    // Улучшенная обработка ошибок
+                    let errorMsg = data.error || 'Неизвестная ошибка';
+                    resultDiv.innerHTML = `<p class="result-error">❌ Ошибка: ${errorMsg}</p>`;
+                    
+                    // Если есть дополнительная информация от TinEye, показываем её
+                    if (data.tineye_matches) {
+                        resultDiv.innerHTML += `<hr style="margin: 1rem 0; border-color: var(--border);">`;
+                        resultDiv.innerHTML += `<h3 style="color: var(--accent);">Найденные совпадения изображений (TinEye):</h3><ul>`;
+                        data.tineye_matches.slice(0, 5).forEach(match => {
+                            resultDiv.innerHTML += `<li><a href="${match.url}" target="_blank" style="color: var(--accent-secondary);">${match.domain}</a> (score: ${match.score})</li>`;
+                        });
+                        resultDiv.innerHTML += `</ul>`;
+                    }
+                }
+            } catch (error) {
+                console.error('Ошибка при поиске фильма:', error);
+                resultDiv.innerHTML = `<p class="result-error">❌ Произошла ошибка при поиске. Попробуйте позже.</p>`;
+            }
+        });
+    }
+});
+</script>
 {% endblock %}
