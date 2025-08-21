@@ -279,12 +279,13 @@ function initializeApp() {
     const appContent = document.getElementById('app-content');
     if (appContent) {
         // Разрешаем скролл после загрузки
-        appContent.style.overflow = 'auto';
+        appContent.style.height = '100vh';
+        appContent.style.overflowY = 'auto';
         appContent.style.webkitOverflowScrolling = 'touch';
+        appContent.style.overscrollBehavior = 'contain';
         
-        // Убираем фиксированную высоту, если она была
-        appContent.style.height = 'auto';
-        appContent.style.position = 'relative';
+        // Убираем фиксированную позицию у body/html если нужно
+        // Но оставляем их зафиксированными для предотвращения overscroll
     }
 
     console.log("Приложение инициализировано, скролл разрешен");
