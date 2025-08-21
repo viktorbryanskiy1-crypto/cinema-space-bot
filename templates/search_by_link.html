@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+
+{% block title %}Поиск фильма по ссылке{% endblock %}
+
+{% block content %}
+<style>
+.search-link-container {
+    max-width: 600px;
+    margin: 2rem auto;
+    padding: 2rem;
+    background: rgba(30, 30, 46, 0.8);
+    border-radius: 15px;
+    border: 1px solid var(--border);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+.search-link-title {
+    text-align: center;
+    margin-bottom: 1.5rem;
+    font-size: 1.8rem;
+    background: linear-gradient(45deg, var(--accent), var(--accent-secondary));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+.search-link-description {
+    text-align: center;
+    margin-bottom: 2rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+.search-link-form {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 1rem;
+}
+#video-link-input {
+    flex-grow: 1;
+    padding: 12px 15px;
+    border: 2px solid var(--accent);
+    border-radius: 30px;
+    background: rgba(25, 25, 60, 0.8);
+    color: white;
+    font-size: 1rem;
+}
+#search-film-btn {
+    padding: 12px 25px;
+    border-radius: 30px;
+    border: none;
+    background: linear-gradient(45deg, var(--accent), var(--accent-secondary));
+    color: #0f0c29;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+#search-film-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0, 243, 255, 0.4);
+}
+#search-result {
+    margin-top: 2rem;
+    min-height: 100px;
+    padding: 1rem;
+    border-radius: 10px;
+    background: rgba(15, 12, 41, 0.5);
+    border: 1px dashed var(--border);
+}
+.result-loading {
+    text-align: center;
+    color: var(--accent);
+}
+.result-error {
+    color: var(--warning);
+    text-align: center;
+}
+.result-success {
+    /* Стили для карточки фильма */
+}
+.film-poster {
+    width: 100%;
+    max-width: 200px;
+    border-radius: 10px;
+    margin-bottom: 1rem;
+}
+.film-title {
+    font-size: 1.5rem;
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+    color: var(--accent);
+}
+.film-year {
+    color: var(--text-secondary);
+    margin-bottom: 1rem;
+}
+.film-description {
+    line-height: 1.6;
+}
+</style>
+
+<div class="search-link-container">
+    <h1 class="search-link-title">🔍 Поиск фильма по ссылке</h1>
+    <p class="search-link-description">
+        Вставьте ссылку на короткое видео из Instagram Reels, YouTube Shorts или TikTok.
+        Мы попробуем определить фильм по кадру из видео.
+    </p>
+    <div class="search-link-form">
+        <input type="url" id="video-link-input" placeholder="https://www.instagram.com/reel/... или https://youtu.be/...">
+        <button id="search-film-btn">Найти фильм</button>
+    </div>
+    <div id="search-result">
+        <!-- Результат поиска будет отображаться здесь -->
+        <p style="text-align: center; color: var(--text-secondary);">Введите ссылку и нажмите "Найти фильм"</p>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const searchBtn = document.getElementById('search-film-btn');
+    const inputField = document.getElementById('video-link-input');
+    const resultDiv = document.getElementById('search-result');
+
+    if (searchBtn && inputField && resultDiv) {
+        searchBtn.addEventListener('click', async function () {
+            const url = inputField.value.trim();
+            if (!url) {
+                resultDiv.innerHTML = '<p class="result-error">Пожалуйста, введите ссылку на видео.</p>';
+                return;
+            }
+
+            resultDiv.innerHTML = '<p class="result-loading">🔍 Ищем фильм... Это может занять немного времени.</p>';
+
+            try {
+                const response = await fetch('/api/search_film_by_link', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ url: url })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Отображаем результат
+                    let html = `<h2 class="film-title">${data.film.title || 'Название не найдено'}</h2>`;
+                    if (data.film.year) html += `<p class="film-year">Год: ${data.film.year}</p>`;
+                    if (data.film.description) html += `<p class="film-description">${data.film.description}</p>`;
+                    if (data.tineye_results && data.tineye_results.length > 0) {
+                        html += `<hr style="margin: 1rem 0; border-color: var(--border);">`;
+                        html += `<h3 style="color: var(--accent);">Результаты поиска по изображению:</h3>`;
+                        data.tineye_results.forEach(res => {
+                            html += `<p><a href="${res.url}" target="_blank" style="color: var(--accent-secondary);">${res.domain}</a> - Совпадение: ${Math.round(res.score * 100)}%</p>`;
+                            // Можно добавить превью, если есть res.image_url
+                        });
+                    }
+                    resultDiv.innerHTML = html;
+                } else {
+                    resultDiv.innerHTML = `<p class="result-error">❌ Ошибка: ${data.error}</p>`;
+                }
+            } catch (error) {
+                console.error('Ошибка при поиске фильма:', error);
+                resultDiv.innerHTML = `<p class="result-error">❌ Произошла ошибка при поиске. Попробуйте позже.</p>`;
+            }
+        });
+    }
+});
+</script>
+{% endblock %}
