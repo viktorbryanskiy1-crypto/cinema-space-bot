@@ -1,4 +1,5 @@
 # app.py - Обновлённая версия с гибридным поиском фильмов
+# Исправлены ошибки логирования, улучшена обработка ошибок API
 import os
 import threading
 import logging
@@ -35,6 +36,12 @@ from database import (
 )
 
 # --- Logging ---
+# Установим уровень логирования для библиотек на WARNING, чтобы не засоряли
+logging.getLogger("urllib3").setLevel(logging.WARNING)
+logging.getLogger("requests").setLevel(logging.WARNING)
+logging.getLogger("telegram").setLevel(logging.WARNING)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -46,10 +53,9 @@ REDIS_URL = os.environ.get('REDIS_URL', None)
 # --- НОВОЕ: Получение TMDB API ключа ---
 TMDB_API_KEY = os.environ.get('TMDB_API_KEY') # Добавлено
 # --- Конец нового ---
-
 if not TOKEN:
     logger.error("TELEGRAM_TOKEN not set!")
-
+    
 # --- Redis ---
 redis_client = None
 if REDIS_URL:
@@ -160,13 +166,10 @@ async def extract_video_url_from_telegram_post(post_url):
         else:
             logger.error(f"[ИЗВЛЕЧЕНИЕ] Неверный формат ссылки на пост: {post_url}")
             return None, "Неверный формат ссылки на пост Telegram."
-
         if chat_id_or_username is None or message_id is None:
              return None, "Не удалось распарсить ссылку на пост"
-
         bot = Bot(token=TOKEN)
         YOUR_TEST_CHAT_ID = -1003045387627
-
         try:
             logger.debug(f"[ИЗВЛЕЧЕНИЕ] Пересылаем сообщение в тестовую группу {YOUR_TEST_CHAT_ID}...")
             forwarded_message = bot.forward_message(
@@ -179,25 +182,20 @@ async def extract_video_url_from_telegram_post(post_url):
         except Exception as e1:
             logger.error(f"[ИЗВЛЕЧЕНИЕ] Не удалось получить сообщение через forward: {e1}")
             return None, "Не удалось получить сообщение. Убедитесь, что бот имеет доступ к сообщению."
-
         if not message:
             logger.error("[ИЗВЛЕЧЕНИЕ] Сообщение не найдено или бот не имеет доступа")
             return None, "Сообщение не найдено."
-
         if not message.video:
             logger.error("[ИЗВЛЕЧЕНИЕ] В посте нет видео")
             return None, "В указанном посте не найдено видео."
-
         file_id = message.video.file_id
         logger.info(f"[ИЗВЛЕЧЕНИЕ] Найден file_id: {file_id}")
         direct_url = get_cached_direct_video_url(file_id)
         if not direct_url:
             logger.error("[ИЗВЛЕЧЕНИЕ] Не удалось получить прямую ссылку из file_id")
             return None, "Не удалось получить прямую ссылку на видео из Telegram."
-
         logger.info(f"[ИЗВЛЕЧЕНИЕ] Успешно извлечена прямая ссылка: {direct_url[:50]}...")
         return direct_url, None
-
     except Exception as e:
         logger.error(f"[ИЗВЛЕЧЕНИЕ] Ошибка извлечения видео из поста {post_url}: {e}", exc_info=True)
         return None, f"Ошибка при обработке ссылки на пост: {str(e)}"
@@ -212,7 +210,6 @@ def extract_video_url_sync(post_url):
             logger.debug("Создание нового event loop")
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-
         logger.debug("Запуск асинхронной функции extract_video_url_from_telegram_post")
         result = loop.run_until_complete(extract_video_url_from_telegram_post(post_url))
         logger.debug(f"Асинхронная функция завершена, результат: {result}")
@@ -230,12 +227,10 @@ def refresh_video_url():
         if not data:
             logger.warning("[ОБНОВЛЕНИЕ ССЫЛКИ] Неверный формат данных")
             return jsonify(success=False, error="Неверный формат данных"), 400
-
         post_url = data.get('post_url', '').strip()
         if not post_url:
             logger.warning("[ОБНОВЛЕНИЕ ССЫЛКИ] Не указана ссылка на пост")
             return jsonify(success=False, error="Не указана ссылка на пост"), 400
-
         logger.info(f"[ОБНОВЛЕНИЕ ССЫЛКИ] Запрошено обновление для ссылки: {post_url[:50]}...")
         direct_url, error = extract_video_url_sync(post_url)
         if direct_url:
@@ -244,7 +239,6 @@ def refresh_video_url():
         else:
             logger.error(f"[ОБНОВЛЕНИЕ ССЫЛКИ] Ошибка при извлечении: {error}")
             return jsonify(success=False, error=error), 400
-
     except Exception as e:
         logger.error(f"[ОБНОВЛЕНИЕ ССЫЛКИ] Критическая ошибка: {e}", exc_info=True)
         return jsonify(success=False, error="Внутренняя ошибка сервера"), 500
@@ -260,7 +254,6 @@ def get_cached_html(key, generate_func, expire=300):
                 return cached_html
         except Exception as e:
             logger.warning(f"Ошибка получения HTML из кэша: {e}")
-
     html = generate_func()
     if redis_client and html:
         try:
@@ -276,7 +269,6 @@ def set_menu_button():
     if not TOKEN:
         logger.error("TELEGRAM_TOKEN не установлен для установки Menu Button")
         return False
-
     try:
         logger.info("Начало выполнения set_menu_button")
         bot = Bot(token=TOKEN)
@@ -298,7 +290,6 @@ def set_menu_button():
 if TOKEN:
     updater = Updater(TOKEN, use_context=True)
     dp = updater.dispatcher
-
     # --- Обработчик команды /start ---
     def start(update, context):
         """Обработчик команды /start"""
@@ -338,7 +329,6 @@ if TOKEN:
             logger.info("Сообщение отправлено успешно")
         except Exception as e:
             logger.error(f"КРИТИЧЕСКАЯ ОШИБКА в обработчике /start: {e}", exc_info=True)
-
     # --- Обработчик команды /menu для установки Menu Button ---
     def menu_command(update, context):
         """Команда для установки/переустановки Menu Button"""
@@ -422,13 +412,11 @@ def search_movie_via_tmdb(api_key, query, year=None):
         }
         if year and str(year).isdigit() and 1888 <= int(year) <= datetime.now().year:
              params['year'] = year
-
         logger.debug(f"[TMDB SEARCH] Запрос: {search_url}, Параметры: {params}")
         response = requests.get(search_url, params=params, timeout=10)
         response.raise_for_status()
         data = response.json()
         logger.debug(f"[TMDB SEARCH] Ответ получен, всего результатов: {data.get('total_results', 0)}")
-
         # Возвращаем первый результат, если он есть
         if data.get('results'):
             movie = data['results'][0] # Берем самый релевантный (первый)
@@ -448,7 +436,6 @@ def search_movie_via_tmdb(api_key, query, year=None):
         else:
             logger.info(f"[TMDB SEARCH] Ничего не найдено для запроса: '{query}'")
             return {"success": False, "error": "Фильм не найден в TMDB по названию."}
-
     except requests.exceptions.RequestException as e:
         logger.error(f"[TMDB SEARCH] Ошибка сети: {e}")
         return {"success": False, "error": "Ошибка подключения к TMDB."}
@@ -474,27 +461,21 @@ def extract_frame_from_video_url(video_url, time_percent=0.3):
             video_url_direct = info_dict.get('url')
             if not video_url_direct:
                  raise Exception("Не удалось получить прямую ссылку на видео через yt-dlp.")
-
         logger.debug(f"[ИЗВЛЕЧЕНИЕ КАДРА] Прямая ссылка получена: {video_url_direct[:50]}...")
-
         # 2. Используем OpenCV для захвата кадра
         # ВАЖНО: Используем 'opencv-python-headless'!
         cap = cv2.VideoCapture(video_url_direct)
         if not cap.isOpened():
             raise Exception("Не удалось открыть видео поток с помощью OpenCV.")
-
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         fps = cap.get(cv2.CAP_PROP_FPS)
         logger.debug(f"[ИЗВЛЕЧЕНИЕ КАДРА] Всего кадров: {total_frames}, FPS: {fps}")
-
         if total_frames <= 0 or fps <= 0:
              raise Exception("Не удалось определить параметры видео (количество кадров или FPS).")
-
         # Выбираем кадр посередине или немного ранее (time_percent по умолчанию 30% от длительности)
         target_frame = int(total_frames * time_percent)
         logger.debug(f"[ИЗВЛЕЧЕНИЕ КАДРА] Целевой кадр: {target_frame}")
         cap.set(cv2.CAP_PROP_POS_FRAMES, target_frame)
-
         ret, frame = cap.read()
         if not ret:
             # Попробуем еще раз с нулевого кадра
@@ -502,18 +483,14 @@ def extract_frame_from_video_url(video_url, time_percent=0.3):
             ret, frame = cap.read()
             if not ret:
                 raise Exception("Не удалось прочитать кадр из видео.")
-
         logger.info("[ИЗВЛЕЧЕНИЕ КАДРА] Кадр успешно захвачен.")
-
         # 3. Конвертируем кадр в JPEG BytesIO
         is_success, buffer = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 85]) # Качество 85
         if not is_success:
             raise Exception("Не удалось закодировать кадр в JPEG.")
-
         io_buf = BytesIO(buffer)
         logger.info("[ИЗВЛЕЧЕНИЕ КАДРА] Кадр успешно закодирован в JPEG.")
         return io_buf
-
     except ImportError as e:
         logger.error(f"[ИЗВЛЕЧЕНИЕ КАДРА] Модуль не установлен: {e}")
         raise Exception("Не установлен необходимый модуль 'yt-dlp' или 'opencv-python-headless'.")
@@ -540,11 +517,9 @@ def search_image_tineye(image_bytes_io):
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         }
         response = requests.post(TINEYE_API_URL, files=files, headers=headers, timeout=30)
-
         logger.info(f"[TINEYE SEARCH] Статус код: {response.status_code}")
         # logger.debug(f"[TINEYE SEARCH] Заголовки ответа: {response.headers}")
         # logger.debug(f"[TINEYE SEARCH] Текст ответа (первые 500 символов): {response.text[:500]}...")
-
         if response.status_code == 200:
             try:
                 data = response.json()
@@ -598,7 +573,6 @@ def find_movie_by_imdb_id_via_tmdb(api_key, imdb_id):
         response.raise_for_status()
         data = response.json()
         logger.debug(f"[TMDB FIND BY IMDB] Ответ: {data}")
-
         # Ищем в разделе 'movie_results'
         movie_results = data.get('movie_results', [])
         if movie_results:
@@ -619,7 +593,6 @@ def find_movie_by_imdb_id_via_tmdb(api_key, imdb_id):
         else:
             logger.info(f"[TMDB FIND BY IMDB] Фильм с IMDB ID {imdb_id} не найден в TMDB.")
             return {"success": False, "error": f"Фильм с IMDB ID {imdb_id} не найден в TMDB."}
-
     except requests.exceptions.RequestException as e:
         logger.error(f"[TMDB FIND BY IMDB] Ошибка сети: {e}")
         return {"success": False, "error": "Ошибка подключения к TMDB (поиск по IMDB ID)."}
@@ -633,21 +606,18 @@ def api_search_film_by_link():
     if not TMDB_API_KEY:
         logger.error("[ПОИСК ФИЛЬМА] Переменная окружения TMDB_API_KEY не установлена.")
         return jsonify(success=False, error="Сервис поиска фильмов временно недоступен (отсутствует ключ TMDB)."), 500
-
     try:
         # 1. Получаем данные из запроса
         data = request.get_json()
         if not data:
             logger.warning("[ПОИСК ФИЛЬМА] Неверный формат данных")
             return jsonify(success=False, error="Неверный формат данных."), 400
-
         video_url = data.get('url', '').strip()
         if not video_url:
             logger.warning("[ПОИСК ФИЛЬМА] Не указана ссылка на видео")
             return jsonify(success=False, error="Ссылка на видео не указана."), 400
-
         logger.info(f"[ПОИСК ФИЛЬМА] Получен запрос для URL: {video_url}")
-
+        
         # --- ПОПЫТКА 1: Поиск по метаданным + TMDB ---
         try:
             logger.info("[ПОИСК ФИЛЬМА] Попытка 1: Поиск по метаданным видео и TMDB...")
@@ -662,18 +632,14 @@ def api_search_film_by_link():
                 title_from_video = info_dict.get('title', '').strip()
                 description_from_video = info_dict.get('description', '').strip()
                 upload_date_str = info_dict.get('upload_date', '') # Формат: YYYYMMDD
-
             logger.info(f"[ПОИСК ФИЛЬМА] Метаданные извлечены. Название: '{title_from_video[:50]}...', Описание: '{description_from_video[:50]}...'")
-
             # Простая попытка извлечь год из даты загрузки
             year_from_video = upload_date_str[:4] if len(upload_date_str) == 8 and upload_date_str[:4].isdigit() else None
-
             # Объединяем название и описание для более полного поискового запроса
             search_query = (title_from_video + " " + description_from_video).strip()
             if not search_query:
                  # Если и название, и описание пустые, используем часть URL
                  search_query = video_url.split('/')[-1].split('?')[0][:50] # Пример: ID видео из URL
-
             if search_query:
                 tmdb_result = search_movie_via_tmdb(TMDB_API_KEY, search_query, year_from_video)
                 if tmdb_result['success']:
@@ -683,19 +649,16 @@ def api_search_film_by_link():
                     logger.info(f"[ПОИСК ФИЛЬМА] Попытка 1 не удалась: {tmdb_result.get('error')}")
             else:
                  logger.warning("[ПОИСК ФИЛЬМА] Не удалось сформировать поисковый запрос из метаданных.")
-
         except ImportError:
             logger.error("[ПОИСК ФИЛЬМА] Модуль yt-dlp не установлен для Попытки 1.")
         except Exception as e:
             logger.error(f"[ПОИСК ФИЛЬМА] Ошибка в Попытке 1 (метаданные + TMDB): {e}", exc_info=True)
-
-
+        
         # --- ПОПЫТКА 2: Извлечение кадра + TinEye + TMDB ---
         try:
             logger.info("[ПОИСК ФИЛЬМА] Попытка 2: Извлечение кадра, поиск по TinEye, затем в TMDB...")
             image_bytes_io = extract_frame_from_video_url(video_url)
             logger.info("[ПОИСК ФИЛЬМА] Кадр успешно извлечен.")
-
             tineye_result = search_image_tineye(image_bytes_io)
             if tineye_result['success'] and tineye_result['matches']:
                 logger.info("[ПОИСК ФИЛЬМА] TinEye вернул результаты. Проверяем на наличие IMDB ID...")
@@ -720,20 +683,21 @@ def api_search_film_by_link():
                          logger.debug(f"[ПОИСК ФИЛЬМА] В результате TinEye нет IMDB ID: {match.get('url')}")
                 # Если дошли до сюда, значит IMDB ID в результатах TinEye не нашлось или фильмы не найдены в TMDB
                 logger.info("[ПОИСК ФИЛЬМА] В результатах TinEye не найдено подходящих IMDB ID или фильмы не опознаны в TMDB.")
-                # Можно вернуть результаты TinEye как есть, но без данных фильма
-                # return jsonify(success=False, error="Фильм не опознан, но найдены совпадения изображения.", tineye_matches=tineye_result['matches'][:5])
+                # Возвращаем результаты TinEye как есть, но без данных фильма
+                return jsonify(success=False, error="Фильм не опознан, но найдены совпадения изображения.", tineye_matches=tineye_result['matches'][:10])
             else:
                  error_msg = tineye_result.get('error', 'TinEye не вернул результатов.')
                  logger.info(f"[ПОИСК ФИЛЬМА] TinEye не дал результатов: {error_msg}")
-
+                 # Возвращаем ошибку от TinEye
+                 return jsonify(success=False, error=error_msg)
         except Exception as e:
             logger.error(f"[ПОИСК ФИЛЬМА] Ошибка в Попытке 2 (кадр + TinEye + TMDB): {e}", exc_info=True)
-
-
+            # Возвращаем ошибку с деталями
+            return jsonify(success=False, error=f"Ошибка при извлечении кадра или поиске в TinEye: {str(e)}"), 500
+        
         # --- Если все попытки исчерпаны ---
         logger.info("[ПОИСК ФИЛЬМА] Все попытки поиска не дали результата.")
         return jsonify(success=False, error="Не удалось определить фильм по предоставленной ссылке. Попробуйте другую ссылку или введите название фильма вручную, если знаете его."), 404
-
     except Exception as e:
         logger.error(f"[ПОИСК ФИЛЬМА] Критическая ошибка: {e}", exc_info=True)
         return jsonify(success=False, error="Внутренняя ошибка сервера. Попробуйте позже."), 500
@@ -756,7 +720,7 @@ def telegram_webhook(token):
         logger.error(f"Ошибка обработки webhook обновления: {e}", exc_info=True)
         return jsonify({'error': 'Internal Server Error'}), 500
 
-# --- Маршрут для проверки webhook ---
+# --- Route for webhook info ---
 @app.route('/webhook-info')
 def webhook_info():
     if not TOKEN:
