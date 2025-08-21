@@ -1,28 +1,226 @@
-{% extends "base.html" %}
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>🌌 КиноВселенная</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        /* === УЛЬТРАСОВРЕМЕННЫЙ КОСМИЧЕСКИЙ PRELOADER === */
+        #cosmic-preloader {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 99999;
+            transition: opacity 0.8s cubic-bezier(0.22, 0.61, 0.36, 1);
+            overflow: hidden;
+        }
 
-{% block content %}
-    <nav class="navbar">
-        <div class="nav-brand">
-            <h1>🌌 КиноВселенная</h1>
-        </div>
-        <div class="nav-tabs">
-            <button class="tab-btn active" data-tab="moments">🎬 Моменты из кино</button>
-            <button class="tab-btn" data-tab="trailers">🎥 Трейлеры</button>
-            <button class="tab-btn" data-tab="news">📰 Новости</button>
-        </div>
-        <div class="search-container">
-            <input type="text" id="search-input" class="search-input" placeholder="Поиск...">
-            <button id="search-btn" class="search-btn">🔍</button>
-        </div>
-    </nav>
+        .cosmic-content {
+            text-align: center;
+            position: relative;
+            z-index: 2;
+        }
 
-    <div id="content-area">
-        <div style="text-align: center; padding: 50px; color: var(--accent);">
-            <h2>🚀 Загрузка контента...</h2>
+        /* Анимированный логотип-галактика */
+        .cosmic-logo {
+            width: 90px;
+            height: 90px;
+            margin: 0 auto 25px;
+            position: relative;
+        }
+
+        .galaxy-core {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: radial-gradient(circle, #00f3ff, #ff00c8);
+            box-shadow: 0 0 40px #00f3ff, 0 0 80px #ff00c8;
+            animation: galaxyPulse 3s ease-in-out infinite;
+        }
+
+        .orbit-ring {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 150px;
+            height: 150px;
+            margin: -75px 0 0 -75px;
+            border: 1px solid rgba(0, 243, 255, 0.3);
+            border-radius: 50%;
+            animation: orbitRotate 20s linear infinite;
+        }
+
+        .orbit-particle {
+            position: absolute;
+            top: 0;
+            left: 50%;
+            width: 8px;
+            height: 8px;
+            margin-left: -4px;
+            background: #ff00c8;
+            border-radius: 50%;
+            box-shadow: 0 0 10px #ff00c8;
+        }
+
+        /* Текст с градиентом */
+        .cosmic-title {
+            font-family: 'Segoe UI', 'Inter', sans-serif;
+            font-size: 2.2rem;
+            font-weight: 800;
+            margin-bottom: 10px;
+            background: linear-gradient(45deg, #00f3ff, #ff00c8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 20px rgba(0, 243, 255, 0.5);
+            letter-spacing: -0.5px;
+        }
+
+        .cosmic-subtitle {
+            font-size: 1rem;
+            color: rgba(255, 255, 255, 0.8);
+            margin-bottom: 30px;
+            font-weight: 500;
+        }
+
+        /* Прогресс-бар в стиле энергии */
+        .cosmic-progress-container {
+            width: 300px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            margin: 0 auto 20px;
+            overflow: hidden;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+        }
+
+        .cosmic-progress-bar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #00f3ff, #ff00c8);
+            border-radius: 2px;
+            transition: width 0.4s cubic-bezier(0.22, 0.61, 0.36, 1);
+            box-shadow: 0 0 15px rgba(0, 243, 255, 0.6);
+        }
+
+        .cosmic-status {
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.7);
+            font-weight: 500;
+        }
+
+        /* Анимации */
+        @keyframes galaxyPulse {
+            0%, 100% { transform: scale(1); box-shadow: 0 0 40px #00f3ff, 0 0 80px #ff00c8; }
+            50% { transform: scale(1.1); box-shadow: 0 0 60px #00f3ff, 0 0 120px #ff00c8; }
+        }
+
+        @keyframes orbitRotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        /* Скрытие */
+        #cosmic-preloader.fade-out {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        /* Адаптивность */
+        @media (max-width: 480px) {
+            .cosmic-title { font-size: 1.8rem; }
+            .cosmic-logo { width: 70px; height: 70px; }
+            .cosmic-progress-container { width: 250px; }
+        }
+
+        /* Фоновые элементы (звезды) */
+        .star {
+            position: absolute;
+            background: white;
+            border-radius: 50%;
+            animation: twinkle var(--duration, 3s) infinite ease-in-out;
+        }
+
+        @keyframes twinkle {
+            0%, 100% { opacity: 0.2; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.2); }
+        }
+    </style>
+</head>
+<body>
+    <!-- УЛЬТРАСОВРЕМЕННЫЙ КОСМИЧЕСКИЙ PRELOADER -->
+    <div id="cosmic-preloader">
+        <!-- Звездное небо -->
+        <div id="stars-container"></div>
+        
+        <div class="cosmic-content">
+            <div class="cosmic-logo">
+                <div class="galaxy-core"></div>
+                <div class="orbit-ring">
+                    <div class="orbit-particle"></div>
+                </div>
+            </div>
+            <div class="cosmic-title">КиноВселенная</div>
+            <div class="cosmic-subtitle">Подготовка космического пространства...</div>
+            <div class="cosmic-progress-container">
+                <div class="cosmic-progress-bar" id="cosmic-progress-bar"></div>
+            </div>
+            <div class="cosmic-status" id="cosmic-status">0% Инициализация ядра...</div>
         </div>
     </div>
-{% endblock %}
 
-{% block scripts %}
+    <!-- Основной контент (скрыт до загрузки) -->
+    <div id="app-content" class="container" style="display: none;">
+        <nav class="navbar">
+            <div class="nav-brand">
+                <h1>🌌 КиноВселенная</h1>
+            </div>
+            <div class="nav-tabs">
+                <button class="tab-btn active" data-tab="moments">🎬 Моменты из кино</button>
+                <button class="tab-btn" data-tab="trailers">🎥 Трейлеры</button>
+                <button class="tab-btn" data-tab="news">📰 Новости</button>
+            </div>
+            <div class="search-container">
+                <input type="text" id="search-input" class="search-input" placeholder="Поиск по названиям...">
+                <button id="search-btn" class="search-btn">🔍</button>
+            </div>
+        </nav>
+        
+        <div id="content-area">
+            <div style="text-align: center; padding: 50px; color: var(--accent);">
+                <h2>🚀 Добро пожаловать в КиноВселенную!</h2>
+                <p>Здесь скоро появится космическое приложение с фильмами, трейлерами и новостями</p>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
-{% endblock %}
+    <script>
+        // Создание звездного неба
+        document.addEventListener('DOMContentLoaded', function() {
+            const starsContainer = document.getElementById('stars-container');
+            for (let i = 0; i < 100; i++) {
+                const star = document.createElement('div');
+                star.className = 'star';
+                star.style.left = `${Math.random() * 100}%`;
+                star.style.top = `${Math.random() * 100}%`;
+                star.style.width = `${Math.random() * 3 + 1}px`;
+                star.style.height = star.style.width;
+                star.style.setProperty('--duration', `${Math.random() * 4 + 2}s`);
+                star.style.animationDelay = `${Math.random() * 5}s`;
+                starsContainer.appendChild(star);
+            }
+        });
+    </script>
+</body>
+</html>
