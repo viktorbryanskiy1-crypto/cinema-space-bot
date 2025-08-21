@@ -16,7 +16,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, Bot
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 import redis
 import json
- from database import (
+from database import (
     get_or_create_user, get_user_role,
     add_moment, add_trailer, add_news,
     get_all_moments, get_all_trailers, get_all_news,
@@ -299,20 +299,14 @@ if TOKEN:
             reply_markup = InlineKeyboardMarkup(keyboard)
             logger.info("Отправка сообщения пользователю...")
             update.message.reply_text(
-                "🚀 Добро пожаловать в КиноВселенную!
-"
-                "✨ Исследуй космос кино
-"
-                "🎬 Лучшие моменты из фильмов
-"
-                "🎥 Свежие трейлеры
-"
-                "📰 Горячие новости
-"
+                "🚀 Добро пожаловать в КиноВселенную!\n"
+                "✨ Исследуй космос кино\n"
+                "🎬 Лучшие моменты из фильмов\n"
+                "🎥 Свежие трейлеры\n"
+                "📰 Горячие новости\n"
                 "Нажми кнопку для входа в приложение",
                 reply_markup=reply_markup
             )
-            logger.info("Сообщение отправлено успешно")
         except Exception as e:
             logger.error(f"КРИТИЧЕСКАЯ ОШИБКА в обработчике /start: {e}", exc_info=True)
     # --- Обработчик команды /menu для установки Menu Button ---
