@@ -1,3 +1,4 @@
+<!-- templates/search_by_link.html -->
 {% extends "base.html" %}
 
 {% block title %}Поиск фильма по ссылке{% endblock %}
@@ -102,7 +103,7 @@
         Мы попробуем определить фильм по кадру из видео.
     </p>
     <div class="search-link-form">
-        <input type="url" id="video-link-input" placeholder="https://www.instagram.com/reel/... или https://youtu.be/...">
+        <input type="url" id="video-link-input" placeholder="https://www.instagram.com/reel/...   или https://youtu.be/...  ">
         <button id="search-film-btn">Найти фильм</button>
     </div>
     <div id="search-result">
@@ -111,56 +112,5 @@
     </div>
 </div>
 
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-    const searchBtn = document.getElementById('search-film-btn');
-    const inputField = document.getElementById('video-link-input');
-    const resultDiv = document.getElementById('search-result');
-
-    if (searchBtn && inputField && resultDiv) {
-        searchBtn.addEventListener('click', async function () {
-            const url = inputField.value.trim();
-            if (!url) {
-                resultDiv.innerHTML = '<p class="result-error">Пожалуйста, введите ссылку на видео.</p>';
-                return;
-            }
-
-            resultDiv.innerHTML = '<p class="result-loading">🔍 Ищем фильм... Это может занять немного времени.</p>';
-
-            try {
-                const response = await fetch('/api/search_film_by_link', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ url: url })
-                });
-
-                const data = await response.json();
-
-                if (data.success) {
-                    // Отображаем результат
-                    let html = `<h2 class="film-title">${data.film.title || 'Название не найдено'}</h2>`;
-                    if (data.film.year) html += `<p class="film-year">Год: ${data.film.year}</p>`;
-                    if (data.film.description) html += `<p class="film-description">${data.film.description}</p>`;
-                    if (data.tineye_results && data.tineye_results.length > 0) {
-                        html += `<hr style="margin: 1rem 0; border-color: var(--border);">`;
-                        html += `<h3 style="color: var(--accent);">Результаты поиска по изображению:</h3>`;
-                        data.tineye_results.forEach(res => {
-                            html += `<p><a href="${res.url}" target="_blank" style="color: var(--accent-secondary);">${res.domain}</a> - Совпадение: ${Math.round(res.score * 100)}%</p>`;
-                            // Можно добавить превью, если есть res.image_url
-                        });
-                    }
-                    resultDiv.innerHTML = html;
-                } else {
-                    resultDiv.innerHTML = `<p class="result-error">❌ Ошибка: ${data.error}</p>`;
-                }
-            } catch (error) {
-                console.error('Ошибка при поиске фильма:', error);
-                resultDiv.innerHTML = `<p class="result-error">❌ Произошла ошибка при поиске. Попробуйте позже.</p>`;
-            }
-        });
-    }
-});
-</script>
+<!-- Скрипт удален, логика перенесена в main.js -->
 {% endblock %}
