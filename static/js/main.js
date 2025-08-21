@@ -274,6 +274,20 @@ function initializeApp() {
                 .catch(error => console.log(`Ошибка предзагрузки ${tabName}:`, error));
         });
     }, 2000); // Небольшая задержка, чтобы не перегружать сеть
+
+    // === ВКЛЮЧЕНИЕ СКРОЛЛА ПОСЛЕ ЗАГРУЗКИ ===
+    const appContent = document.getElementById('app-content');
+    if (appContent) {
+        // Разрешаем скролл после загрузки
+        appContent.style.overflow = 'auto';
+        appContent.style.webkitOverflowScrolling = 'touch';
+        
+        // Убираем фиксированную высоту, если она была
+        appContent.style.height = 'auto';
+        appContent.style.position = 'relative';
+    }
+
+    console.log("Приложение инициализировано, скролл разрешен");
 }
 
 // --- Динамические функции после загрузки контента ---
