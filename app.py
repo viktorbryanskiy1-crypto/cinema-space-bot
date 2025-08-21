@@ -364,6 +364,14 @@ def build_extra_map(data, item_type_plural):
 @app.route('/')
 def index():
     return render_template('index.html')
+
+# --- НОВЫЙ МАРШРУТ ДЛЯ ПОИСКА ПО ССЫЛКЕ ---
+@app.route('/search_by_link')
+def search_by_link_page():
+    """Отображает страницу поиска фильма по ссылке."""
+    return render_template('search_by_link.html')
+# --- КОНЕЦ НОВОГО МАРШРУТА ---
+
 # --- Маршрут для Webhook от Telegram ---
 @app.route('/<string:token>', methods=['POST'])
 def telegram_webhook(token):
