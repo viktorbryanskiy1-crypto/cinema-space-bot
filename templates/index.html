@@ -156,7 +156,22 @@
         }
 
         /* === ФИКСАЦИЯ ДЛЯ ПРЕЛОАДЕРА И ПОЛНОЭКРАННОГО РЕЖИМА === */
-        /* Полноэкранная фиксация preloader'а */
+        html, body {
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            overscroll-behavior: none;
+            touch-action: none;
+        }
+
+        #app-content {
+            height: 100vh;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior: contain;
+        }
+
         #cosmic-preloader {
             position: fixed !important;
             top: 0 !important;
@@ -165,39 +180,6 @@
             height: 100vh !important;
             overflow: hidden !important;
             z-index: 99999 !important;
-        }
-
-        /* Фиксация основного контента в полноэкранном режиме */
-        body.fullscreen,
-        .container.fullscreen,
-        #app-content.fullscreen {
-            position: fixed !important;
-            top: 0 !important;
-            left: 0 !important;
-            width: 100vw !important;
-            height: 100vh !important;
-            overflow: hidden !important;
-            overscroll-behavior: none !important; /* Отключает pull-to-refresh и overscroll */
-        }
-
-        /* Отключение pull-to-refresh и overscroll для всего тела */
-        html, body {
-            overscroll-behavior: none !important;
-            touch-action: pan-x pan-y !important; /* Разрешает только горизонтальный и вертикальный скролл */
-        }
-
-        /* Для iOS Safari - отключает rubber-band эффект */
-        body {
-            position: fixed;
-            overflow: hidden;
-            width: 100%;
-            height: 100%;
-        }
-
-        /* Когда контент загрузился, возвращаем скролл */
-        #app-content.visible {
-            overflow: auto !important;
-            -webkit-overflow-scrolling: touch !important;
         }
     </style>
 </head>
@@ -271,24 +253,32 @@
         document.addEventListener('DOMContentLoaded', function () {
             // Функция для активации полноэкранного режима
             function enableFullscreenMode() {
+                const html = document.documentElement;
                 const body = document.body;
-                const container = document.querySelector('.container');
-                const appContent = document.getElementById('app-content');
+                
+                // Фиксируем html и body
+                html.style.position = 'fixed';
+                html.style.width = '100%';
+                html.style.height = '100%';
+                html.style.overflow = 'hidden';
+                
+                body.style.position = 'fixed';
+                body.style.width = '100%';
+                body.style.height = '100%';
+                body.style.overflow = 'hidden';
+                body.style.overscrollBehavior = 'none';
+                body.style.touchAction = 'none';
 
-                // Добавляем классы полноэкранного режима
-                body.classList.add('fullscreen');
-                if (container) container.classList.add('fullscreen');
+                // Разрешаем скролл только для контента
+                const appContent = document.getElementById('app-content');
                 if (appContent) {
-                    appContent.classList.add('fullscreen');
-                    // Скрываем скролл до загрузки
-                    appContent.style.overflow = 'hidden';
+                    appContent.style.height = '100vh';
+                    appContent.style.overflowY = 'auto';
+                    appContent.style.webkitOverflowScrolling = 'touch';
+                    appContent.style.overscrollBehavior = 'contain';
                 }
 
-                // Отключаем pull-to-refresh
-                document.documentElement.style.overscrollBehavior = 'none';
-                body.style.overscrollBehavior = 'none';
-
-                console.log("Fullscreen mode enabled");
+                console.log("Fullscreen mode enabled with proper scrolling");
             }
 
             // Активируем полноэкранный режим сразу при загрузке
@@ -297,25 +287,6 @@
             // Также активируем при изменении URL (если используется SPA)
             window.addEventListener('popstate', enableFullscreenMode);
         });
-
-        // === ПРЕДОТВРАЩЕНИЕ SCROLL-Bounce НА iOS ===
-        let isScrolling = false;
-        document.addEventListener('touchmove', function (e) {
-            if (!isScrolling) {
-                isScrolling = true;
-                window.requestAnimationFrame(function () {
-                    // Разрешаем скролл только для контента, а не для body
-                    const target = e.target;
-                    const scrollable = target.closest('.card-grid, .comments-list, .modal-content, [style*="overflow"]') || 
-                                     document.getElementById('content-area');
-                    
-                    if (!scrollable || scrollable.scrollHeight <= scrollable.clientHeight) {
-                        e.preventDefault(); // Блокируем скролл если нет контента для прокрутки
-                    }
-                    isScrolling = false;
-                });
-            }
-        }, { passive: false });
     </script>
 </body>
 </html>
