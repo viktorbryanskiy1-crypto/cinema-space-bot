@@ -1,5 +1,5 @@
 # app.py - Обновлённая версия с гибридным поиском фильмов
-# Исправлен возврат tineye_matches в API
+# Исправлены ошибки логирования, улучшена обработка ошибок API
 import os
 import threading
 import logging
@@ -34,6 +34,7 @@ from database import (
     delete_item, get_access_settings, update_access_settings,
     init_db, get_item_by_id, get_db_connection # Добавлен get_db_connection
 )
+
 # --- Logging ---
 # Установим уровень логирования для библиотек на WARNING, чтобы не засоряли
 logging.getLogger("urllib3").setLevel(logging.WARNING)
@@ -44,6 +45,7 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
 # --- Config ---
 TOKEN = os.environ.get('TELEGRAM_TOKEN')
 WEBHOOK_URL = os.environ.get('WEBHOOK_URL', 'https://cinema-space-bot.onrender.com').strip().rstrip('/')
@@ -53,6 +55,7 @@ TMDB_API_KEY = os.environ.get('TMDB_API_KEY') # Добавлено
 # --- Конец нового ---
 if not TOKEN:
     logger.error("TELEGRAM_TOKEN not set!")
+    
 # --- Redis ---
 redis_client = None
 if REDIS_URL:
@@ -70,6 +73,7 @@ else:
     except Exception as e:
         logger.warning(f"Local Redis not available: {e}")
         redis_client = None
+
 # --- Flask ---
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'super-secret-key')
@@ -78,14 +82,18 @@ app.config['UPLOAD_FOLDER'] = 'uploads'
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 ALLOWED_VIDEO_EXTENSIONS = {'mp4', 'avi', 'mov', 'wmv', 'flv', 'webm'}
 ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+
 def allowed_file(filename, allowed_exts):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in allowed_exts
+
 # --- Telegram Bot ---
 updater = None
 dp = None
 pending_video_data = {}
+
 # --- НОВОЕ: Кэш для прямых ссылок ---
 video_url_cache = {}
+
 def get_direct_video_url(file_id):
     """Преобразует file_id в прямую ссылку для веба"""
     bot_token = TOKEN
@@ -115,6 +123,7 @@ def get_direct_video_url(file_id):
     except Exception as e:
         logger.error(f"Неизвестная ошибка при получении ссылки для file_id {file_id}: {e}")
         return None
+
 def get_cached_direct_video_url(file_id, cache_time=3600):
     """Кэшированное получение прямой ссылки"""
     current_time = time.time()
@@ -130,6 +139,7 @@ def get_cached_direct_video_url(file_id, cache_time=3600):
         logger.debug(f"Ссылка для file_id {file_id} закэширована")
         return url
     return None
+
 # --- ИСПРАВЛЕННАЯ Функция для извлечения видео из поста Telegram ---
 async def extract_video_url_from_telegram_post(post_url):
     """
@@ -189,6 +199,7 @@ async def extract_video_url_from_telegram_post(post_url):
     except Exception as e:
         logger.error(f"[ИЗВЛЕЧЕНИЕ] Ошибка извлечения видео из поста {post_url}: {e}", exc_info=True)
         return None, f"Ошибка при обработке ссылки на пост: {str(e)}"
+
 def extract_video_url_sync(post_url):
     """Синхронная обертка для асинхронной функции извлечения видео"""
     try:
@@ -206,6 +217,7 @@ def extract_video_url_sync(post_url):
     except Exception as e:
         logger.error(f"Ошибка в синхронной обертке extract_video_url_sync: {e}", exc_info=True)
         return None, f"Ошибка обработки запроса: {e}"
+
 # --- НОВАЯ ФУНКЦИЯ: Обновление устаревшей ссылки ---
 @app.route('/api/refresh_video_url', methods=['POST'])
 def refresh_video_url():
@@ -230,6 +242,7 @@ def refresh_video_url():
     except Exception as e:
         logger.error(f"[ОБНОВЛЕНИЕ ССЫЛКИ] Критическая ошибка: {e}", exc_info=True)
         return jsonify(success=False, error="Внутренняя ошибка сервера"), 500
+
 # --- НОВАЯ ФУНКЦИЯ: Кэширование HTML страниц ---
 def get_cached_html(key, generate_func, expire=300):
     """Получает HTML из кэша или генерирует новый"""
@@ -249,6 +262,7 @@ def get_cached_html(key, generate_func, expire=300):
         except Exception as e:
             logger.warning(f"Ошибка сохранения HTML в кэш: {e}")
     return html
+
 # --- Функция для установки Menu Button ---
 def set_menu_button():
     """Устанавливает кнопку меню для бота"""
@@ -272,6 +286,7 @@ def set_menu_button():
     except Exception as e:
         logger.error(f"❌ ОШИБКА в set_menu_button: {e}", exc_info=True)
         return False
+
 if TOKEN:
     updater = Updater(TOKEN, use_context=True)
     dp = updater.dispatcher
@@ -303,12 +318,12 @@ if TOKEN:
             reply_markup = InlineKeyboardMarkup(keyboard)
             logger.info("Отправка сообщения пользователю...")
             update.message.reply_text(
-                """🚀 Добро пожаловать в КиноВселенную!
-✨ Исследуй космос кино
-🎬 Лучшие моменты из фильмов
-🎥 Свежие трейлеры
-📰 Горячие новости
-Нажми кнопку для входа в приложение""",
+                "🚀 Добро пожаловать в КиноВселенную!\n"
+                "✨ Исследуй космос кино\n"
+                "🎬 Лучшие моменты из фильмов\n"
+                "🎥 Свежие трейлеры\n"
+                "📰 Горячие новости\n"
+                "Нажми кнопку для входа в приложение",
                 reply_markup=reply_markup
             )
             logger.info("Сообщение отправлено успешно")
@@ -326,6 +341,7 @@ if TOKEN:
         except Exception as e:
             logger.error(f"Ошибка в /menu: {e}")
             update.message.reply_text("❌ Ошибка при установке кнопки меню")
+
 # --- Helpers ---
 def save_uploaded_file(file_storage, allowed_exts):
     if file_storage and allowed_file(file_storage.filename, allowed_exts):
@@ -335,6 +351,7 @@ def save_uploaded_file(file_storage, allowed_exts):
         file_storage.save(path)
         return f"/uploads/{unique_name}"
     return None
+
 def cache_get(key):
     if not redis_client:
         return None
@@ -343,18 +360,21 @@ def cache_get(key):
         return json.loads(raw) if raw else None
     except Exception:
         return None
+
 def cache_set(key, value, expire=300):
     if redis_client:
         try:
             redis_client.set(key, json.dumps(value), ex=expire)
         except Exception:
             pass
+
 def cache_delete(key):
     if redis_client:
         try:
             redis_client.delete(key)
         except Exception:
             pass
+
 def build_extra_map(data, item_type_plural):
     """Добавляет реакции и комментарии к каждому элементу данных."""
     extra = {}
@@ -364,19 +384,23 @@ def build_extra_map(data, item_type_plural):
         comments_count = len(get_comments(item_type_plural, item_id) or [])
         extra[item_id] = {'reactions': reactions, 'comments_count': comments_count}
     return extra
+
 # --- Routes (пользовательские) ---
 @app.route('/')
 def index():
     return render_template('index.html')
+
 # --- НОВЫЙ МАРШРУТ ДЛЯ ПОИСКА ПО ССЫЛКЕ ---
 @app.route('/search_by_link')
 def search_by_link_page():
     """Отображает страницу поиска фильма по ссылке."""
     return render_template('search_by_link.html')
 # --- КОНЕЦ НОВОГО МАРШРУТА ---
+
 # --- НОВЫЙ API МАРШРУТ: Поиск фильма по ссылке (Гибридный: метаданные + TMDB + TinEye) ---
 # TinEye API URL (бесплатный, без ключа, но с лимитами)
 TINEYE_API_URL = "https://tineye.com/api/v1/search"
+
 def search_movie_via_tmdb(api_key, query, year=None):
     """Ищет фильм в TMDB по названию."""
     try:
@@ -418,6 +442,7 @@ def search_movie_via_tmdb(api_key, query, year=None):
     except Exception as e:
         logger.error(f"[TMDB SEARCH] Непредвиденная ошибка: {e}", exc_info=True)
         return {"success": False, "error": "Внутренняя ошибка при поиске в TMDB."}
+
 def extract_frame_from_video_url(video_url, time_percent=0.3):
     """Извлекает кадр из видео по URL."""
     temp_filename = None
@@ -477,6 +502,7 @@ def extract_frame_from_video_url(video_url, time_percent=0.3):
         if temp_filename and os.path.exists(temp_filename):
             os.remove(temp_filename)
         raise e # Пробрасываем исключение дальше
+
 def search_image_tineye(image_bytes_io):
     """Отправляет изображение в TinEye API и возвращает результаты."""
     try:
@@ -532,6 +558,7 @@ def search_image_tineye(image_bytes_io):
     except Exception as e:
         logger.error(f"[TINEYE SEARCH] Неизвестная ошибка: {e}", exc_info=True)
         return {"success": False, "error": "Неизвестная ошибка при поиске в TinEye."}
+
 def find_movie_by_imdb_id_via_tmdb(api_key, imdb_id):
     """Ищет фильм в TMDB по IMDB ID."""
     try:
@@ -572,6 +599,7 @@ def find_movie_by_imdb_id_via_tmdb(api_key, imdb_id):
     except Exception as e:
         logger.error(f"[TMDB FIND BY IMDB] Непредвиденная ошибка: {e}", exc_info=True)
         return {"success": False, "error": "Внутренняя ошибка при поиске в TMDB по IMDB ID."}
+
 @app.route('/api/search_film_by_link', methods=['POST'])
 def api_search_film_by_link():
     """API для поиска фильма по ссылке на видео (гибридный подход)."""
@@ -589,6 +617,7 @@ def api_search_film_by_link():
             logger.warning("[ПОИСК ФИЛЬМА] Не указана ссылка на видео")
             return jsonify(success=False, error="Ссылка на видео не указана."), 400
         logger.info(f"[ПОИСК ФИЛЬМА] Получен запрос для URL: {video_url}")
+        
         # --- ПОПЫТКА 1: Поиск по метаданным + TMDB ---
         try:
             logger.info("[ПОИСК ФИЛЬМА] Попытка 1: Поиск по метаданным видео и TMDB...")
@@ -624,6 +653,7 @@ def api_search_film_by_link():
             logger.error("[ПОИСК ФИЛЬМА] Модуль yt-dlp не установлен для Попытки 1.")
         except Exception as e:
             logger.error(f"[ПОИСК ФИЛЬМА] Ошибка в Попытке 1 (метаданные + TMDB): {e}", exc_info=True)
+        
         # --- ПОПЫТКА 2: Извлечение кадра + TinEye + TMDB ---
         try:
             logger.info("[ПОИСК ФИЛЬМА] Попытка 2: Извлечение кадра, поиск по TinEye, затем в TMDB...")
@@ -664,6 +694,7 @@ def api_search_film_by_link():
             logger.error(f"[ПОИСК ФИЛЬМА] Ошибка в Попытке 2 (кадр + TinEye + TMDB): {e}", exc_info=True)
             # Возвращаем ошибку с деталями
             return jsonify(success=False, error=f"Ошибка при извлечении кадра или поиске в TinEye: {str(e)}"), 500
+        
         # --- Если все попытки исчерпаны ---
         logger.info("[ПОИСК ФИЛЬМА] Все попытки поиска не дали результата.")
         return jsonify(success=False, error="Не удалось определить фильм по предоставленной ссылке. Попробуйте другую ссылку или введите название фильма вручную, если знаете его."), 404
@@ -671,6 +702,7 @@ def api_search_film_by_link():
         logger.error(f"[ПОИСК ФИЛЬМА] Критическая ошибка: {e}", exc_info=True)
         return jsonify(success=False, error="Внутренняя ошибка сервера. Попробуйте позже."), 500
 # --- КОНЕЦ НОВОГО API МАРШРУТА ---
+
 # --- Маршрут для Webhook от Telegram ---
 @app.route('/<string:token>', methods=['POST'])
 def telegram_webhook(token):
@@ -687,6 +719,7 @@ def telegram_webhook(token):
     except Exception as e:
         logger.error(f"Ошибка обработки webhook обновления: {e}", exc_info=True)
         return jsonify({'error': 'Internal Server Error'}), 500
+
 # --- Route for webhook info ---
 @app.route('/webhook-info')
 def webhook_info():
@@ -699,6 +732,7 @@ def webhook_info():
     except Exception as e:
         logger.error(f"Ошибка получения информации о webhook: {e}")
         return jsonify({'error': str(e)}), 500
+
 # --- УЛУЧШЕНИЕ: Кэшированные маршруты для вкладок ---
 @app.route('/moments')
 def moments():
@@ -736,6 +770,7 @@ def moments():
     # Кэшируем HTML на 5 минут
     cached_html = get_cached_html('moments_page', generate_moments_html, expire=300)
     return cached_html
+
 @app.route('/trailers')
 def trailers():
     def generate_trailers_html():
@@ -772,6 +807,7 @@ def trailers():
     # Кэшируем HTML на 5 минут
     cached_html = get_cached_html('trailers_page', generate_trailers_html, expire=300)
     return cached_html
+
 @app.route('/news')
 def news():
     def generate_news_html():
@@ -808,6 +844,7 @@ def news():
     # Кэшируем HTML на 5 минут
     cached_html = get_cached_html('news_page', generate_news_html, expire=300)
     return cached_html
+
 @app.route('/moments/<int:item_id>')
 def moment_detail(item_id):
     """Отображает страницу одного момента."""
@@ -827,6 +864,7 @@ def moment_detail(item_id):
         'created_at': item[4] if len(item) > 4 else None
     }
     return render_template('moment_detail.html', item=item_dict, reactions=reactions, comments=comments)
+
 @app.route('/trailers/<int:item_id>')
 def trailer_detail(item_id):
     """Отображает страницу одного трейлера."""
@@ -846,6 +884,7 @@ def trailer_detail(item_id):
         'created_at': item[4] if len(item) > 4 else None
     }
     return render_template('trailer_detail.html', item=item_dict, reactions=reactions, comments=comments)
+
 @app.route('/news/<int:item_id>')
 def news_detail(item_id):
     """Отображает страницу одной новости."""
@@ -865,10 +904,12 @@ def news_detail(item_id):
         'created_at': item[4] if len(item) > 4 else None
     }
     return render_template('news_detail.html', item=item_dict, reactions=reactions, comments=comments)
+
 def _get_payload():
     if request.is_json:
         return request.get_json(silent=True) or {}
     return request.form or {}
+
 @app.route('/api/add_moment', methods=['POST'])
 def api_add_moment():
     try:
@@ -900,6 +941,7 @@ def api_add_moment():
     except Exception as e:
         logger.error(f"API add_moment error: {e}", exc_info=True)
         return jsonify(success=False, error=str(e)), 500
+
 @app.route('/api/add_trailer', methods=['POST'])
 def api_add_trailer():
     try:
@@ -931,6 +973,7 @@ def api_add_trailer():
     except Exception as e:
         logger.error(f"API add_trailer error: {e}", exc_info=True)
         return jsonify(success=False, error=str(e)), 500
+
 @app.route('/api/add_news', methods=['POST'])
 def api_add_news():
     try:
@@ -950,9 +993,11 @@ def api_add_news():
     except Exception as e:
         logger.error(f"API add_news error: {e}", exc_info=True)
         return jsonify(success=False, error=str(e)), 500
+
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
 @app.route('/api/reaction', methods=['POST'])
 def api_add_reaction():
     try:
@@ -966,6 +1011,7 @@ def api_add_reaction():
     except Exception as e:
         logger.error(f"API add_reaction error: {e}", exc_info=True)
         return jsonify(success=False, error=str(e)), 500
+
 @app.route('/api/comments', methods=['GET'])
 def api_get_comments():
     try:
@@ -976,6 +1022,7 @@ def api_get_comments():
     except Exception as e:
         logger.error(f"API get_comments error: {e}", exc_info=True)
         return jsonify(comments=[], error=str(e)), 500
+
 @app.route('/api/comment', methods=['POST'])
 def api_add_comment():
     try:
@@ -989,6 +1036,7 @@ def api_add_comment():
     except Exception as e:
         logger.error(f"API add_comment error: {e}", exc_info=True)
         return jsonify(success=False, error=str(e)), 500
+
 @app.route('/admin/login', methods=['GET', 'POST'])
 def admin_login():
     if request.method == 'POST':
@@ -999,10 +1047,12 @@ def admin_login():
             return redirect(url_for('admin_dashboard'))
         return render_template('admin/login.html', error='Неверный логин или пароль')
     return render_template('admin/login.html')
+
 @app.route('/admin/logout')
 def admin_logout():
     session.pop('admin', None)
     return redirect(url_for('admin_login'))
+
 def admin_required(func):
     from functools import wraps
     @wraps(func)
@@ -1011,6 +1061,7 @@ def admin_required(func):
             return redirect(url_for('admin_login'))
         return func(*args, **kwargs)
     return wrapper
+
 @app.route('/admin')
 @admin_required
 def admin_dashboard():
@@ -1020,11 +1071,13 @@ def admin_dashboard():
                            trailers_count=stats.get('trailers', 0),
                            news_count=stats.get('news', 0),
                            comments_count=stats.get('comments', 0))
+
 @app.route('/admin/add_video')
 @admin_required
 def admin_add_video_form():
     """Отображает форму добавления видео."""
     return render_template('admin/add_video.html')
+
 @app.route('/admin/content')
 @admin_required
 def admin_content():
@@ -1032,12 +1085,16 @@ def admin_content():
     trailers = get_all_trailers() or []
     news = get_all_news() or []
     return render_template('admin/content.html', moments=moments, trailers=trailers, news=news)
+
 def delete_moment(item_id):
     delete_item('moments', item_id)
+
 def delete_trailer(item_id):
     delete_item('trailers', item_id)
+
 def delete_news(item_id):
     delete_item('news', item_id)
+
 @app.route('/admin/delete/<content_type>/<int:content_id>')
 @admin_required
 def admin_delete(content_type, content_id):
@@ -1054,6 +1111,7 @@ def admin_delete(content_type, content_id):
         cache_delete('news_list')
         cache_delete('news_page')  # Удаляем кэш страницы
     return redirect(url_for('admin_content'))
+
 @app.route('/admin/access')
 @admin_required
 def admin_access_settings():
@@ -1062,12 +1120,14 @@ def admin_access_settings():
     news_roles = get_access_settings('news')
     return render_template('admin/access/settings.html',
                            moment_roles=moment_roles, trailer_roles=trailer_roles, news_roles=news_roles)
+
 @app.route('/admin/access/update/<content_type>', methods=['POST'])
 @admin_required
 def admin_update_access(content_type):
     roles = request.form.getlist('roles')
     update_access_settings(content_type, roles)
     return redirect(url_for('admin_access_settings'))
+
 @app.route('/admin/add_video_json', methods=['POST'])
 @admin_required
 def admin_add_video_json():
@@ -1111,6 +1171,7 @@ def admin_add_video_json():
     except Exception as e:
         logger.error(f"[JSON API] add_video error: {e}", exc_info=True)
         return jsonify(success=False, error=str(e)), 500
+
 def add_video_command(update, context):
     user = update.message.from_user
     telegram_id = str(user.id)
@@ -1128,6 +1189,7 @@ def add_video_command(update, context):
         f"🎬 Добавление '{parts[1]}' с названием '{parts[2]}'. "
         f"Пришли прямой URL видео (https://...) или отправь видео файлом."
     )
+
 def handle_pending_video_text(update, context):
     user = update.message.from_user
     telegram_id = str(user.id)
@@ -1150,6 +1212,7 @@ def handle_pending_video_text(update, context):
     cache_delete('moments_list')
     cache_delete('trailers_list')
     cache_delete('news_list')
+
 def handle_pending_video_file(update, context):
     user = update.message.from_user
     telegram_id = str(user.id)
@@ -1191,12 +1254,14 @@ def handle_pending_video_file(update, context):
         error_msg = f"❌ Ошибка сохранения в БД: {e}"
         logger.error(error_msg, exc_info=True)
         update.message.reply_text(error_msg)
+
 if dp:
     dp.add_handler(CommandHandler('start', start))
     dp.add_handler(CommandHandler('menu', menu_command))
     dp.add_handler(CommandHandler('add_video', add_video_command))
     dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_pending_video_text))
     dp.add_handler(MessageHandler(Filters.video & ~Filters.command, handle_pending_video_file))
+
 # --- Start Bot ---
 def start_bot():
     if updater:
@@ -1208,6 +1273,7 @@ def start_bot():
         except Exception as e:
             logger.error(f"Не удалось установить Menu Button при запуске: {e}")
         logger.info("Telegram бот готов принимать обновления через Webhook.")
+
 # --- Health Check Endpoint ---
 @app.route('/health')
 def health_check():
@@ -1245,6 +1311,7 @@ def health_check():
     except Exception as e:
         logger.error(f"Health check error: {e}")
         return jsonify({'status': 'unhealthy', 'error': str(e)}), 500
+
 # --- Main ---
 if __name__ == '__main__':
     try:
