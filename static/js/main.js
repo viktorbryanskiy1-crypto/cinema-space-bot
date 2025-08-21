@@ -1,7 +1,6 @@
-// static/js/main.js — полный рабочий файл с оптимизацией Telegram WebApp и fullscreen
+// main.js — полный рабочий файл с оптимизацией Telegram WebApp и fullscreen
 // Обновлен для поддержки автоматического обновления ссылок на видео и улучшенного UX
 // Исправлен конфликт обработчиков событий для search_by_link.html
-// Добавлена поддержка вкладки search_by_link
 
 // Глобальные переменные
 let currentTab = 'moments';
