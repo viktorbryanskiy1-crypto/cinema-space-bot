@@ -16,7 +16,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, Bot
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 import redis
 import json
-from database import (
+ from database import (
     get_or_create_user, get_user_role,
     add_moment, add_trailer, add_news,
     get_all_moments, get_all_trailers, get_all_news,
@@ -24,7 +24,7 @@ from database import (
     add_reaction, add_comment,
     authenticate_admin, get_stats,
     delete_item, get_access_settings, update_access_settings,
-    init_db, get_item_by_id
+    init_db, get_item_by_id, get_db_connection # Добавлен get_db_connection
 )
 # --- Logging ---
 logging.basicConfig(level=logging.INFO,
@@ -299,11 +299,16 @@ if TOKEN:
             reply_markup = InlineKeyboardMarkup(keyboard)
             logger.info("Отправка сообщения пользователю...")
             update.message.reply_text(
-                "🚀 Добро пожаловать в КиноВселенную!\n"
-                "✨ Исследуй космос кино\n"
-                "🎬 Лучшие моменты из фильмов\n"
-                "🎥 Свежие трейлеры\n"
-                "📰 Горячие новости\n"
+                "🚀 Добро пожаловать в КиноВселенную!
+"
+                "✨ Исследуй космос кино
+"
+                "🎬 Лучшие моменты из фильмов
+"
+                "🎥 Свежие трейлеры
+"
+                "📰 Горячие новости
+"
                 "Нажми кнопку для входа в приложение",
                 reply_markup=reply_markup
             )
@@ -371,6 +376,147 @@ def search_by_link_page():
     """Отображает страницу поиска фильма по ссылке."""
     return render_template('search_by_link.html')
 # --- КОНЕЦ НОВОГО МАРШРУТА ---
+
+# --- НОВЫЙ API МАРШРУТ: Поиск фильма по ссылке ---
+@app.route('/api/search_film_by_link', methods=['POST'])
+def api_search_film_by_link():
+    """API для поиска фильма по ссылке на видео."""
+    try:
+        # 1. Получаем данные из запроса
+        data = request.get_json()
+        if not data:
+            logger.warning("[ПОИСК ФИЛЬМА] Неверный формат данных")
+            return jsonify(success=False, error="Неверный формат данных."), 400
+
+        video_url = data.get('url', '').strip()
+        if not video_url:
+            logger.warning("[ПОИСК ФИЛЬМА] Не указана ссылка на видео")
+            return jsonify(success=False, error="Ссылка на видео не указана."), 400
+
+        logger.info(f"[ПОИСК ФИЛЬМА] Получен запрос для URL: {video_url}")
+
+        # 2. Импортируем yt_dlp (убедитесь, что он добавлен в requirements.txt)
+        #    Делаем это здесь, чтобы не тормозить запуск приложения, если модуль тяжелый
+        try:
+            import yt_dlp
+        except ImportError as e:
+            logger.error(f"[ПОИСК ФИЛЬМА] Модуль yt_dlp не установлен: {e}")
+            return jsonify(success=False, error="Сервис временно недоступен (отсутствует yt_dlp)."), 500
+
+        # 3. Используем yt_dlp для извлечения метаданных
+        ydl_opts = {
+            'quiet': True,
+            'no_warnings': True,
+            'skip_download': True,  # Не скачивать видео
+            'extract_flat': 'in_playlist', # Для ускорения, если это плейлист
+        }
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            try:
+                info_dict = ydl.extract_info(video_url, download=False)
+                title_from_video = info_dict.get('title', '')
+                description_from_video = info_dict.get('description', '')
+                upload_date_str = info_dict.get('upload_date', '') # Формат: YYYYMMDD
+
+                logger.info(f"[ПОИСК ФИЛЬМА] Метаданные извлечены. Название: '{title_from_video[:50]}...', Описание: '{description_from_video[:50]}...'")
+
+                # Простая попытка извлечь год из даты загрузки
+                year_from_video = upload_date_str[:4] if len(upload_date_str) == 8 and upload_date_str[:4].isdigit() else 'Неизвестно'
+
+            except yt_dlp.DownloadError as e:
+                logger.error(f"[ПОИСК ФИЛЬМА] Ошибка yt_dlp при извлечении метаданных: {e}")
+                return jsonify(success=False, error="Не удалось получить информацию о видео. Проверьте ссылку."), 400
+            except Exception as e:
+                logger.error(f"[ПОИСК ФИЛЬМА] Неизвестная ошибка yt_dlp: {e}")
+                return jsonify(success=False, error="Ошибка при обработке видео."), 500
+
+        # 4. Поиск в вашей базе данных
+        #    Ищем в таблицах 'moments', 'trailers', 'news' по названию и описанию
+        #    Для простоты и скорости будем искать по 'title' в 'moments' и 'trailers'
+        #    Можно расширить логику поиска позже.
+        found_item = None
+        found_in_table = None
+
+        # --- Поиск в 'moments' ---
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor()
+            # Ищем точное совпадение или частичное вхождение в title
+            # Используем LOWER для регистронезависимого поиска
+            cur.execute("""
+                SELECT id, title, description, created_at
+                FROM moments
+                WHERE LOWER(title) LIKE LOWER(%s)
+                ORDER BY created_at DESC
+                LIMIT 1
+            """, (f"%{title_from_video}%",))
+            row = cur.fetchone()
+            if row:
+                found_item = {
+                    'id': row[0],
+                    'title': row[1],
+                    'description': row[2],
+                    'type': 'moment'
+                }
+                found_in_table = 'moments'
+                logger.info(f"[ПОИСК ФИЛЬМА] Найдено в 'moments': {row[1]}")
+            cur.close()
+            conn.close()
+        except Exception as e:
+            logger.error(f"[ПОИСК ФИЛЬМА] Ошибка поиска в 'moments': {e}")
+
+        # --- Если не нашли в 'moments', ищем в 'trailers' ---
+        if not found_item:
+            try:
+                conn = get_db_connection()
+                cur = conn.cursor()
+                cur.execute("""
+                    SELECT id, title, description, created_at
+                    FROM trailers
+                    WHERE LOWER(title) LIKE LOWER(%s)
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                """, (f"%{title_from_video}%",))
+                row = cur.fetchone()
+                if row:
+                    found_item = {
+                        'id': row[0],
+                        'title': row[1],
+                        'description': row[2],
+                        'type': 'trailer'
+                    }
+                    found_in_table = 'trailers'
+                    logger.info(f"[ПОИСК ФИЛЬМА] Найдено в 'trailers': {row[1]}")
+                cur.close()
+                conn.close()
+            except Exception as e:
+                logger.error(f"[ПОИСК ФИЛЬМА] Ошибка поиска в 'trailers': {e}")
+
+        # 5. Формируем ответ
+        if found_item:
+            # Нашли в своей базе - это лучший сценарий
+            film_data = {
+                "title": found_item['title'],
+                "year": year_from_video, # Год из даты видео, можно уточнить позже
+                "description": found_item['description'] or f"Информация извлечена из названия видео: '{title_from_video}'.",
+                "source": f"Найдено в разделе '{found_item['type']}' вашего приложения."
+            }
+            return jsonify(success=True, film=film_data, method="database_search")
+        else:
+            # Не нашли в своей базе
+            # Возвращаем то, что смогли извлечь из видео
+            film_data = {
+                "title": title_from_video or "Не удалось определить название",
+                "year": year_from_video,
+                "description": description_from_video or f"Информация извлечена из названия видео: '{title_from_video}'. Точное совпадение с фильмом в нашей базе не найдено.",
+                "source": "Информация извлечена из метаданных видео. Точное совпадение в базе не найдено."
+            }
+            logger.info(f"[ПОИСК ФИЛЬМА] Совпадений в базе не найдено. Возвращены метаданные видео.")
+            return jsonify(success=True, film=film_data, method="metadata_only")
+
+    except Exception as e:
+        logger.error(f"[ПОИСК ФИЛЬМА] Критическая ошибка: {e}", exc_info=True)
+        return jsonify(success=False, error="Внутренняя ошибка сервера. Попробуйте позже."), 500
+# --- КОНЕЦ НОВОГО API МАРШРУТА ---
 
 # --- Маршрут для Webhook от Telegram ---
 @app.route('/<string:token>', methods=['POST'])
