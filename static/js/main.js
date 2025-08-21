@@ -1,6 +1,7 @@
 // static/js/main.js — полный рабочий файл с оптимизацией Telegram WebApp и fullscreen
 // Обновлен для поддержки автоматического обновления ссылок на видео и улучшенного UX
 // Исправлен конфликт обработчиков событий для search_by_link.html
+// Добавлена поддержка вкладки search_by_link
 
 // Глобальные переменные
 let currentTab = 'moments';
@@ -161,6 +162,27 @@ function initializeApp() {
     // --- НОВОЕ: Асинхронная функция загрузки контента вкладки с кэшированием ---
     async function loadTabContent(tabName) {
         try {
+            // --- НОВОЕ: Специальная обработка для search_by_link ---
+            if (tabName === 'search_by_link') {
+                console.log(`Загрузка специальной вкладки ${tabName}`);
+                // Загружаем HTML напрямую
+                const response = await fetch(`/${tabName}`);
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                const html = await response.text();
+                
+                // Вставляем HTML в contentArea
+                contentArea.innerHTML = html;
+                currentTab = tabName;
+                
+                // --- НОВОЕ: Добавляем обработчик кнопки поиска специально для этой вкладки ---
+                addSearchByLinkHandler();
+                
+                // addDynamicFeatures(); // Не нужно вызывать для этой вкладки, чтобы не конфликтовать
+                return; // Выходим из функции
+            }
+            // --- КОНЕЦ НОВОГО ---
+            
+            // Остальная логика для обычных вкладок (moments, trailers, news)
             // Проверяем кэш первым делом
             if (tabCache[tabName]) {
                 console.log(`Загрузка вкладки ${tabName} из кэша`);
@@ -252,8 +274,14 @@ function initializeApp() {
 
     // --- Инициализация вкладки ---
     if (tabBtns.length > 0) {
-        tabBtns[0].classList.add('active');
-        loadTabContent(tabBtns[0].dataset.tab);
+        // Найдем кнопку для search_by_link и сделаем её активной, если текущая вкладка такая
+        // Иначе активной становится первая кнопка (moments)
+        let initialTabBtn = Array.from(tabBtns).find(btn => btn.dataset.tab === currentTab);
+        if (!initialTabBtn) {
+            initialTabBtn = tabBtns[0];
+        }
+        initialTabBtn.classList.add('active');
+        loadTabContent(initialTabBtn.dataset.tab);
     } else {
         console.log("Кнопки вкладок не найдены на главной странице.");
     }
@@ -761,5 +789,87 @@ function setupContentForm(formId, typeName, apiUrl, modalId, alwaysFormData=fals
         }
     });
 }
+
+// --- НОВАЯ ФУНКЦИЯ: Обработчик для страницы search_by_link ---
+function addSearchByLinkHandler() {
+    console.log("Добавление обработчика для search_by_link");
+    const searchBtn = document.getElementById('search-film-btn');
+    const inputField = document.getElementById('video-link-input');
+    const resultDiv = document.getElementById('search-result');
+
+    // Убираем предыдущие обработчики, если они были (на всякий случай)
+    // Это помогает избежать дублирования при быстром переключении вкладок
+    if (searchBtn) {
+        const newSearchBtn = searchBtn.cloneNode(true);
+        searchBtn.parentNode.replaceChild(newSearchBtn, searchBtn);
+        newSearchBtn.addEventListener('click', async function () {
+            const url = inputField ? inputField.value.trim() : '';
+            if (!url) {
+                resultDiv.innerHTML = '<p class="result-error">Пожалуйста, введите ссылку на видео.</p>';
+                return;
+            }
+
+            resultDiv.innerHTML = '<p class="result-loading">🔍 Ищем фильм... Это может занять немного времени.</p>';
+
+            try {
+                const response = await fetch('/api/search_film_by_link', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ url: url })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Отображаем результат
+                    let html = `<h2 class="film-title">${data.film.title || 'Название не найдено'}</h2>`;
+                    if (data.film.year) html += `<p class="film-year">Год: ${data.film.year}</p>`;
+                    if (data.film.description) html += `<p class="film-description">${data.film.description}</p>`;
+                    if (data.film.poster_path) html += `<img src="${data.film.poster_path}" alt="Постер" class="film-poster">`;
+                    
+                    // Отображаем информацию от TinEye, если она есть
+                    if (data.tineye_match_info) {
+                        html += `<hr style="margin: 1rem 0; border-color: var(--border);">`;
+                        html += `<h3 style="color: var(--accent);">Информация из TinEye:</h3>`;
+                        html += `<p><a href="${data.tineye_match_info.url}" target="_blank" style="color: var(--accent-secondary);">${data.tineye_match_info.domain}</a> - Совпадение: ${data.tineye_match_info.score}</p>`;
+                    } else if (data.tineye_matches) {
+                        html += `<hr style="margin: 1rem 0; border-color: var(--border);">`;
+                        html += `<h3 style="color: var(--accent);">Найденные совпадения изображений (TinEye):</h3><ul>`;
+                        data.tineye_matches.slice(0, 5).forEach(match => {
+                            html += `<li><a href="${match.url}" target="_blank" style="color: var(--accent-secondary);">${match.domain}</a> (score: ${match.score})</li>`;
+                        });
+                        html += `</ul>`;
+                    }
+                    resultDiv.innerHTML = html;
+                } else {
+                    // Улучшенная обработка ошибок
+                    let errorMsg = data.error || 'Неизвестная ошибка';
+                    resultDiv.innerHTML = `<p class="result-error">❌ Ошибка: ${errorMsg}</p>`;
+                    
+                    // Если есть дополнительная информация от TinEye, показываем её
+                    if (data.tineye_matches) {
+                        resultDiv.innerHTML += `<hr style="margin: 1rem 0; border-color: var(--border);">`;
+                        resultDiv.innerHTML += `<h3 style="color: var(--accent);">Найденные совпадения изображений (TinEye):</h3><ul>`;
+                        data.tineye_matches.slice(0, 5).forEach(match => {
+                            resultDiv.innerHTML += `<li><a href="${match.url}" target="_blank" style="color: var(--accent-secondary);">${match.domain}</a> (score: ${match.score})</li>`;
+                        });
+                        resultDiv.innerHTML += `</ul>`;
+                    }
+                }
+            } catch (error) {
+                console.error('Ошибка при поиске фильма:', error);
+                resultDiv.innerHTML = `<p class="result-error">❌ Произошла ошибка при поиске. Попробуйте позже.</p>`;
+            }
+        });
+    } else {
+        console.warn("Кнопка поиска не найдена на странице search_by_link");
+        if(resultDiv) {
+            resultDiv.innerHTML = '<p class="result-error">❌ Ошибка инициализации формы поиска. Элементы не найдены.</p>';
+        }
+    }
+}
+// --- КОНЕЦ НОВОЙ ФУНКЦИИ ---
 
 console.log("main.js загружен и выполняется с fullscreen Telegram WebApp!");
