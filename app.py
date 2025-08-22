@@ -198,6 +198,31 @@ def extract_video_url_sync(post_url):
         logger.error(f"Ошибка в синхронной обертке extract_video_url_sync: {e}", exc_info=True)
         return None, f"Ошибка обработки запроса: {e}"
 
+# --- Кэширование HTML страниц ---
+def get_cached_html(key, generate_func, expire=300):
+    """Получает HTML из кэша или генерирует новый"""
+    if redis_client:
+        try:
+            cached_html = redis_client.get(key)
+            if cached_html:
+                logger.info(f"HTML для {key} получен из кэша")
+                return cached_html
+        except Exception as e:
+            logger.warning(f"Ошибка получения HTML из кэша: {e}")
+    
+    # Генерируем новый HTML
+    html = generate_func()
+    
+    # Сохраняем в кэш
+    if redis_client and html:
+        try:
+            redis_client.set(key, html, ex=expire)
+            logger.info(f"HTML для {key} закэширован на {expire} секунд")
+        except Exception as e:
+            logger.warning(f"Ошибка сохранения HTML в кэш: {e}")
+    
+    return html
+
 # --- Helpers ---
 def save_uploaded_file(file_storage, allowed_exts):
     if file_storage and allowed_file(file_storage.filename, allowed_exts):
@@ -533,6 +558,36 @@ def api_add_comment():
     except Exception as e:
         return jsonify(success=False, error=str(e)), 500
 
+# --- НОВАЯ ФУНКЦИЯ: Обновление устаревшей ссылки ---
+@app.route('/api/refresh_video_url', methods=['POST'])
+def refresh_video_url():
+    """Обновляет устаревшую ссылку на видео по Telegram посту"""
+    try:
+        data = request.get_json()
+        if not data:
+            logger.warning("[ОБНОВЛЕНИЕ ССЫЛКИ] Неверный формат данных")
+            return jsonify(success=False, error="Неверный формат данных"), 400
+        
+        post_url = data.get('post_url', '').strip()
+        if not post_url:
+            logger.warning("[ОБНОВЛЕНИЕ ССЫЛКИ] Не указана ссылка на пост")
+            return jsonify(success=False, error="Не указана ссылка на пост"), 400
+        
+        logger.info(f"[ОБНОВЛЕНИЕ ССЫЛКИ] Запрошено обновление для ссылки: {post_url[:50]}...")
+        
+        # Извлекаем новую ссылку
+        direct_url, error = extract_video_url_sync(post_url)
+        if direct_url:
+            logger.info("[ОБНОВЛЕНИЕ ССЫЛКИ] Новая ссылка успешно получена")
+            return jsonify(success=True, new_url=direct_url)
+        else:
+            logger.error(f"[ОБНОВЛЕНИЕ ССЫЛКИ] Ошибка при извлечении: {error}")
+            return jsonify(success=False, error=error), 400
+            
+    except Exception as e:
+        logger.error(f"[ОБНОВЛЕНИЕ ССЫЛКИ] Критическая ошибка: {e}", exc_info=True)
+        return jsonify(success=False, error="Внутренняя ошибка сервера"), 500
+
 # --- Админ-панель ---
 @app.route('/admin/login', methods=['GET', 'POST'])
 def admin_login():
@@ -698,6 +753,37 @@ def admin_add_video_json():
         return jsonify(success=True, message="Видео успешно добавлено!")
     except Exception as e:
         return jsonify(success=False, error=str(e)), 500
+
+# --- Функция для установки Menu Button ---
+def set_menu_button():
+    """Устанавливает кнопку меню для бота"""
+    if not TOKEN:
+        logger.error("TELEGRAM_TOKEN не установлен для установки Menu Button")
+        return False
+    try:
+        bot = Bot(token=TOKEN)
+        app_url = f"{WEBHOOK_URL}/?mode=fullscreen"
+        menu_button = MenuButtonWebApp(
+            text="movies",
+            web_app=WebAppInfo(url=app_url)
+        )
+        bot.set_chat_menu_button(menu_button=menu_button)
+        logger.info(f"✅ Menu Button установлена: {app_url}")
+        return True
+    except Exception as e:
+        logger.error(f"❌ ОШИБКА в set_menu_button: {e}")
+        return False
+
+# --- Start Bot ---
+def start_bot():
+    if updater:
+        logger.info("Настройка Telegram бота для работы через Webhook...")
+        try:
+            set_menu_button()
+            logger.info("Menu Button успешно установлена.")
+        except Exception as e:
+            logger.error(f"Не удалось установить Menu Button при запуске: {e}")
+        logger.info("Telegram бот готов принимать обновления через Webhook.")
 
 # --- Telegram Bot Handlers ---
 if TOKEN:
@@ -878,11 +964,16 @@ def health_check():
 # --- Main ---
 if __name__ == '__main__':
     try:
+        logger.info("Инициализация базы данных...")
         init_db()
         logger.info("База данных инициализирована.")
     except Exception as e:
-        logger.error(f"DB init error: {e}")
+        logger.error(f"DB init error: {e}", exc_info=True)
+    
+    logger.info("Запуск Telegram бота...")
+    start_bot()
     
     port = int(os.environ.get('PORT', 10000))
     logger.info(f"Запуск Flask приложения на порту {port}...")
     app.run(host='0.0.0.0', port=port)
+    logger.info("Flask приложение остановлено.")
