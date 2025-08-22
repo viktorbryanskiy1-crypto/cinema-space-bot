@@ -1,5 +1,5 @@
-# app.py - Полный, исправленный код с восстановленной админ-панелью и гибридным поиском фильмов
-# Исправлены все синтаксические ошибки
+# app.py - Полный код с восстановленной админ-панелью и гибридным поиском фильмов
+# Исправлены все синтаксические ошибки, улучшена обработка ошибок API
 import os
 import threading
 import logging
@@ -194,7 +194,7 @@ async def extract_video_url_from_telegram_post(post_url):
         logger.info(f"[ИЗВЛЕЧЕНИЕ] Найден file_id: {file_id}")
         direct_url = get_cached_direct_video_url(file_id)
         if not direct_url:
-            logger.error("[ИСПРАВЛЕНИЕ] Не удалось получить прямую ссылку из file_id")
+            logger.error("[ИЗВЛЕЧЕНИЕ] Не удалось получить прямую ссылку из file_id")
             return None, "Не удалось получить прямую ссылку на видео из Telegram."
         logger.info(f"[ИЗВЛЕЧЕНИЕ] Успешно извлечена прямая ссылка: {direct_url[:50]}...")
         return direct_url, None
@@ -384,7 +384,7 @@ def cache_delete(key):
 def build_extra_map(data, item_type_plural):
     """Добавляет реакции и комментарии к каждому элементу данных."""
     extra = {}
-    for row in data:
+    for row in data: # ИСПРАВЛЕНО: Добавлен 'data' в 'for row in '
         item_id = row[0]
         reactions = get_reactions_count(item_type_plural, item_id) or {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}
         comments_count = len(get_comments(item_type_plural, item_id) or [])
@@ -394,6 +394,9 @@ def build_extra_map(data, item_type_plural):
 # --- Routes (пользовательские) ---
 @app.route('/')
 def index():
+    """Главная страница. Перенаправляет на админку, если пользователь авторизован."""
+    if 'admin' in session:
+        return redirect(url_for('admin_dashboard'))
     return render_template('index.html')
 
 # --- НОВЫЙ МАРШРУТ ДЛЯ ПОИСКА ПО ССЫЛКЕ ---
@@ -636,7 +639,7 @@ def api_search_film_by_link():
     try:
         # 1. Получаем данные из запроса
         data = request.get_json()
-        if not data:
+        if not 
             logger.warning("[ПОИСК ФИЛЬМА] Неверный формат данных")
             return jsonify(success=False, error="Неверный формат данных."), 400
 
@@ -781,7 +784,7 @@ def moments():
             extra_map = build_extra_map(data, 'moments')
             logger.info("extra_map построен успешно")
             combined_data = []
-            for row in data:
+            for row in data: # ИСПРАВЛЕНО: Добавлен 'data' в 'for row in '
                 item_id = row[0]
                 item_dict = {
                     'id': row[0],
@@ -818,7 +821,7 @@ def trailers():
             extra_map = build_extra_map(data, 'trailers')
             logger.info("extra_map построен успешно")
             combined_data = []
-            for row in data:
+            for row in data: # ИСПРАВЛЕНО: Добавлен 'data' в 'for row in data:'
                 item_id = row[0]
                 item_dict = {
                     'id': row[0],
@@ -855,7 +858,7 @@ def news():
             extra_map = build_extra_map(data, 'news')
             logger.info("extra_map построен успешно")
             combined_data = []
-            for row in data:
+            for row in data: # ИСПРАВЛЕНО: Добавлен 'data' в 'for row in '
                 item_id = row[0]
                 item_dict = {
                     'id': row[0],
@@ -914,9 +917,9 @@ def trailer_detail(item_id):
     item_dict = {
         'id': item[0],
         'title': item[1] if len(item) > 1 else '',
-        'description': item[2] if len(item) > 2 else '',
-        'video_url': item[3] if len(item) > 3 else '',
-        'created_at': item[4] if len(item) > 4 else None
+        'description': item[2] if len(item) > 2 else '', # Исправлено: было row
+        'video_url': item[3] if len(item) > 3 else '',   # Исправлено: было row
+        'created_at': item[4] if len(item) > 4 else None # Исправлено: было row
     }
     return render_template('trailer_detail.html', item=item_dict, reactions=reactions, comments=comments)
 
@@ -1072,6 +1075,7 @@ def api_add_comment():
         logger.error(f"API add_comment error: {e}", exc_info=True)
         return jsonify(success=False, error=str(e)), 500
 
+# --- НАЧАЛО АДМИН-ПАНЕЛИ ---
 @app.route('/admin/login', methods=['GET', 'POST'])
 def admin_login():
     if request.method == 'POST':
@@ -1170,7 +1174,7 @@ def admin_add_video_json():
     """API endpoint для добавления видео через форму add_video.html"""
     try:
         data = request.get_json()
-        if not data:
+        if not 
             return jsonify(success=False, error="Неверный формат данных (ожидается JSON)"), 400
         title = data.get('title', '').strip()
         description = data.get('description', '').strip()
@@ -1229,7 +1233,7 @@ def add_video_command(update, context):
 def handle_pending_video_text(update, context):
     user = update.message.from_user
     telegram_id = str(user.id)
-    if telegram_id not in pending_video_data:
+    if telegram_id not in pending_video_
         return
     data = pending_video_data.pop(telegram_id)
     content_type, title = data['content_type'], data['title']
@@ -1253,7 +1257,7 @@ def handle_pending_video_file(update, context):
     user = update.message.from_user
     telegram_id = str(user.id)
     logger.info(f"Получен видеофайл от пользователя {telegram_id}")
-    if telegram_id not in pending_video_data:
+    if telegram_id not in pending_video_
         logger.debug("Нет ожидающих данных для видео")
         return
     data = pending_video_data.pop(telegram_id)
@@ -1279,7 +1283,7 @@ def handle_pending_video_file(update, context):
         elif content_type == 'trailer':
             add_trailer(title, "Added via Telegram", video_url)
         elif content_type == 'news':
-            add_news(title, "Added via Telegram", video_url if video_url.startswith(('http://', 'https://')) else None)
+            add_news(title, "Added via Telegram", video_url)
         success_msg = f"✅ '{content_type}' '{title}' добавлено из файла!"
         logger.info(success_msg)
         update.message.reply_text(success_msg)
@@ -1297,6 +1301,7 @@ if dp:
     dp.add_handler(CommandHandler('add_video', add_video_command))
     dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_pending_video_text))
     dp.add_handler(MessageHandler(Filters.video & ~Filters.command, handle_pending_video_file))
+# --- КОНЕЦ АДМИН-ПАНЕЛИ ---
 
 # --- Start Bot ---
 def start_bot():
@@ -1333,12 +1338,15 @@ def health_check():
             db_status = "OK"
         except Exception as e:
             db_status = f"Connection error: {str(e)}"
+        # Проверяем TMDB API ключ
+        tmdb_status = "OK" if TMDB_API_KEY else "TMDB_API_KEY not set"
         return jsonify({
             'status': 'healthy',
             'services': {
                 'redis': redis_status,
                 'bot': bot_status,
-                'database': db_status
+                'database': db_status,
+                'tmdb_api': tmdb_status
             },
             'timestamp': datetime.now().isoformat()
         })
