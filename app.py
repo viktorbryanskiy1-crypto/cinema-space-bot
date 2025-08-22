@@ -226,7 +226,7 @@ def refresh_video_url():
     """Обновляет устаревшую ссылку на видео по Telegram посту"""
     try:
         data = request.get_json()
-        if not data:
+        if not 
             logger.warning("[ОБНОВЛЕНИЕ ССЫЛКИ] Неверный формат данных")
             return jsonify(success=False, error="Неверный формат данных"), 400
         post_url = data.get('post_url', '').strip()
@@ -821,7 +821,7 @@ def trailers():
             extra_map = build_extra_map(data, 'trailers')
             logger.info("extra_map построен успешно")
             combined_data = []
-            for row in data: # ИСПРАВЛЕНО: Добавлен 'data' в 'for row in data:'
+            for row in data: # ИСПРАВЛЕНО: Добавлен 'data' в 'for row in '
                 item_id = row[0]
                 item_dict = {
                     'id': row[0],
