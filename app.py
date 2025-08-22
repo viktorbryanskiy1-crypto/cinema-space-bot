@@ -1,4 +1,4 @@
-# app.py - Полный, исправленный код с восстановленной админ-панелью и гибридным поиском фильмов
+# app.py - Полный код с восстановленной админ-панелью и гибридным поиском фильмов
 # Исправлены ошибки логирования, улучшена обработка ошибок API
 import os
 import threading
@@ -384,7 +384,7 @@ def cache_delete(key):
 def build_extra_map(data, item_type_plural):
     """Добавляет реакции и комментарии к каждому элементу данных."""
     extra = {}
-    for row in data: # ИСПРАВЛЕНО: Добавлен 'data'
+    for row in data:  # ИСПРАВЛЕНО: Добавлен 'data' в 'for row in data:'
         item_id = row[0]
         reactions = get_reactions_count(item_type_plural, item_id) or {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}
         comments_count = len(get_comments(item_type_plural, item_id) or [])
@@ -739,8 +739,7 @@ def api_search_film_by_link():
 # --- КОНЕЦ НОВЫХ ФУНКЦИЙ ---
 
 # --- Маршрут для Webhook от Telegram ---
-# ИСПРАВЛЕНО: Изменен маршрут, чтобы избежать конфликта с /admin
-@app.route('/webhook/<string:token>', methods=['POST'])
+@app.route('/<string:token>', methods=['POST'])
 def telegram_webhook(token):
     if token != TOKEN:
         logger.warning(f"Получен запрос webhook с неверным токеном: {token}")
@@ -782,7 +781,7 @@ def moments():
             extra_map = build_extra_map(data, 'moments')
             logger.info("extra_map построен успешно")
             combined_data = []
-            for row in data: # ИСПРАВЛЕНО: Добавлен 'data'
+            for row in data:  # ИСПРАВЛЕНО: Добавлен 'data' в 'for row in data:'
                 item_id = row[0]
                 item_dict = {
                     'id': row[0],
@@ -819,7 +818,7 @@ def trailers():
             extra_map = build_extra_map(data, 'trailers')
             logger.info("extra_map построен успешно")
             combined_data = []
-            for row in data: # ИСПРАВЛЕНО: Добавлен 'data'
+            for row in data:  # ИСПРАВЛЕНО: Добавлен 'data' в 'for row in data:'
                 item_id = row[0]
                 item_dict = {
                     'id': row[0],
@@ -856,7 +855,7 @@ def news():
             extra_map = build_extra_map(data, 'news')
             logger.info("extra_map построен успешно")
             combined_data = []
-            for row in data: # ИСПРАВЛЕНО: Добавлен 'data'
+            for row in data:  # ИСПРАВЛЕНО: Добавлен 'data' в 'for row in data:'
                 item_id = row[0]
                 item_dict = {
                     'id': row[0],
@@ -1210,15 +1209,7 @@ def admin_add_video_json():
         logger.error(f"[JSON API] add_video error: {e}", exc_info=True)
         return jsonify(success=False, error=str(e)), 500
 
-# --- Функции и обработчики для админ-панели через Telegram-бот ---
-def get_user_role(telegram_id):
-    """Получает роль пользователя из БД."""
-    # Импортируем здесь, чтобы избежать циклических импортов
-    from database import get_user_role as db_get_user_role
-    return db_get_user_role(telegram_id)
-
 def add_video_command(update, context):
-    """Обработчик команды /add_video [moment|trailer|news] [title]"""
     user = update.message.from_user
     telegram_id = str(user.id)
     role = get_user_role(telegram_id)
@@ -1230,7 +1221,6 @@ def add_video_command(update, context):
     if len(parts) < 3 or parts[1].lower() not in ['moment', 'trailer', 'news']:
         update.message.reply_text("❌ Format: /add_video [moment|trailer|news] [title]")
         return
-    # Сохраняем ожидаемые данные в глобальную переменную
     pending_video_data[telegram_id] = {'content_type': parts[1].lower(), 'title': parts[2]}
     update.message.reply_text(
         f"🎬 Добавление '{parts[1]}' с названием '{parts[2]}'. "
@@ -1238,103 +1228,59 @@ def add_video_command(update, context):
     )
 
 def handle_pending_video_text(update, context):
-    """Обрабатывает текстовое сообщение (ожидается URL видео), если есть ожидающие данные."""
     user = update.message.from_user
     telegram_id = str(user.id)
-    # Проверяем, есть ли ожидающие данные для этого пользователя
-    if telegram_id not in pending_video_data:
-        return # Нет ожидающих данных, ничего не делаем
-    
-    # Извлекаем ожидающие данные
+    if telegram_id not in pending_video_
+        return
     data = pending_video_data.pop(telegram_id)
     content_type, title = data['content_type'], data['title']
-    
-    # Получаем текст сообщения (ожидается URL)
     video_url = update.message.text.strip()
-    
-    # Проверяем, является ли это URL
     if not (video_url.startswith('http://') or video_url.startswith('https://')):
         update.message.reply_text("❌ Это не URL. Пришли прямую ссылку на видео или отправь файл.")
-        # Возвращаем данные обратно в ожидание
         pending_video_data[telegram_id] = data
         return
-
-    # Обработка в зависимости от типа контента
-    try:
-        if content_type == 'moment':
-            add_moment(title, "Added via Telegram", video_url)
-            cache_delete('moments_list')
-            cache_delete('moments_page') # Удаляем кэш страницы
-        elif content_type == 'trailer':
-            add_trailer(title, "Added via Telegram", video_url)
-            cache_delete('trailers_list')
-            cache_delete('trailers_page') # Удаляем кэш страницы
-        elif content_type == 'news':
-            add_news(title, "Added via Telegram", video_url)
-            cache_delete('news_list')
-            cache_delete('news_page') # Удаляем кэш страницы
-        success_msg = f"✅ '{content_type}' '{title}' добавлено по ссылке!"
-        logger.info(success_msg)
-        update.message.reply_text(success_msg)
-    except Exception as e:
-        error_msg = f"❌ Ошибка сохранения в БД: {e}"
-        logger.error(error_msg, exc_info=True)
-        update.message.reply_text(error_msg)
-        # Возвращаем данные обратно в ожидание в случае ошибки?
-        # pending_video_data[telegram_id] = data # Возможно, не стоит возвращать, чтобы не зациклить
+    if content_type == 'moment':
+        add_moment(title, "Added via Telegram", video_url)
+    elif content_type == 'trailer':
+        add_trailer(title, "Added via Telegram", video_url)
+    elif content_type == 'news':
+        add_news(title, "Added via Telegram", video_url)
+    update.message.reply_text(f"✅ '{content_type}' '{title}' добавлено по ссылке!")
+    cache_delete('moments_list')
+    cache_delete('trailers_list')
+    cache_delete('news_list')
 
 def handle_pending_video_file(update, context):
-    """Обрабатывает видеофайл, если есть ожидающие данные."""
     user = update.message.from_user
     telegram_id = str(user.id)
     logger.info(f"Получен видеофайл от пользователя {telegram_id}")
-    
-    # Проверяем, есть ли ожидающие данные для этого пользователя
-    if telegram_id not in pending_video_data:
+    if telegram_id not in pending_video_
         logger.debug("Нет ожидающих данных для видео")
         return
-
-    # Извлекаем ожидающие данные
     data = pending_video_data.pop(telegram_id)
     content_type, title = data['content_type'], data['title']
     logger.info(f"Обработка {content_type} '{title}'")
-
-    # Проверяем, что сообщение содержит видео
     if not update.message.video:
         logger.warning("Полученное сообщение не содержит видео")
         update.message.reply_text("❌ Это не видео. Пришли файл видео или ссылку.")
-        # Возвращаем данные обратно в ожидание
         pending_video_data[telegram_id] = data
         return
-
-    # Получаем file_id видео
     file_id = update.message.video.file_id
     logger.info(f"Получен file_id: {file_id}")
-
-    # Преобразуем file_id в прямую ссылку
     video_url = get_cached_direct_video_url(file_id)
     if not video_url:
         error_msg = "❌ Не удалось получить прямую ссылку на видео из Telegram"
         logger.error(error_msg)
         update.message.reply_text(error_msg)
         return
-
     logger.info(f"Сгенерирована прямая ссылка: {video_url[:50]}...")
-
-    # Сохраняем в БД
     try:
         if content_type == 'moment':
             add_moment(title, "Added via Telegram", video_url)
-            cache_delete('moments_list')
-            cache_delete('moments_page') # Удаляем кэш страницы
         elif content_type == 'trailer':
             add_trailer(title, "Added via Telegram", video_url)
-            cache_delete('trailers_list')
-            cache_delete('trailers_page') # Удаляем кэш страницы
         elif content_type == 'news':
-            add_news(title, "Added via Telegram", video_url)
-            cache_delete('news_list')
-            cache_delete('news_page') # Удаляем кэш страницы
+            add_news(title, "Added via Telegram", video_url if video_url.startswith(('http://', 'https://')) else None)
         success_msg = f"✅ '{content_type}' '{title}' добавлено из файла!"
         logger.info(success_msg)
         update.message.reply_text(success_msg)
@@ -1346,40 +1292,25 @@ def handle_pending_video_file(update, context):
         logger.error(error_msg, exc_info=True)
         update.message.reply_text(error_msg)
 
-# --- Регистрация обработчиков в Dispatcher ---
 if dp:
-    logger.info("Регистрация обработчиков команд и сообщений для админ-панели через Telegram...")
-    try:
-        dp.add_handler(CommandHandler('start', start))
-        logger.info("✅ Обработчик команды /start зарегистрирован")
-    except Exception as e:
-        logger.error(f"❌ Ошибка регистрации обработчика /start: {e}")
-
-    try:
-        dp.add_handler(CommandHandler('menu', menu_command))
-        logger.info("✅ Обработчик команды /menu зарегистрирован")
-    except Exception as e:
-        logger.error(f"❌ Ошибка регистрации обработчика /menu: {e}")
-
-    try:
-        dp.add_handler(CommandHandler('add_video', add_video_command))
-        logger.info("✅ Обработчик команды /add_video зарегистрирован")
-    except Exception as e:
-        logger.error(f"❌ Ошибка регистрации обработчика /add_video: {e}")
-
-    try:
-        dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_pending_video_text))
-        logger.info("✅ Обработчик текстовых сообщений (ожидание URL) зарегистрирован")
-    except Exception as e:
-        logger.error(f"❌ Ошибка регистрации обработчика текстовых сообщений: {e}")
-
-    try:
-        dp.add_handler(MessageHandler(Filters.video & ~Filters.command, handle_pending_video_file))
-        logger.info("✅ Обработчик видеофайлов (ожидание загрузки) зарегистрирован")
-    except Exception as e:
-        logger.error(f"❌ Ошибка регистрации обработчика видеофайлов: {e}")
-    logger.info("Регистрация обработчиков админ-панели через Telegram завершена.")
+    dp.add_handler(CommandHandler('start', start))
+    dp.add_handler(CommandHandler('menu', menu_command))
+    dp.add_handler(CommandHandler('add_video', add_video_command))
+    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_pending_video_text))
+    dp.add_handler(MessageHandler(Filters.video & ~Filters.command, handle_pending_video_file))
 # --- КОНЕЦ АДМИН-ПАНЕЛИ ---
+
+# --- Start Bot ---
+def start_bot():
+    if updater:
+        logger.info("Настройка Telegram бота для работы через Webhook...")
+        logger.info("Установка Menu Button...")
+        try:
+            set_menu_button()
+            logger.info("Menu Button успешно установлена.")
+        except Exception as e:
+            logger.error(f"Не удалось установить Menu Button при запуске: {e}")
+        logger.info("Telegram бот готов принимать обновления через Webhook.")
 
 # --- Health Check Endpoint ---
 @app.route('/health')
@@ -1398,20 +1329,18 @@ def health_check():
         # Проверяем базу данных
         db_status = "Unknown"
         try:
+            from database import get_db_connection
             conn = get_db_connection()
             conn.close()
             db_status = "OK"
         except Exception as e:
             db_status = f"Connection error: {str(e)}"
-        # Проверяем TMDB API ключ
-        tmdb_status = "OK" if TMDB_API_KEY else "TMDB_API_KEY not set"
         return jsonify({
             'status': 'healthy',
             'services': {
                 'redis': redis_status,
                 'bot': bot_status,
-                'database': db_status,
-                'tmdb_api': tmdb_status
+                'database': db_status
             },
             'timestamp': datetime.now().isoformat()
         })
@@ -1428,15 +1357,7 @@ if __name__ == '__main__':
     except Exception as e:
         logger.error(f"DB init error: {e}", exc_info=True)
     logger.info("Запуск Telegram бота...")
-    if updater:
-        logger.info("Настройка Telegram бота для работы через Webhook...")
-        logger.info("Установка Menu Button...")
-        try:
-            set_menu_button()
-            logger.info("Menu Button успешно установлена.")
-        except Exception as e:
-            logger.error(f"Не удалось установить Menu Button при запуске: {e}")
-        logger.info("Telegram бот готов принимать обновления через Webhook.")
+    start_bot()
     port = int(os.environ.get('PORT', 10000))
     logger.info(f"Запуск Flask приложения на порту {port}...")
     app.run(host='0.0.0.0', port=port)
