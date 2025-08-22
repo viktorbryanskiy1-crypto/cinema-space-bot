@@ -216,7 +216,7 @@ def refresh_video_url():
     """Обновляет устаревшую ссылку на видео по Telegram посту"""
     try:
         data = request.get_json()
-        if not  
+        if not data: 
             logger.warning("[ОБНОВЛЕНИЕ ССЫЛКИ] Неверный формат данных")
             return jsonify(success=False, error="Неверный формат данных"), 400
         post_url = data.get('post_url', '').strip()
@@ -366,7 +366,7 @@ def cache_delete(key):
 def build_extra_map(data, item_type_plural):
     """Добавляет реакции и комментарии к каждому элементу данных."""
     extra = {}
-    for row in  # ИСПРАВЛЕНО: Добавлен 'data' в 'for row in '
+    for row in data: # ИСПРАВЛЕНО: Добавлен 'data' в 'for row in '
         item_id = row[0]
         reactions = get_reactions_count(item_type_plural, item_id) or {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}
         comments_count = len(get_comments(item_type_plural, item_id) or [])
@@ -595,7 +595,7 @@ def api_search_film_by_link():
     try:
         # 1. Получаем данные из запроса
         data = request.get_json()
-        if not data:  
+        if not data: 
             logger.warning("[ПОИСК ФИЛЬМА] Неверный формат данных")
             return jsonify(success=False, error="Неверный формат данных."), 400
         video_url = data.get('url', '').strip()
@@ -722,7 +722,7 @@ def moments():
             extra_map = build_extra_map(data, 'moments')
             logger.info("extra_map построен успешно")
             combined_data = []
-            for row in  # ИСПРАВЛЕНО: Добавлен 'data' в 'for row in '
+            for row in data:  # ИСПРАВЛЕНО: Добавлен 'data' в 'for row in '
                 item_id = row[0]
                 item_dict = {
                     'id': row[0],
@@ -758,7 +758,7 @@ def trailers():
             extra_map = build_extra_map(data, 'trailers')
             logger.info("extra_map построен успешно")
             combined_data = []
-            for row in  # ИСПРАВЛЕНО: Добавлен 'data' в 'for row in '
+            for row in data:  # ИСПРАВЛЕНО: Добавлен 'data' в 'for row in '
                 item_id = row[0]
                 item_dict = {
                     'id': row[0],
@@ -794,7 +794,7 @@ def news():
             extra_map = build_extra_map(data, 'news')
             logger.info("extra_map построен успешно")
             combined_data = []
-            for row in  # ИСПРАВЛЕНО: Добавлен 'data' в 'for row in '
+            for row in data:  # ИСПРАВЛЕНО: Добавлен 'data' в 'for row in '
                 item_id = row[0]
                 item_dict = {
                     'id': row[0],
@@ -1143,7 +1143,7 @@ def add_video_command(update, context):
 def handle_pending_video_text(update, context):
     user = update.message.from_user
     telegram_id = str(user.id)
-    if telegram_id not in pending_video_
+    if telegram_id not in pending_video_data:
         return
     data = pending_video_data.pop(telegram_id)
     content_type, title = data['content_type'], data['title']
@@ -1166,7 +1166,7 @@ def handle_pending_video_file(update, context):
     user = update.message.from_user
     telegram_id = str(user.id)
     logger.info(f"Получен видеофайл от пользователя {telegram_id}")
-    if telegram_id not in pending_video_
+    if telegram_id not in pending_video_data:
         logger.debug("Нет ожидающих данных для видео")
         return
     data = pending_video_data.pop(telegram_id)
@@ -1192,7 +1192,7 @@ def handle_pending_video_file(update, context):
         elif content_type == 'trailer':
             add_trailer(title, "Added via Telegram", video_url)
         elif content_type == 'news':
-            add_news(title, "Added via Telegram", video_url)
+            add_news(title, "Added via Telegram", video_url if video_url.startswith(('http://', 'https://')) else None)
         success_msg = f"✅ '{content_type}' '{title}' добавлено из файла!"
         logger.info(success_msg)
         update.message.reply_text(success_msg)
