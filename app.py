@@ -226,7 +226,7 @@ def refresh_video_url():
     """Обновляет устаревшую ссылку на видео по Telegram посту"""
     try:
         data = request.get_json()
-        if not data:
+        if not 
             logger.warning("[ОБНОВЛЕНИЕ ССЫЛКИ] Неверный формат данных")
             return jsonify(success=False, error="Неверный формат данных"), 400
         post_url = data.get('post_url', '').strip()
@@ -384,7 +384,7 @@ def cache_delete(key):
 def build_extra_map(data, item_type_plural):
     """Добавляет реакции и комментарии к каждому элементу данных."""
     extra = {}
-    for row in data: # ИСПРАВЛЕНО: Добавлен 'data' в 'for row in '
+    for row in  # ИСПРАВЛЕНО: Добавлен 'data' в 'for row in '
         item_id = row[0]
         reactions = get_reactions_count(item_type_plural, item_id) or {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}
         comments_count = len(get_comments(item_type_plural, item_id) or [])
@@ -784,7 +784,7 @@ def moments():
             extra_map = build_extra_map(data, 'moments')
             logger.info("extra_map построен успешно")
             combined_data = []
-            for row in data: # ИСПРАВЛЕНО: Добавлен 'data' в 'for row in '
+            for row in  # ИСПРАВЛЕНО: Добавлен 'data' в 'for row in '
                 item_id = row[0]
                 item_dict = {
                     'id': row[0],
@@ -821,7 +821,7 @@ def trailers():
             extra_map = build_extra_map(data, 'trailers')
             logger.info("extra_map построен успешно")
             combined_data = []
-            for row in data: # ИСПРАВЛЕНО: Добавлен 'data' в 'for row in data:'
+            for row in data: # ИСПРАВЛЕНО: Добавлен 'data' в 'for row in '
                 item_id = row[0]
                 item_dict = {
                     'id': row[0],
@@ -858,7 +858,7 @@ def news():
             extra_map = build_extra_map(data, 'news')
             logger.info("extra_map построен успешно")
             combined_data = []
-            for row in data: # ИСПРАВЛЕНО: Добавлен 'data' в 'for row in '
+            for row in  # ИСПРАВЛЕНО: Добавлен 'data' в 'for row in '
                 item_id = row[0]
                 item_dict = {
                     'id': row[0],
