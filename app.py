@@ -1,5 +1,4 @@
-# app.py - Полный код с восстановленной админ-панелью и гибридным поиском фильмов
-# Исправлены ошибки логирования, улучшена обработка ошибок API
+# app.py - Полный, исправленный код с восстановленной админ-панелью и гибридным поиском фильмов
 import os
 import threading
 import logging
@@ -384,7 +383,7 @@ def cache_delete(key):
 def build_extra_map(data, item_type_plural):
     """Добавляет реакции и комментарии к каждому элементу данных."""
     extra = {}
-    for row in data:  # ИСПРАВЛЕНО: Добавлен 'data' в 'for row in data:'
+    for row in data: # ИСПРАВЛЕНО: Добавлен 'data' в 'for row in data:'
         item_id = row[0]
         reactions = get_reactions_count(item_type_plural, item_id) or {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}
         comments_count = len(get_comments(item_type_plural, item_id) or [])
@@ -636,7 +635,7 @@ def api_search_film_by_link():
     try:
         # 1. Получаем данные из запроса
         data = request.get_json()
-        if not data:
+        if not 
             logger.warning("[ПОИСК ФИЛЬМА] Неверный формат данных")
             return jsonify(success=False, error="Неверный формат данных."), 400
 
@@ -781,7 +780,7 @@ def moments():
             extra_map = build_extra_map(data, 'moments')
             logger.info("extra_map построен успешно")
             combined_data = []
-            for row in data:  # ИСПРАВЛЕНО: Добавлен 'data' в 'for row in data:'
+            for row in data: # ИСПРАВЛЕНО: Добавлен 'data' в 'for row in data:'
                 item_id = row[0]
                 item_dict = {
                     'id': row[0],
@@ -818,7 +817,7 @@ def trailers():
             extra_map = build_extra_map(data, 'trailers')
             logger.info("extra_map построен успешно")
             combined_data = []
-            for row in data:  # ИСПРАВЛЕНО: Добавлен 'data' в 'for row in data:'
+            for row in data: # ИСПРАВЛЕНО: Добавлен 'data' в 'for row in data:'
                 item_id = row[0]
                 item_dict = {
                     'id': row[0],
@@ -855,7 +854,7 @@ def news():
             extra_map = build_extra_map(data, 'news')
             logger.info("extra_map построен успешно")
             combined_data = []
-            for row in data:  # ИСПРАВЛЕНО: Добавлен 'data' в 'for row in data:'
+            for row in data: # ИСПРАВЛЕНО: Добавлен 'data' в 'for row in data:'
                 item_id = row[0]
                 item_dict = {
                     'id': row[0],
@@ -1171,7 +1170,7 @@ def admin_add_video_json():
     """API endpoint для добавления видео через форму add_video.html"""
     try:
         data = request.get_json()
-        if not data:
+        if not 
             return jsonify(success=False, error="Неверный формат данных (ожидается JSON)"), 400
         title = data.get('title', '').strip()
         description = data.get('description', '').strip()
@@ -1280,7 +1279,7 @@ def handle_pending_video_file(update, context):
         elif content_type == 'trailer':
             add_trailer(title, "Added via Telegram", video_url)
         elif content_type == 'news':
-            add_news(title, "Added via Telegram", video_url if video_url.startswith(('http://', 'https://')) else None)
+            add_news(title, "Added via Telegram", video_url)
         success_msg = f"✅ '{content_type}' '{title}' добавлено из файла!"
         logger.info(success_msg)
         update.message.reply_text(success_msg)
