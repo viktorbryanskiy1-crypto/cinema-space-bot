@@ -1,4 +1,3 @@
-<!-- templates/search_by_link.html -->
 {% extends "base.html" %}
 
 {% block title %}Поиск фильма по ссылке{% endblock %}
@@ -13,6 +12,12 @@
     border-radius: 15px;
     border: 1px solid var(--border);
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(100, 100, 255, 0.1);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.search-link-container:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 12px 40px rgba(0, 243, 255, 0.2);
 }
 .search-link-title {
     text-align: center;
@@ -21,6 +26,7 @@
     background: linear-gradient(45deg, var(--accent), var(--accent-secondary));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
+    font-weight: bold;
 }
 .search-link-description {
     text-align: center;
@@ -103,7 +109,7 @@
         Мы попробуем определить фильм по кадру из видео.
     </p>
     <div class="search-link-form">
-        <input type="url" id="video-link-input" placeholder="https://www.instagram.com/reel/...   или https://youtu.be/...  ">
+        <input type="url" id="video-link-input" placeholder="https://www.instagram.com/reel/... или https://youtu.be/...">
         <button id="search-film-btn">Найти фильм</button>
     </div>
     <div id="search-result">
@@ -144,36 +150,14 @@ document.addEventListener('DOMContentLoaded', function () {
                     let html = `<h2 class="film-title">${data.film.title || 'Название не найдено'}</h2>`;
                     if (data.film.year) html += `<p class="film-year">Год: ${data.film.year}</p>`;
                     if (data.film.description) html += `<p class="film-description">${data.film.description}</p>`;
-                    if (data.film.poster_path) html += `<img src="${data.film.poster_path}" alt="Постер" class="film-poster">`;
-                    
-                    // Отображаем информацию от TinEye, если она есть
                     if (data.tineye_match_info) {
                         html += `<hr style="margin: 1rem 0; border-color: var(--border);">`;
-                        html += `<h3 style="color: var(--accent);">Информация из TinEye:</h3>`;
-                        html += `<p><a href="${data.tineye_match_info.url}" target="_blank" style="color: var(--accent-secondary);">${data.tineye_match_info.domain}</a> - Совпадение: ${data.tineye_match_info.score}</p>`;
-                    } else if (data.tineye_matches) {
-                        html += `<hr style="margin: 1rem 0; border-color: var(--border);">`;
-                        html += `<h3 style="color: var(--accent);">Найденные совпадения изображений (TinEye):</h3><ul>`;
-                        data.tineye_matches.slice(0, 5).forEach(match => {
-                            html += `<li><a href="${match.url}" target="_blank" style="color: var(--accent-secondary);">${match.domain}</a> (score: ${match.score})</li>`;
-                        });
-                        html += `</ul>`;
+                        html += `<h3 style="color: var(--accent);">Результаты поиска по изображению:</h3>`;
+                        html += `<p><a href="${data.tineye_match_info.url}" target="_blank" style="color: var(--accent-secondary);">${data.tineye_match_info.domain}</a> - Совпадение: ${Math.round(data.tineye_match_info.score * 100)}%</p>`;
                     }
                     resultDiv.innerHTML = html;
                 } else {
-                    // Улучшенная обработка ошибок
-                    let errorMsg = data.error || 'Неизвестная ошибка';
-                    resultDiv.innerHTML = `<p class="result-error">❌ Ошибка: ${errorMsg}</p>`;
-                    
-                    // Если есть дополнительная информация от TinEye, показываем её
-                    if (data.tineye_matches) {
-                        resultDiv.innerHTML += `<hr style="margin: 1rem 0; border-color: var(--border);">`;
-                        resultDiv.innerHTML += `<h3 style="color: var(--accent);">Найденные совпадения изображений (TinEye):</h3><ul>`;
-                        data.tineye_matches.slice(0, 5).forEach(match => {
-                            resultDiv.innerHTML += `<li><a href="${match.url}" target="_blank" style="color: var(--accent-secondary);">${match.domain}</a> (score: ${match.score})</li>`;
-                        });
-                        resultDiv.innerHTML += `</ul>`;
-                    }
+                    resultDiv.innerHTML = `<p class="result-error">❌ Ошибка: ${data.error}</p>`;
                 }
             } catch (error) {
                 console.error('Ошибка при поиске фильма:', error);
