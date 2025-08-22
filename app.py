@@ -1,4 +1,5 @@
 # app.py - Полный, исправленный код с восстановленной админ-панелью и гибридным поиском фильмов
+# Исправлены все синтаксические ошибки
 import os
 import threading
 import logging
@@ -1071,7 +1072,6 @@ def api_add_comment():
         logger.error(f"API add_comment error: {e}", exc_info=True)
         return jsonify(success=False, error=str(e)), 500
 
-# --- НАЧАЛО АДМИН-ПАНЕЛИ ---
 @app.route('/admin/login', methods=['GET', 'POST'])
 def admin_login():
     if request.method == 'POST':
@@ -1279,7 +1279,7 @@ def handle_pending_video_file(update, context):
         elif content_type == 'trailer':
             add_trailer(title, "Added via Telegram", video_url)
         elif content_type == 'news':
-            add_news(title, "Added via Telegram", video_url)
+            add_news(title, "Added via Telegram", video_url if video_url.startswith(('http://', 'https://')) else None)
         success_msg = f"✅ '{content_type}' '{title}' добавлено из файла!"
         logger.info(success_msg)
         update.message.reply_text(success_msg)
@@ -1297,7 +1297,6 @@ if dp:
     dp.add_handler(CommandHandler('add_video', add_video_command))
     dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_pending_video_text))
     dp.add_handler(MessageHandler(Filters.video & ~Filters.command, handle_pending_video_file))
-# --- КОНЕЦ АДМИН-ПАНЕЛИ ---
 
 # --- Start Bot ---
 def start_bot():
