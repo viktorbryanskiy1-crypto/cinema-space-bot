@@ -1,5 +1,5 @@
 # app.py - Полный код с восстановленной админ-панелью и гибридным поиском фильмов
-# Исправлены ошибки логирования, улучшена обработка ошибок API
+# Исправлены все синтаксические ошибки
 import os
 import threading
 import logging
@@ -384,7 +384,7 @@ def cache_delete(key):
 def build_extra_map(data, item_type_plural):
     """Добавляет реакции и комментарии к каждому элементу данных."""
     extra = {}
-    for row in 
+    for row in data: # ИСПРАВЛЕНО: Добавлено 'data' в 'for row in data:'
         item_id = row[0]
         reactions = get_reactions_count(item_type_plural, item_id) or {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}
         comments_count = len(get_comments(item_type_plural, item_id) or [])
@@ -636,7 +636,7 @@ def api_search_film_by_link():
     try:
         # 1. Получаем данные из запроса
         data = request.get_json()
-        if not 
+        if not data:
             logger.warning("[ПОИСК ФИЛЬМА] Неверный формат данных")
             return jsonify(success=False, error="Неверный формат данных."), 400
 
@@ -781,7 +781,7 @@ def moments():
             extra_map = build_extra_map(data, 'moments')
             logger.info("extra_map построен успешно")
             combined_data = []
-            for row in 
+            for row in data: # ИСПРАВЛЕНО: Добавлено 'data' в 'for row in data:'
                 item_id = row[0]
                 item_dict = {
                     'id': row[0],
@@ -818,7 +818,7 @@ def trailers():
             extra_map = build_extra_map(data, 'trailers')
             logger.info("extra_map построен успешно")
             combined_data = []
-            for row in 
+            for row in data: # ИСПРАВЛЕНО: Добавлено 'data' в 'for row in data:'
                 item_id = row[0]
                 item_dict = {
                     'id': row[0],
@@ -855,7 +855,7 @@ def news():
             extra_map = build_extra_map(data, 'news')
             logger.info("extra_map построен успешно")
             combined_data = []
-            for row in 
+            for row in data: # ИСПРАВЛЕНО: Добавлено 'data' в 'for row in data:'
                 item_id = row[0]
                 item_dict = {
                     'id': row[0],
@@ -1072,7 +1072,6 @@ def api_add_comment():
         logger.error(f"API add_comment error: {e}", exc_info=True)
         return jsonify(success=False, error=str(e)), 500
 
-# --- АДМИН-ПАНЕЛЬ ---
 @app.route('/admin/login', methods=['GET', 'POST'])
 def admin_login():
     if request.method == 'POST':
@@ -1170,7 +1169,7 @@ def admin_add_video_json():
     """API endpoint для добавления видео через форму add_video.html"""
     try:
         data = request.get_json()
-        if not 
+        if not data:
             return jsonify(success=False, error="Неверный формат данных (ожидается JSON)"), 400
         title = data.get('title', '').strip()
         description = data.get('description', '').strip()
@@ -1208,8 +1207,7 @@ def admin_add_video_json():
         logger.error(f"[JSON API] add_video error: {e}", exc_info=True)
         return jsonify(success=False, error=str(e)), 500
 
-# --- НОВОЕ: Функции и обработчики для админ-панели через Telegram-бот ---
-# --- Импорт внутри функции, чтобы избежать циклических импортов ---
+# --- НОВАЯ ФУНКЦИЯ: Импорт внутри функции, чтобы избежать циклических импортов ---
 def get_user_role(telegram_id):
     """Получает роль пользователя из БД."""
     # Импортируем здесь, чтобы избежать циклических импортов
@@ -1241,7 +1239,7 @@ def handle_pending_video_text(update, context):
     user = update.message.from_user
     telegram_id = str(user.id)
     # Проверяем, есть ли ожидающие данные для этого пользователя
-    if telegram_id not in pending_video_
+    if telegram_id not in pending_video_data:
         return # Нет ожидающих данных, ничего не делаем
     
     # Извлекаем ожидающие данные
@@ -1290,7 +1288,7 @@ def handle_pending_video_file(update, context):
     logger.info(f"Получен видеофайл от пользователя {telegram_id}")
     
     # Проверяем, есть ли ожидающие данные для этого пользователя
-    if telegram_id not in pending_video_
+    if telegram_id not in pending_video_data:
         logger.debug("Нет ожидающих данных для видео")
         return # Нет ожидающих данных, ничего не делаем
 
@@ -1377,7 +1375,6 @@ if dp:
     except Exception as e:
         logger.error(f"❌ Ошибка регистрации обработчика видеофайлов: {e}")
     logger.info("Регистрация обработчиков админ-панели через Telegram завершена.")
-# --- КОНЕЦ НОВОГО ---
 
 # --- Health Check Endpoint ---
 @app.route('/health')
@@ -1396,6 +1393,7 @@ def health_check():
         # Проверяем базу данных
         db_status = "Unknown"
         try:
+            from database import get_db_connection
             conn = get_db_connection()
             conn.close()
             db_status = "OK"
