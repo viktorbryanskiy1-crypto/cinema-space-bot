@@ -1,30 +1,39 @@
 {% extends 'admin/base.html' %}
+{% block title %}Добавить контент{% endblock %}
 {% block content %}
 <h2>Добавить новый контент</h2>
 
+<!-- Отображение ошибок, если они есть -->
+{% if error %}
+<div style="color: red; margin-bottom: 15px;">
+    <strong>Ошибка:</strong> {{ error }}
+</div>
+{% endif %}
+
 <form method="POST" action="{{ url_for('admin_add_content') }}" enctype="multipart/form-data">
-    <label>Тип контента:</label>
-    <select name="content_type" required>
+    <label for="content_type">Тип контента:</label>
+    <select name="content_type" id="content_type" required>
+        <option value="">Выберите тип...</option>
         <option value="moment">Момент</option>
         <option value="trailer">Трейлер</option>
         <option value="news">Новость</option>
     </select>
     <br><br>
 
-    <label>Название:</label>
-    <input type="text" name="title" required>
+    <label for="title">Название/Заголовок:</label>
+    <input type="text" name="title" id="title" required>
     <br><br>
 
-    <label>Описание:</label>
-    <textarea name="description"></textarea>
+    <label for="description">Описание/Текст:</label>
+    <textarea name="description" id="description"></textarea>
     <br><br>
 
-    <label>Добавить через ссылку Telegram:</label>
-    <input type="text" name="telegram_url" placeholder="https://t.me/ваш_канал/123">
+    <label for="telegram_url">Добавить через ссылку Telegram:</label>
+    <input type="text" name="telegram_url" id="telegram_url" placeholder="https://t.me/ваш_канал/123">
     <br><br>
 
-    <label>Или загрузить файл с компьютера:</label>
-    <input type="file" name="video_file">
+    <label for="video_file">Или загрузить файл с компьютера:</label>
+    <input type="file" name="video_file" id="video_file">
     <br><br>
 
     <button type="submit">Добавить контент</button>
