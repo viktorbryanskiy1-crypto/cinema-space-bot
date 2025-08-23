@@ -299,11 +299,16 @@ if TOKEN:
             reply_markup = InlineKeyboardMarkup(keyboard)
             logger.info("Отправка сообщения пользователю...")
             update.message.reply_text(
-                "🚀 Добро пожаловать в КиноВселенную!\n"
-                "✨ Исследуй космос кино\n"
-                "🎬 Лучшие моменты из фильмов\n"
-                "🎥 Свежие трейлеры\n"
-                "📰 Горячие новости\n"
+                "🚀 Добро пожаловать в КиноВселенную!
+"
+                "✨ Исследуй космос кино
+"
+                "🎬 Лучшие моменты из фильмов
+"
+                "🎥 Свежие трейлеры
+"
+                "📰 Горячие новости
+"
                 "Нажми кнопку для входа в приложение",
                 reply_markup=reply_markup
             )
@@ -364,14 +369,12 @@ def build_extra_map(data, item_type_plural):
 @app.route('/')
 def index():
     return render_template('index.html')
-
 # --- НОВЫЙ МАРШРУТ ДЛЯ ПОИСКА ПО ССЫЛКЕ ---
 @app.route('/search_by_link')
 def search_by_link_page():
     """Отображает страницу поиска фильма по ссылке."""
     return render_template('search_by_link.html')
 # --- КОНЕЦ НОВОГО МАРШРУТА ---
-
 # --- Маршрут для Webhook от Telegram ---
 @app.route('/<string:token>', methods=['POST'])
 def telegram_webhook(token):
@@ -721,6 +724,13 @@ def admin_dashboard():
                            trailers_count=stats.get('trailers', 0),
                            news_count=stats.get('news', 0),
                            comments_count=stats.get('comments', 0))
+# ИСПРАВЛЕНИЕ: Добавлен маршрут для admin_add_content
+@app.route('/admin/add_content', methods=['GET', 'POST']) # <-- Исправленный маршрут
+@admin_required
+def admin_add_content():
+    """Отображает форму добавления контента."""
+    return render_template('admin/add_content.html')
+
 @app.route('/admin/add_video')
 @admin_required
 def admin_add_video_form():
