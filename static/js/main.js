@@ -1,4 +1,4 @@
-// main.js — полный рабочий файл с оптимизацией Telegram WebApp и fullscreen
+// static/js/main.js — полный рабочий файл с оптимизацией Telegram WebApp, fullscreen и поддержкой превью
 // Обновлен для поддержки автоматического обновления ссылок на видео и улучшенного UX
 
 // Глобальные переменные
@@ -99,6 +99,8 @@ document.addEventListener('DOMContentLoaded', async function() {
                     const html = await response.text();
                     tabCache[tab] = html;
                     console.log(`Вкладка ${tab} предзагружена`);
+                } else {
+                    console.warn(`Не удалось загрузить вкладку ${tab}:`, response.status);
                 }
             } catch (error) {
                 console.error(`Ошибка предзагрузки вкладки ${tab}:`, error);
@@ -299,6 +301,50 @@ function addDynamicFeatures() {
     addModalHandlers();
     setupFormToggles();
     initializeVideoErrorHandling();
+    // --- НОВОЕ: Инициализация обработчиков превью ---
+    initializePreviewClickHandlers();
+    // --- КОНЕЦ НОВОГО ---
+}
+
+// --- НОВАЯ ФУНКЦИЯ: Обработка кликов по превью для запуска видео ---
+function initializePreviewClickHandlers() {
+    // Обработчик для контейнеров видео
+    document.querySelectorAll('.video-container').forEach(container => {
+        const previewImg = container.querySelector('.video-preview');
+        const placeholder = container.querySelector('.video-placeholder');
+        const videoElement = container.querySelector('video');
+        const sourceElement = videoElement.querySelector('source');
+        const playButton = container.querySelector('.play-button-overlay');
+        const videoUrl = container.dataset.videoUrl;
+
+        // Функция для запуска видео
+        function playVideo() {
+            // Скрываем превью/заглушку и кнопку Play
+            if (previewImg) previewImg.style.display = 'none';
+            if (placeholder) placeholder.style.display = 'none';
+            if (playButton) playButton.style.display = 'none';
+            
+            // Показываем и запускаем видео
+            videoElement.style.display = 'block';
+            sourceElement.src = videoUrl; // Устанавливаем источник
+            videoElement.load(); // Перезагружаем видео
+            // Добавляем autoplay после загрузки
+            videoElement.onloadeddata = function() {
+                videoElement.play().catch(e => console.error("Autoplay failed:", e));
+            };
+        }
+
+        // Назначаем обработчики клика
+        if (previewImg) {
+            previewImg.addEventListener('click', playVideo);
+        }
+        if (placeholder) {
+            placeholder.addEventListener('click', playVideo);
+        }
+        if (playButton) {
+            playButton.addEventListener('click', playVideo);
+        }
+    });
 }
 
 // --- НОВАЯ ФУНКЦИЯ: Обработка ошибок воспроизведения видео ---
@@ -329,62 +375,93 @@ function initializeVideoErrorHandling() {
                 const videoSrc = this.querySelector('source')?.src || this.src;
                 if (videoSrc && videoSrc.includes('api.telegram.org/file')) {
                     // Отправляем запрос на обновление ссылки
-                    const response = await fetch('/api/refresh_video_url', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            post_url: videoSrc
-                        })
-                    });
+                    // Определяем тип элемента и его ID из родительского контейнера
+                    const card = this.closest('.card, .video-wrap');
+                    let itemType = 'unknown';
+                    let itemId = null;
+                    if (card) {
+                        if (card.dataset.momentId) {
+                            itemType = 'moment';
+                            itemId = card.dataset.momentId;
+                        } else if (card.dataset.trailerId) {
+                            itemType = 'trailer';
+                            itemId = card.dataset.trailerId;
+                        } else if (card.dataset.newsId) {
+                            itemType = 'news';
+                            itemId = card.dataset.newsId;
+                        }
+                    }
                     
-                    const result = await response.json();
-                    
-                    if (result.success && result.new_url) {
-                        // Создаем новый видеоэлемент с обновленной ссылкой
-                        const newVideo = document.createElement('video');
-                        newVideo.controls = true;
-                        newVideo.preload = 'metadata';
-                        newVideo.style.cssText = 'max-width: 100%; border-radius: 10px; width: 100%; height: auto;';
+                    if (itemId && itemType !== 'unknown') {
+                        const response = await fetch('/api/refresh_video_url', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                [`${itemType}_id`]: parseInt(itemId) // Например, moment_id: 123
+                            })
+                        });
                         
-                        const source = document.createElement('source');
-                        source.src = result.new_url;
-                        source.type = 'video/mp4';
+                        const result = await response.json();
                         
-                        newVideo.appendChild(source);
-                        
-                        // Добавляем обработчик ошибок для нового видео
-                        newVideo.addEventListener('error', function(e) {
-                            console.log('Ошибка воспроизведения обновленного видео:', e);
+                        if (result.success && result.new_url) {
+                            // Создаем новый видеоэлемент с обновленной ссылкой
+                            const newVideo = document.createElement('video');
+                            newVideo.controls = true;
+                            newVideo.preload = 'metadata';
+                            newVideo.style.cssText = 'max-width: 100%; border-radius: 10px; width: 100%; height: auto;';
+                            
+                            const source = document.createElement('source');
+                            source.src = result.new_url;
+                            source.type = 'video/mp4';
+                            
+                            newVideo.appendChild(source);
+                            
+                            // Добавляем обработчик ошибок для нового видео
+                            newVideo.addEventListener('error', function(e) {
+                                console.log('Ошибка воспроизведения обновленного видео:', e);
+                                const errorNotice = document.createElement('div');
+                                errorNotice.className = 'video-error-notice';
+                                errorNotice.innerHTML = `
+                                    <div style="background: rgba(255, 0, 0, 0.2); padding: 15px; border-radius: 8px; margin: 10px 0; color: #ff4444; text-align: center;">
+                                        <div style="font-size: 24px; margin-bottom: 10px;">❌</div>
+                                        <div>Не удалось воспроизвести видео</div>
+                                        <div style="font-size: 12px; margin-top: 5px;">Попробуйте обновить страницу или попробовать позже</div>
+                                    </div>
+                                `;
+                                parent.replaceChild(errorNotice, newVideo);
+                            });
+                            
+                            // Заменяем прелоадер на новое видео
+                            parent.replaceChild(newVideo, loader);
+                            
+                            // Загружаем и воспроизводим видео
+                            newVideo.load();
+                            
+                            console.log('Видео успешно обновлено');
+                        } else {
+                            // Показываем ошибку
                             const errorNotice = document.createElement('div');
                             errorNotice.className = 'video-error-notice';
                             errorNotice.innerHTML = `
                                 <div style="background: rgba(255, 0, 0, 0.2); padding: 15px; border-radius: 8px; margin: 10px 0; color: #ff4444; text-align: center;">
                                     <div style="font-size: 24px; margin-bottom: 10px;">❌</div>
-                                    <div>Не удалось воспроизвести видео</div>
-                                    <div style="font-size: 12px; margin-top: 5px;">Попробуйте обновить страницу или попробовать позже</div>
+                                    <div>Не удалось обновить видео</div>
+                                    <div style="font-size: 12px; margin-top: 5px;">${result.error || 'Попробуйте позже'}</div>
                                 </div>
                             `;
-                            parent.replaceChild(errorNotice, newVideo);
-                        });
-                        
-                        // Заменяем прелоадер на новое видео
-                        parent.replaceChild(newVideo, loader);
-                        
-                        // Загружаем и воспроизводим видео
-                        newVideo.load();
-                        
-                        console.log('Видео успешно обновлено');
+                            parent.replaceChild(errorNotice, loader);
+                        }
                     } else {
-                        // Показываем ошибку
+                         // Не удалось определить тип/ID, показываем общую ошибку
                         const errorNotice = document.createElement('div');
                         errorNotice.className = 'video-error-notice';
                         errorNotice.innerHTML = `
                             <div style="background: rgba(255, 0, 0, 0.2); padding: 15px; border-radius: 8px; margin: 10px 0; color: #ff4444; text-align: center;">
                                 <div style="font-size: 24px; margin-bottom: 10px;">❌</div>
                                 <div>Не удалось обновить видео</div>
-                                <div style="font-size: 12px; margin-top: 5px;">${result.error || 'Попробуйте позже'}</div>
+                                <div style="font-size: 12px; margin-top: 5px;">Неверные данные для обновления</div>
                             </div>
                         `;
                         parent.replaceChild(errorNotice, loader);
