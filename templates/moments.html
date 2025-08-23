@@ -1,4 +1,8 @@
 <!-- templates/moments.html -->
+{% extends "base.html" %}
+{% block title %}🎬 Моменты из кино{% endblock %}
+
+{% block content %}
 <div class="content-section">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
         <h2 style="background: linear-gradient(45deg, #00f3ff, #ff00c8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size: 2em;">🎬 Моменты из кино</h2>
@@ -55,38 +59,32 @@
             <p class="card-description">{{ moment.description }}</p>
             
             {% if moment.video_url %}
-                {% if moment.video_url.startswith('https://t.me/') %}
-                    <!-- Telegram Widget -->
-                    <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 10px; margin-bottom: 15px;">
-                        <script async src="https://telegram.org/js/telegram-widget.js?22" 
-                                data-telegram-post="{{ moment.video_url.replace('https://t.me/', '') }}" 
-                                data-width="100%" data-height="100%"
-                                style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none;">
-                        </script>
-                    </div>
-                {% elif moment.video_url.startswith('/uploads/') %}
-                    <!-- Локальное видео -->
-                    <video class="card-media" controls preload="metadata" controlsList="nodownload" style="max-width: 100%; border-radius: 10px;" data-post-url="{{ moment.video_url }}">
-                        <source src="{{ moment.video_url }}" type="video/mp4">
-                        Ваш браузер не поддерживает видео.
-                    </video>
-                {% elif 'youtube.com' in moment.video_url or 'youtu.be' in moment.video_url %}
-                    <!-- YouTube iframe -->
-                    <iframe class="card-media" src="{{ moment.video_url.replace('watch?v=', 'embed/').replace('youtu.be/', 'youtube.com/embed/') }}"
-                        frameborder="0" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        style="width: 100%; height: 315px; border-radius: 10px;"></iframe>
-                {% elif 'vimeo.com' in moment.video_url %}
-                    <!-- Vimeo iframe -->
-                    <iframe class="card-media" src="{{ moment.video_url.replace('vimeo.com/', 'player.vimeo.com/video/') }}"
-                        frameborder="0" allowfullscreen allow="autoplay; fullscreen; picture-in-picture"
-                        style="width: 100%; height: 315px; border-radius: 10px;"></iframe>
+            <!-- НОВОЕ: Контейнер для превью и видео -->
+            <div class="video-container" data-video-url="{{ moment.video_url }}" style="position: relative; width: 100%;">
+                <!-- Отображение превью, если оно есть -->
+                {% if moment.preview_url %}
+                    <img src="{{ moment.preview_url }}" alt="Превью {{ moment.title }}" class="video-preview" style="width: 100%; border-radius: 10px; cursor: pointer; display: block;">
                 {% else %}
-                    <!-- Прямая ссылка на видео -->
-                    <video class="card-media" controls preload="metadata" controlsList="nodownload" style="max-width: 100%; border-radius: 10px;" data-post-url="{{ moment.video_url }}">
-                        <source src="{{ moment.video_url }}" type="video/mp4">
-                        Ваш браузер не поддерживает видео.
-                    </video>
+                    <!-- Если превью нет, показываем заглушку -->
+                    <div class="video-placeholder" style="width: 100%; height: 200px; background: #333; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #aaa; cursor: pointer;">
+                        Превью недоступно. Нажмите для воспроизведения.
+                    </div>
                 {% endif %}
+                <!-- Видео скрыто по умолчанию -->
+                <video class="card-media" controls preload="none" controlsList="nodownload" style="width: 100%; border-radius: 10px; display: none;">
+                    <source src="{{ moment.video_url }}" type="video/mp4">
+                    Ваш браузер не поддерживает видео.
+                </video>
+                <!-- Кнопка Play поверх превью (опционально) -->
+                {% if moment.preview_url %}
+                <div class="play-button-overlay" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0, 0, 0, 0.7); border-radius: 50%; padding: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M8 5V19L19 12L8 5Z" />
+                    </svg>
+                </div>
+                {% endif %}
+            </div>
+            <!-- КОНЕЦ НОВОГО -->
             {% else %}
                 <p style="color: var(--text-secondary); text-align: center;">Видео недоступно</p>
             {% endif %}
@@ -221,6 +219,47 @@
         });
     }
     
+    // НОВАЯ ФУНКЦИЯ: Обработка кликов по превью для запуска видео
+    document.addEventListener('DOMContentLoaded', function() {
+        // Обработчик для контейнеров видео
+        document.querySelectorAll('.video-container').forEach(container => {
+            const previewImg = container.querySelector('.video-preview');
+            const placeholder = container.querySelector('.video-placeholder');
+            const videoElement = container.querySelector('video');
+            const sourceElement = videoElement.querySelector('source');
+            const playButton = container.querySelector('.play-button-overlay');
+            const videoUrl = container.dataset.videoUrl;
+
+            // Функция для запуска видео
+            function playVideo() {
+                // Скрываем превью/заглушку и кнопку Play
+                if (previewImg) previewImg.style.display = 'none';
+                if (placeholder) placeholder.style.display = 'none';
+                if (playButton) playButton.style.display = 'none';
+                
+                // Показываем и запускаем видео
+                videoElement.style.display = 'block';
+                sourceElement.src = videoUrl; // Устанавливаем источник
+                videoElement.load(); // Перезагружаем видео
+                // Добавляем autoplay после загрузки
+                videoElement.onloadeddata = function() {
+                    videoElement.play().catch(e => console.error("Autoplay failed:", e));
+                };
+            }
+
+            // Назначаем обработчики клика
+            if (previewImg) {
+                previewImg.addEventListener('click', playVideo);
+            }
+            if (placeholder) {
+                placeholder.addEventListener('click', playVideo);
+            }
+            if (playButton) {
+                playButton.addEventListener('click', playVideo);
+            }
+        });
+    });
+    
     // НОВАЯ ФУНКЦИЯ: Обработка ошибок воспроизведения видео
     document.addEventListener('DOMContentLoaded', function() {
         document.querySelectorAll('video').forEach(video => {
@@ -299,3 +338,4 @@
         });
     });
 </script>
+{% endblock %}
