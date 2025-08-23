@@ -5,6 +5,11 @@ from datetime import datetime
 import bcrypt
 import json
 from psycopg2.extras import RealDictCursor
+import logging
+
+# --- Logging ---
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # ---------------- Подключение к БД ----------------
 def get_db_connection():
@@ -20,12 +25,14 @@ def init_db():
     c = conn.cursor()
     try:
         # Таблицы
+        # --- ИЗМЕНЕНИЕ: Добавлен столбец preview_url ---
         c.execute("""
             CREATE TABLE IF NOT EXISTS moments (
                 id SERIAL PRIMARY KEY,
                 title TEXT NOT NULL,
                 description TEXT,
                 video_url TEXT NOT NULL,
+                preview_url TEXT, -- Новое поле для превью
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -35,9 +42,11 @@ def init_db():
                 title TEXT NOT NULL,
                 description TEXT,
                 video_url TEXT NOT NULL,
+                preview_url TEXT, -- Новое поле для превью
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        # --- КОНЕЦ ИЗМЕНЕНИЯ ---
         c.execute("""
             CREATE TABLE IF NOT EXISTS news (
                 id SERIAL PRIMARY KEY,
@@ -177,24 +186,32 @@ def delete_item(item_type, item_id):
         conn.close()
 
 # ---------------- Моменты ----------------
-def add_moment(title, description, video_url):
+# --- ИЗМЕНЕНИЕ: Функция add_moment обновлена для preview_url ---
+def add_moment(title, description, video_url, preview_url=None):
     conn = get_db_connection()
     c = conn.cursor()
     try:
-        c.execute("INSERT INTO moments (title, description, video_url) VALUES (%s,%s,%s)", (title, description, video_url))
+        # ВАЖНО: Обновлен SQL-запрос, добавлен preview_url
+        c.execute("INSERT INTO moments (title, description, video_url, preview_url) VALUES (%s,%s,%s,%s)", (title, description, video_url, preview_url))
         conn.commit()
+        logger.info(f"Момент '{title}' добавлен в БД (с превью: {preview_url is not None}).")
     finally:
         conn.close()
+# --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
 # ---------------- Трейлеры ----------------
-def add_trailer(title, description, video_url):
+# --- ИЗМЕНЕНИЕ: Функция add_trailer обновлена для preview_url ---
+def add_trailer(title, description, video_url, preview_url=None):
     conn = get_db_connection()
     c = conn.cursor()
     try:
-        c.execute("INSERT INTO trailers (title, description, video_url) VALUES (%s,%s,%s)", (title, description, video_url))
+        # ВАЖНО: Обновлен SQL-запрос, добавлен preview_url
+        c.execute("INSERT INTO trailers (title, description, video_url, preview_url) VALUES (%s,%s,%s,%s)", (title, description, video_url, preview_url))
         conn.commit()
+        logger.info(f"Трейлер '{title}' добавлен в БД (с превью: {preview_url is not None}).")
     finally:
         conn.close()
+# --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
 # ---------------- Новости ----------------
 def add_news(title, text, image_url=None):
