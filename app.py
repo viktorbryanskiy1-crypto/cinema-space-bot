@@ -299,11 +299,11 @@ if TOKEN:
             reply_markup = InlineKeyboardMarkup(keyboard)
             logger.info("Отправка сообщения пользователю...")
             update.message.reply_text(
-                "🚀 Добро пожаловать в КиноВселенную!"
-                "✨ Исследуй космос кино"
-                "🎬 Лучшие моменты из фильмов"
-                "🎥 Свежие трейлеры"
-                "📰 Горячие новости"
+                "🚀 Добро пожаловать в КиноВселенную!\n"
+                "✨ Исследуй космос кино\n"
+                "🎬 Лучшие моменты из фильмов\n"
+                "🎥 Свежие трейлеры\n"
+                "📰 Горячие новости\n"
                 "Нажми кнопку для входа в приложение",
                 reply_markup=reply_markup
             )
@@ -719,13 +719,96 @@ def admin_dashboard():
                            trailers_count=stats.get('trailers', 0),
                            news_count=stats.get('news', 0),
                            comments_count=stats.get('comments', 0))
-# ИСПРАВЛЕНИЕ: Добавлен маршрут для admin_add_content
-@app.route('/admin/add_content', methods=['GET', 'POST']) # <-- Исправленный маршрут
+# --- ИСПРАВЛЕННЫЙ МАРШРУТ ДЛЯ ДОБАВЛЕНИЯ КОНТЕНТА ЧЕРЕЗ АДМИНКУ ---
+@app.route('/admin/add_content', methods=['GET', 'POST'])
 @admin_required
 def admin_add_content():
-    """Отображает форму добавления контента."""
-    return render_template('admin/add_content.html')
+    """Отображает форму добавления контента и обрабатывает её."""
+    if request.method == 'POST':
+        try:
+            # 1. Получаем данные из формы
+            content_type = request.form.get('content_type', '').strip()
+            title = request.form.get('title', '').strip()
+            description = request.form.get('description', '').strip()
+            telegram_url = request.form.get('telegram_url', '').strip()
+            
+            # Инициализируем URL контента как None
+            content_url = None
 
+            # 2. Приоритет: Ссылка на Telegram
+            if telegram_url:
+                logger.info(f"[ADMIN FORM] Обнаружена ссылка на Telegram пост: {telegram_url}")
+                # Базовая проверка формата ссылки
+                if 't.me/' not in telegram_url:
+                     return render_template('admin/add_content.html', error="Ссылка должна вести на пост в Telegram (t.me/...)")
+                
+                # Извлекаем прямую ссылку
+                direct_url, error = extract_video_url_sync(telegram_url)
+                if direct_url:
+                    content_url = direct_url
+                    logger.info(f"[ADMIN FORM] Извлечена прямая ссылка из поста: {content_url[:50]}...")
+                else:
+                    logger.error(f"[ADMIN FORM] Ошибка извлечения из поста: {error}")
+                    return render_template('admin/add_content.html', error=error)
+
+            # 3. Приоритет: Загруженный файл (если не было ссылки на Telegram)
+            elif 'video_file' in request.files:
+                file = request.files['video_file']
+                # Проверяем, был ли загружен файл и имеет ли он имя
+                if file and file.filename != '':
+                    # Определяем разрешенные расширения в зависимости от типа контента
+                    if content_type in ['moment', 'trailer']:
+                         saved_path = save_uploaded_file(file, ALLOWED_VIDEO_EXTENSIONS)
+                    elif content_type == 'news':
+                         # Для новостей разрешаем загружать изображения
+                         saved_path = save_uploaded_file(file, ALLOWED_IMAGE_EXTENSIONS)
+                    else:
+                         # По умолчанию считаем видео
+                         saved_path = save_uploaded_file(file, ALLOWED_VIDEO_EXTENSIONS)
+                    
+                    if saved_path:
+                        content_url = saved_path # Это будет путь типа /uploads/...
+                        logger.info(f"[ADMIN FORM] Файл загружен: {content_url}")
+                    else:
+                         return render_template('admin/add_content.html', error="Ошибка загрузки файла. Проверьте формат.")
+
+            # 4. Проверка: был ли определен URL/путь к контенту
+            if not content_url:
+                # Если ни ссылка, ни файл не были предоставлены
+                return render_template('admin/add_content.html', error="Укажите ссылку на Telegram пост или загрузите файл.")
+
+            # 5. Сохранение в БД в зависимости от типа контента
+            if content_type == 'moment':
+                add_moment(title, description, content_url)
+                cache_delete('moments_list')
+                cache_delete('moments_page')
+                logger.info(f"[ADMIN FORM] Добавлен момент: {title}")
+            elif content_type == 'trailer':
+                add_trailer(title, description, content_url)
+                cache_delete('trailers_list')
+                cache_delete('trailers_page')
+                logger.info(f"[ADMIN FORM] Добавлен трейлер: {title}")
+            elif content_type == 'news':
+                # Для новости content_url - это путь к изображению (загружено или указано как URL)
+                add_news(title, description, content_url)
+                cache_delete('news_list')
+                cache_delete('news_page')
+                logger.info(f"[ADMIN FORM] Добавлена новость: {title}")
+            else:
+                # На случай, если content_type некорректный (вдруг select был изменен)
+                return render_template('admin/add_content.html', error="Неверный тип контента.")
+
+            # 6. Перенаправление после успешного добавления на страницу со всем контентом
+            return redirect(url_for('admin_content'))
+
+        except Exception as e:
+            logger.error(f"[ADMIN FORM] add_content error: {e}", exc_info=True)
+            # Отображаем форму с сообщением об ошибке
+            return render_template('admin/add_content.html', error=f"Ошибка сервера: {e}")
+
+    # 7. Если метод GET (первый заход на страницу), просто отображаем форму
+    return render_template('admin/add_content.html')
+# --- КОНЕЦ ИСПРАВЛЕННОГО МАРШРУТА ---
 @app.route('/admin/add_video')
 @admin_required
 def admin_add_video_form():
