@@ -12,7 +12,7 @@ from flask import (
     redirect, url_for, session, send_from_directory, abort
 )
 from werkzeug.utils import secure_filename
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, Bot, MenuButtonWebApp, Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, Bot, MenuButtonWebApp, Update, InputFile
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 import redis
 import json
@@ -68,8 +68,44 @@ def allowed_file(filename, allowed_exts):
 updater = None
 dp = None
 pending_video_data = {}
-# --- НОВОЕ: Кэш для прямых ссылок ---
-video_url_cache = {}
+# --- УЛУЧШЕННОЕ КЭШИРОВАНИЕ ССЫЛОК С АВТООБНОВЛЕНИЕМ ---
+# Увеличиваем время кэширования до 6 часов
+video_url_cache_advanced = {}
+
+def get_cached_direct_video_url_advanced(file_id, cache_time=21600): # 6 часов
+    """Кэшированное получение прямой ссылки с возможностью автообновления"""
+    current_time = time.time()
+    
+    # Проверяем кэш
+    if file_id in video_url_cache_advanced:
+        url, expire_time, original_file_id = video_url_cache_advanced[file_id]
+        # Если срок действия ссылки еще не истек
+        if current_time < expire_time:
+            logger.debug(f"Ссылка для file_id {file_id} получена из кэша (осталось {int(expire_time - current_time)} сек)")
+            return url, False # False = не обновлялась
+        else:
+            # Срок действия истек, пытаемся обновить
+            logger.info(f"Срок действия ссылки для file_id {file_id} истек. Попытка обновления...")
+            new_url = get_direct_video_url(original_file_id)
+            if new_url:
+                # Обновляем кэш
+                video_url_cache_advanced[file_id] = (new_url, current_time + cache_time, original_file_id)
+                logger.info(f"Ссылка для file_id {file_id} успешно обновлена")
+                return new_url, True # True = была обновлена
+            else:
+                # Не удалось обновить, возвращаем старую (может еще немного поработать)
+                logger.warning(f"Не удалось обновить ссылку для file_id {file_id}, возвращаю старую")
+                return url, False # Возвращаем старую, надеемся, она еще жива
+    
+    # Если в кэше нет или истекло время жизни и не обновилось
+    logger.debug(f"Генерация новой ссылки для file_id {file_id}")
+    url = get_direct_video_url(file_id)
+    if url:
+        video_url_cache_advanced[file_id] = (url, current_time + cache_time, file_id)
+        logger.debug(f"Ссылка для file_id {file_id} закэширована")
+        return url, False # Новая ссылка
+    return None, False
+
 def get_direct_video_url(file_id):
     """Преобразует file_id в прямую ссылку для веба"""
     bot_token = TOKEN
@@ -101,21 +137,7 @@ def get_direct_video_url(file_id):
     except Exception as e:
         logger.error(f"Неизвестная ошибка при получении ссылки для file_id {file_id}: {e}")
         return None
-def get_cached_direct_video_url(file_id, cache_time=3600):  # Увеличено до 1 часа
-    """Кэшированное получение прямой ссылки"""
-    current_time = time.time()
-    if file_id in video_url_cache:
-        url, expire_time = video_url_cache[file_id]
-        if current_time < expire_time:
-            logger.debug(f"Ссылка для file_id {file_id} получена из кэша")
-            return url
-    logger.debug(f"Генерация новой ссылки для file_id {file_id}")
-    url = get_direct_video_url(file_id)
-    if url:
-        video_url_cache[file_id] = (url, current_time + cache_time)
-        logger.debug(f"Ссылка для file_id {file_id} закэширована")
-        return url
-    return None
+
 # --- ИСПРАВЛЕННАЯ Функция для извлечения видео из поста Telegram ---
 # (Обновлённая версия: пересылает сообщения только в тестовую группу)
 async def extract_video_url_from_telegram_post(post_url):
@@ -172,7 +194,7 @@ async def extract_video_url_from_telegram_post(post_url):
             return None, "В указанном посте не найдено видео."
         file_id = message.video.file_id
         logger.info(f"[ИЗВЛЕЧЕНИЕ] Найден file_id: {file_id}")
-        direct_url = get_cached_direct_video_url(file_id)
+        direct_url, _ = get_cached_direct_video_url_advanced(file_id)
         if not direct_url:
             logger.error("[ИЗВЛЕЧЕНИЕ] Не удалось получить прямую ссылку из file_id")
             return None, "Не удалось получить прямую ссылку на видео из Telegram."
@@ -181,6 +203,7 @@ async def extract_video_url_from_telegram_post(post_url):
     except Exception as e:
         logger.error(f"[ИЗВЛЕЧЕНИЕ] Ошибка извлечения видео из поста {post_url}: {e}", exc_info=True)
         return None, f"Ошибка при обработке ссылки на пост: {str(e)}"
+
 def extract_video_url_sync(post_url):
     """Синхронная обертка для асинхронной функции извлечения видео"""
     try:
@@ -198,6 +221,7 @@ def extract_video_url_sync(post_url):
     except Exception as e:
         logger.error(f"Ошибка в синхронной обертке extract_video_url_sync: {e}", exc_info=True)
         return None, f"Ошибка обработки запроса: {e}"
+
 # --- НОВАЯ ФУНКЦИЯ: Обновление устаревшей ссылки ---
 @app.route('/api/refresh_video_url', methods=['POST'])
 def refresh_video_url():
@@ -223,6 +247,7 @@ def refresh_video_url():
     except Exception as e:
         logger.error(f"[ОБНОВЛЕНИЕ ССЫЛКИ] Критическая ошибка: {e}", exc_info=True)
         return jsonify(success=False, error="Внутренняя ошибка сервера"), 500
+
 # --- НОВАЯ ФУНКЦИЯ: Кэширование HTML страниц ---
 def get_cached_html(key, generate_func, expire=300):
     """Получает HTML из кэша или генерирует новый"""
@@ -244,6 +269,7 @@ def get_cached_html(key, generate_func, expire=300):
         except Exception as e:
             logger.warning(f"Ошибка сохранения HTML в кэш: {e}")
     return html
+
 # --- Функция для установки Menu Button ---
 def set_menu_button():
     """Устанавливает кнопку меню для бота"""
@@ -268,6 +294,7 @@ def set_menu_button():
     except Exception as e:
         logger.error(f"❌ ОШИБКА в set_menu_button: {e}", exc_info=True)
         return False
+
 if TOKEN:
     updater = Updater(TOKEN, use_context=True)
     dp = updater.dispatcher
@@ -752,26 +779,66 @@ def admin_add_content():
                     return render_template('admin/add_content.html', error=error)
 
             # 3. Приоритет: Загруженный файл (если не было ссылки на Telegram)
+            # --- ПРОДВИНУТАЯ ЛОГИКА: Отправка файла в Telegram без временного сохранения ---
             elif 'video_file' in request.files:
                 file = request.files['video_file']
                 # Проверяем, был ли загружен файл и имеет ли он имя
                 if file and file.filename != '':
-                    # Определяем разрешенные расширения в зависимости от типа контента
-                    if content_type in ['moment', 'trailer']:
-                         saved_path = save_uploaded_file(file, ALLOWED_VIDEO_EXTENSIONS)
-                    elif content_type == 'news':
-                         # Для новостей разрешаем загружать изображения
-                         saved_path = save_uploaded_file(file, ALLOWED_IMAGE_EXTENSIONS)
-                    else:
-                         # По умолчанию считаем видео
-                         saved_path = save_uploaded_file(file, ALLOWED_VIDEO_EXTENSIONS)
                     
-                    if saved_path:
-                        content_url = saved_path # Это будет путь типа /uploads/...
-                        logger.info(f"[ADMIN FORM] Файл загружен: {content_url}")
-                    else:
-                         return render_template('admin/add_content.html', error="Ошибка загрузки файла. Проверьте формат.")
-
+                    try:
+                        # 1. Определяем ID чата для хранения (ваша тестовая группа)
+                        YOUR_TEST_CHAT_ID = -1003045387627 # <<<--- Ваш ID тестовой группы
+                        
+                        # 2. Создаем InputFile из объекта FileStorage Flask
+                        # Это позволяет отправить файл напрямую из памяти без сохранения на диск
+                        from telegram import Bot
+                        bot = Bot(token=TOKEN)
+                        
+                        # file.stream - это BytesIO объект
+                        # Нужно убедиться, что указатель в начале
+                        file.stream.seek(0)
+                        
+                        # Создаем InputFile. Имя файла берем из оригинала
+                        input_file = InputFile(file.stream, filename=file.filename)
+                        
+                        logger.info(f"[ADMIN FORM] Отправка файла '{file.filename}' в Telegram (чат {YOUR_TEST_CHAT_ID})...")
+                        
+                        # 3. Отправляем файл в Telegram
+                        # Выбираем метод в зависимости от типа контента
+                        if content_type in ['moment', 'trailer']:
+                            sent_message = bot.send_video(chat_id=YOUR_TEST_CHAT_ID, video=input_file, supports_streaming=True)
+                            file_key = 'video'
+                        elif content_type == 'news':
+                            # Для новостей отправляем как фото
+                            sent_message = bot.send_photo(chat_id=YOUR_TEST_CHAT_ID, photo=input_file)
+                            file_key = 'photo'
+                        else:
+                            # По умолчанию видео
+                            sent_message = bot.send_video(chat_id=YOUR_TEST_CHAT_ID, video=input_file, supports_streaming=True)
+                            file_key = 'video'
+                        
+                        # 4. Получаем file_id из отправленного сообщения
+                        if sent_message and getattr(sent_message, file_key, None):
+                            new_file_id = getattr(sent_message, file_key).file_id
+                            logger.info(f"[ADMIN FORM] Файл загружен в Telegram, file_id: {new_file_id}")
+                            
+                            # 5. Получаем прямую ссылку из file_id (с использованием улучшенного кэша)
+                            direct_url, _ = get_cached_direct_video_url_advanced(new_file_id)
+                            if direct_url:
+                                content_url = direct_url
+                                logger.info(f"[ADMIN FORM] Получена прямая ссылка из Telegram: {content_url[:50]}...")
+                            else:
+                                logger.error("[ADMIN FORM] Не удалось получить прямую ссылку для загруженного файла")
+                                return render_template('admin/add_content.html', error="Ошибка получения ссылки на загруженный файл.")
+                        else:
+                            logger.error("[ADMIN FORM] Не удалось отправить файл в Telegram или получить file_id")
+                            return render_template('admin/add_content.html', error="Ошибка отправки файла в Telegram.")
+                            
+                    except Exception as e:
+                        logger.error(f"[ADMIN FORM] Ошибка при работе с Telegram API для загрузки файла: {e}", exc_info=True)
+                        return render_template('admin/add_content.html', error=f"Ошибка обработки файла: {e}")
+                    # --- КОНЕЦ ПРОДВИНУТОЙ ЛОГИКИ ---
+        
             # 4. Проверка: был ли определен URL/путь к контенту
             if not content_url:
                 # Если ни ссылка, ни файл не были предоставлены
@@ -956,7 +1023,7 @@ def handle_pending_video_file(update, context):
         return
     file_id = update.message.video.file_id
     logger.info(f"Получен file_id: {file_id}")
-    video_url = get_cached_direct_video_url(file_id)
+    video_url, _ = get_cached_direct_video_url_advanced(file_id)
     if not video_url:
         error_msg = "❌ Не удалось получить прямую ссылку на видео из Telegram"
         logger.error(error_msg)
