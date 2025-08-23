@@ -1,3 +1,4 @@
+<!-- templates/admin/add_content.html -->
 {% extends 'admin/base.html' %}
 {% block title %}Добавить контент{% endblock %}
 {% block content %}
@@ -28,13 +29,25 @@
     <textarea name="description" id="description"></textarea>
     <br><br>
 
-    <label for="telegram_url">Добавить через ссылку Telegram:</label>
+    <h3>Видео</h3>
+    <label for="telegram_url">Добавить видео через ссылку Telegram:</label>
     <input type="text" name="telegram_url" id="telegram_url" placeholder="https://t.me/ваш_канал/123">
     <br><br>
 
-    <label for="video_file">Или загрузить файл с компьютера:</label>
-    <input type="file" name="video_file" id="video_file">
+    <label for="video_file">Или загрузить видео с компьютера:</label>
+    <input type="file" name="video_file" id="video_file" accept="video/*">
     <br><br>
+    
+    <!-- НОВОЕ: Раздел для превью -->
+    <h3>Превью (миниатюра)</h3>
+    <label for="preview_telegram_url">Добавить превью через ссылку Telegram:</label>
+    <input type="text" name="preview_telegram_url" id="preview_telegram_url" placeholder="https://t.me/ваш_канал/124">
+    <br><br>
+
+    <label for="preview_file">Или загрузить превью с компьютера:</label>
+    <input type="file" name="preview_file" id="preview_file" accept="image/*">
+    <br><br>
+    <!-- КОНЕЦ НОВОГО -->
 
     <button type="submit">Добавить контент</button>
 </form>
