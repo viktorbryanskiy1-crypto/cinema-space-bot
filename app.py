@@ -779,7 +779,7 @@ def admin_add_content():
                     return render_template('admin/add_content.html', error=error)
 
             # 3. Приоритет: Загруженный файл (если не было ссылки на Telegram)
-            # --- ПРОДВИНУТАЯ ЛОГИКА: Отправка файла в Telegram без временного сохранения ---
+            # --- ИСПРАВЛЕННАЯ ПРОДВИНУТАЯ ЛОГИКА: Отправка файла в Telegram без временного сохранения ---
             elif 'video_file' in request.files:
                 file = request.files['video_file']
                 # Проверяем, был ли загружен файл и имеет ли он имя
@@ -787,7 +787,7 @@ def admin_add_content():
                     
                     try:
                         # 1. Определяем ID чата для хранения (ваша тестовая группа)
-                        YOUR_TEST_CHAT_ID = -1003045387627 # <<<--- Ваш ID тестовой группы
+                        YOUR_TEST_CHAT_ID = -1003045387627 # <<<--- ВАШ ID тестовой группы
                         
                         # 2. Создаем InputFile из объекта FileStorage Flask
                         # Это позволяет отправить файл напрямую из памяти без сохранения на диск
@@ -805,6 +805,8 @@ def admin_add_content():
                         
                         # 3. Отправляем файл в Telegram
                         # Выбираем метод в зависимости от типа контента
+                        sent_message = None
+                        file_key = None
                         if content_type in ['moment', 'trailer']:
                             sent_message = bot.send_video(chat_id=YOUR_TEST_CHAT_ID, video=input_file, supports_streaming=True)
                             file_key = 'video'
@@ -822,10 +824,11 @@ def admin_add_content():
                             new_file_id = getattr(sent_message, file_key).file_id
                             logger.info(f"[ADMIN FORM] Файл загружен в Telegram, file_id: {new_file_id}")
                             
-                            # 5. Получаем прямую ссылку из file_id (с использованием улучшенного кэша)
+                            # 5. !!!ИСПРАВЛЕНИЕ!!! Получаем прямую ссылку из file_id (с использованием улучшенного кэша)
+                            # И ВАЖНО: используем эту ссылку для сохранения в БД
                             direct_url, _ = get_cached_direct_video_url_advanced(new_file_id)
                             if direct_url:
-                                content_url = direct_url
+                                content_url = direct_url # <-- Вот ключевое исправление
                                 logger.info(f"[ADMIN FORM] Получена прямая ссылка из Telegram: {content_url[:50]}...")
                             else:
                                 logger.error("[ADMIN FORM] Не удалось получить прямую ссылку для загруженного файла")
@@ -837,7 +840,7 @@ def admin_add_content():
                     except Exception as e:
                         logger.error(f"[ADMIN FORM] Ошибка при работе с Telegram API для загрузки файла: {e}", exc_info=True)
                         return render_template('admin/add_content.html', error=f"Ошибка обработки файла: {e}")
-                    # --- КОНЕЦ ПРОДВИНУТОЙ ЛОГИКИ ---
+                    # --- КОНЕЦ ИСПРАВЛЕННОЙ ПРОДВИНУТОЙ ЛОГИКИ ---
         
             # 4. Проверка: был ли определен URL/путь к контенту
             if not content_url:
@@ -845,6 +848,7 @@ def admin_add_content():
                 return render_template('admin/add_content.html', error="Укажите ссылку на Telegram пост или загрузите файл.")
 
             # 5. Сохранение в БД в зависимости от типа контента
+            # !!!Теперь content_url всегда содержит прямую ссылку на Telegram!!!
             if content_type == 'moment':
                 add_moment(title, description, content_url)
                 cache_delete('moments_list')
@@ -856,7 +860,7 @@ def admin_add_content():
                 cache_delete('trailers_page')
                 logger.info(f"[ADMIN FORM] Добавлен трейлер: {title}")
             elif content_type == 'news':
-                # Для новости content_url - это путь к изображению (загружено или указано как URL)
+                # Для новости content_url - это прямая ссылка на изображение в Telegram
                 add_news(title, description, content_url)
                 cache_delete('news_list')
                 cache_delete('news_page')
