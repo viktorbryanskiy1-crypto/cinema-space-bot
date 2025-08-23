@@ -12,6 +12,8 @@ from flask import (
     Flask, render_template, request, jsonify,
     redirect, url_for, session, send_from_directory, abort, make_response
 )
+from functools import wraps
+import hashlib
 from werkzeug.utils import secure_filename
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, Bot, MenuButtonWebApp, Update, InputFile
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
