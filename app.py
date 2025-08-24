@@ -86,11 +86,11 @@ dp = None
 pending_video_data = {}
 # --- НОВОЕ: Конфигурация кэширования ---
 CACHE_CONFIG = {
-    'html_expire': 300,       # Было 1800 (30 минут), стало 5 минут
+    'html_expire': 3600,       # Было 1800 (30 минут), стало 5 минут
     'api_expire': 120,        # Было 300 (5 минут), стало 2 минуты
     'data_expire': 300,       # Было 600 (10 минут), стало 5 минут
     'static_expire': 2592000, # 30 дней для статики (CSS, JS, изображения)
-    'video_url_cache_time': 21600 # 6 часов для кэша ссылок Telegram
+    'video_url_cache_time': 86400 # 6 часов для кэша ссылок Telegram
 }
 # --- НОВОЕ: Декораторы для кэширования ---
 from functools import wraps
