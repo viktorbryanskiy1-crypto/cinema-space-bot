@@ -1,4 +1,4 @@
-# app.py (полный код с исправлениями)
+# app.py (полный код с изменениями для кэширования)
 import os
 import threading
 import logging
@@ -8,6 +8,7 @@ import requests
 import time
 import re
 import asyncio
+import hashlib # <-- Перемещен сюда
 from datetime import datetime
 from flask import (
     Flask, render_template, request, jsonify,
@@ -18,7 +19,6 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, Bot
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 import redis
 import json
-import hashlib # <-- Добавлен импорт hashlib
 from database import (
     get_or_create_user, get_user_role,
     add_moment, add_trailer, add_news,
@@ -67,6 +67,7 @@ ALLOWED_VIDEO_EXTENSIONS = {'mp4', 'avi', 'mov', 'wmv', 'flv', 'webm'}
 ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 def allowed_file(filename, allowed_exts):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in allowed_exts
+
 # --- ИНИЦИАЛИЗАЦИЯ БД ---
 # Вызываем init_db() сразу после создания app и настройки Redis,
 # но до создания updater и других компонентов.
@@ -80,15 +81,17 @@ except Exception as e:
     # чтобы остановить запуск приложения, если БД критична.
     # raise e
 # --- КОНЕЦ ИНИЦИАЛИЗАЦИИ БД ---
+
 # --- Telegram Bot ---
 updater = None
 dp = None
 pending_video_data = {}
 # --- НОВОЕ: Конфигурация кэширования ---
+# --- ИЗМЕНЕНО: Уменьшено время кэширования ---
 CACHE_CONFIG = {
-    'html_expire': 1800,      # 30 минут для HTML-страниц
-    'api_expire': 300,        # 5 минут для API-ответов
-    'data_expire': 600,       # 10 минут для отдельных элементов данных
+    'html_expire': 300,       # Было 1800 (30 минут), стало 5 минут
+    'api_expire': 120,        # Было 300 (5 минут), стало 2 минуты
+    'data_expire': 300,       # Было 600 (10 минут), стало 5 минут
     'static_expire': 2592000, # 30 дней для статики (CSS, JS, изображения)
     'video_url_cache_time': 21600 # 6 часов для кэша ссылок Telegram
 }
@@ -123,7 +126,7 @@ def etag_cache(key_generator_func):
             # Если кэш отсутствует или ETag не совпал, выполняем функцию
             html_content = f(*args, **kwargs)
             # Генерируем ETag на основе содержимого
-            etag = hashlib.md5(html_content.encode('utf-8')).hexdigest() # <-- hashlib используется здесь
+            etag = hashlib.md5(html_content.encode('utf-8')).hexdigest() # <-- Используется hashlib
             # Сохраняем в кэш с ETag
             cache_set(cache_key, {'html': html_content, 'etag': etag}, expire=CACHE_CONFIG['html_expire'])
             # Возвращаем ответ с ETag
@@ -201,6 +204,7 @@ def get_direct_video_url(file_id):
     except Exception as e:
         logger.error(f"Неизвестная ошибка при получении ссылки для file_id {file_id}: {e}")
         return None
+
 # --- ИСПРАВЛЕННАЯ Функция для извлечения видео из поста Telegram ---
 # (Обновлённая версия: пересылает сообщения только в тестовую группу)
 async def extract_video_url_from_telegram_post(post_url):
@@ -407,7 +411,7 @@ def get_cached_html(key, generate_func, expire=None):
     html = generate_func()
     if html:
         # Генерируем ETag
-        etag = hashlib.md5(html.encode('utf-8')).hexdigest() # <-- hashlib используется здесь
+        etag = hashlib.md5(html.encode('utf-8')).hexdigest() # <-- Используется hashlib
         # Сохраняем в кэш с ETag
         cache_set(etag_cache_key, {'html': html, 'etag': etag}, expire=expire)
         logger.info(f"HTML для {key} закэширован на {expire} секунд (с ETag)")
@@ -521,6 +525,15 @@ def cache_delete(key):
             redis_client.delete(key)
         except Exception:
             pass
+            
+# --- НОВОЕ: Функция для инвалидации ETag кэша ---
+def invalidate_etag_cache(cache_key_base):
+    """Удаляет кэш ETag для заданного ключа."""
+    cache_key = f"etag_cache_{cache_key_base}"
+    cache_delete(cache_key)
+    logger.debug(f"Кэш ETag для '{cache_key_base}' инвалидирован.")
+# --- КОНЕЦ НОВОГО ---
+
 def build_extra_map(data, item_type_plural):
     """Добавляет реакции и комментарии к каждому элементу данных."""
     extra = {}
@@ -854,6 +867,18 @@ def webhook_info():
     except Exception as e:
         logger.error(f"Ошибка получения информации о webhook: {e}")
         return jsonify({'error': str(e)}), 500
+
+# --- Вспомогательная функция для получения данных из формы или JSON ---
+def _get_payload():
+    """Получает данные из формы или JSON в зависимости от типа запроса."""
+    if request.is_json:
+        return request.get_json()
+    else:
+        # Для multipart/form-data или application/x-www-form-urlencoded
+        # request.form.to_dict() не обрабатывает вложенные структуры,
+        # но для наших форм подходит.
+        # Для файлов request.files будет содержать их.
+        return request.form.to_dict()
 # --- ИЗМЕНЕННЫЕ: Маршруты API добавления контента с инвалидацией кэша ---
 @app.route('/api/add_moment', methods=['POST'])
 def api_add_moment():
@@ -882,6 +907,8 @@ def api_add_moment():
         # --- ИНВАЛИДАЦИЯ КЭША ---
         cache_delete('moments_list')
         cache_delete('moments_page')  # Удаляем кэш страницы
+        # --- НОВОЕ: Инвалидация кэша ETag ---
+        invalidate_etag_cache('moments_page')
         # --- КОНЕЦ ИНВАЛИДАЦИИ ---
         logger.info(f"Добавлен момент: {title}")
         return jsonify(success=True)
@@ -915,6 +942,8 @@ def api_add_trailer():
         # --- ИНВАЛИДАЦИЯ КЭША ---
         cache_delete('trailers_list')
         cache_delete('trailers_page')  # Удаляем кэш страницы
+        # --- НОВОЕ: Инвалидация кэша ETag ---
+        invalidate_etag_cache('trailers_page')
         # --- КОНЕЦ ИНВАЛИДАЦИИ ---
         logger.info(f"Добавлен трейлер: {title}")
         return jsonify(success=True)
@@ -936,6 +965,8 @@ def api_add_news():
         # --- ИНВАЛИДАЦИЯ КЭША ---
         cache_delete('news_list')
         cache_delete('news_page')  # Удаляем кэш страницы
+        # --- НОВОЕ: Инвалидация кэша ETag ---
+        invalidate_etag_cache('news_page')
         # --- КОНЕЦ ИНВАЛИДАЦИИ ---
         logger.info(f"Добавлена новость: {title}")
         return jsonify(success=True)
@@ -959,6 +990,8 @@ def api_add_comment():
         # Также может потребоваться обновить счетчик комментариев в build_extra_map
         # Проще всего сбросить кэш страниц списка
         cache_delete(f"{item_type}s_page") # Например, 'moments_page', 'trailers_page'
+        # --- НОВОЕ: Инвалидация кэша ETag для страницы списка ---
+        invalidate_etag_cache(f"{item_type}s_page")
         # --- КОНЕЦ ИНВАЛИДАЦИИ ---
         return jsonify(success=True)
     except Exception as e:
@@ -992,6 +1025,8 @@ def api_add_reaction_post():
             cache_delete(f"reactions_{item_type}_{item_id}") # Кэш для страницы деталей
             # Сбрасываем кэш страницы списка
             cache_delete(f"{item_type}s_page")
+            # --- НОВОЕ: Инвалидация кэша ETag для страницы списка ---
+            invalidate_etag_cache(f"{item_type}s_page")
             # --- КОНЕЦ ИНВАЛИДАЦИИ ---
         return jsonify(success=success)
     except Exception as e:
@@ -1164,6 +1199,8 @@ def admin_add_content():
                 # --- ИНВАЛИДАЦИЯ КЭША ---
                 cache_delete('moments_list')
                 cache_delete('moments_page')
+                # --- НОВОЕ: Инвалидация кэша ETag ---
+                invalidate_etag_cache('moments_page')
                 # --- КОНЕЦ ИНВАЛИДАЦИИ ---
                 logger.info(f"[ADMIN FORM] Добавлен момент: {title}")
             elif content_type == 'trailer':
@@ -1171,6 +1208,8 @@ def admin_add_content():
                 # --- ИНВАЛИДАЦИЯ КЭША ---
                 cache_delete('trailers_list')
                 cache_delete('trailers_page')
+                # --- НОВОЕ: Инвалидация кэша ETag ---
+                invalidate_etag_cache('trailers_page')
                 # --- КОНЕЦ ИНВАЛИДАЦИИ ---
                 logger.info(f"[ADMIN FORM] Добавлен трейлер: {title}")
             elif content_type == 'news':
@@ -1181,6 +1220,8 @@ def admin_add_content():
                 # --- ИНВАЛИДАЦИЯ КЭША ---
                 cache_delete('news_list')
                 cache_delete('news_page')
+                # --- НОВОЕ: Инвалидация кэша ETag ---
+                invalidate_etag_cache('news_page')
                 # --- КОНЕЦ ИНВАЛИДАЦИИ ---
                 logger.info(f"[ADMIN FORM] Добавлена новость: {title}")
             else:
@@ -1221,18 +1262,24 @@ def admin_delete(content_type, content_id):
         # --- ИНВАЛИДАЦИЯ КЭША ---
         cache_delete('moments_list')
         cache_delete('moments_page')  # Удаляем кэш страницы
+        # --- НОВОЕ: Инвалидация кэша ETag ---
+        invalidate_etag_cache('moments_page')
         # --- КОНЕЦ ИНВАЛИДАЦИИ ---
     elif content_type == 'trailer':
         delete_trailer(content_id)
         # --- ИНВАЛИДАЦИЯ КЭША ---
         cache_delete('trailers_list')
         cache_delete('trailers_page')  # Удаляем кэш страницы
+        # --- НОВОЕ: Инвалидация кэша ETag ---
+        invalidate_etag_cache('trailers_page')
         # --- КОНЕЦ ИНВАЛИДАЦИИ ---
     elif content_type == 'news':
         delete_news(content_id)
         # --- ИНВАЛИДАЦИЯ КЭША ---
         cache_delete('news_list')
         cache_delete('news_page')  # Удаляем кэш страницы
+        # --- НОВОЕ: Инвалидация кэша ETag ---
+        invalidate_etag_cache('news_page')
         # --- КОНЕЦ ИНВАЛИДАЦИИ ---
     return redirect(url_for('admin_content'))
 @app.route('/admin/access')
@@ -1280,18 +1327,24 @@ def admin_add_video_json():
             # --- ИНВАЛИДАЦИЯ КЭША ---
             cache_delete('moments_list')
             cache_delete('moments_page')  # Удаляем кэш страницы
+            # --- НОВОЕ: Инвалидация кэша ETag ---
+            invalidate_etag_cache('moments_page')
             # --- КОНЕЦ ИНВАЛИДАЦИИ ---
         elif category == 'trailer':
             add_trailer(title, description, video_url)
             # --- ИНВАЛИДАЦИЯ КЭША ---
             cache_delete('trailers_list')
             cache_delete('trailers_page')  # Удаляем кэш страницы
+            # --- НОВОЕ: Инвалидация кэша ETag ---
+            invalidate_etag_cache('trailers_page')
             # --- КОНЕЦ ИНВАЛИДАЦИИ ---
         elif category == 'news':
             add_news(title, description, video_url if video_url.startswith(('http://', 'https://')) else None)
             # --- ИНВАЛИДАЦИЯ КЭША ---
             cache_delete('news_list')
             cache_delete('news_page')  # Удаляем кэш страницы
+            # --- НОВОЕ: Инвалидация кэша ETag ---
+            invalidate_etag_cache('news_page')
             # --- КОНЕЦ ИНВАЛИДАЦИИ ---
         logger.info(f"[JSON API] Добавлен {category}: {title}")
         return jsonify(success=True, message="Видео успешно добавлено!")
@@ -1332,18 +1385,24 @@ def handle_pending_video_text(update, context):
         # --- ИНВАЛИДАЦИЯ КЭША ---
         cache_delete('moments_list')
         cache_delete('moments_page')
+        # --- НОВОЕ: Инвалидация кэша ETag ---
+        invalidate_etag_cache('moments_page')
         # --- КОНЕЦ ИНВАЛИДАЦИИ ---
     elif content_type == 'trailer':
         add_trailer(title, "Added via Telegram", video_url)
         # --- ИНВАЛИДАЦИЯ КЭША ---
         cache_delete('trailers_list')
         cache_delete('trailers_page')
+        # --- НОВОЕ: Инвалидация кэша ETag ---
+        invalidate_etag_cache('trailers_page')
         # --- КОНЕЦ ИНВАЛИДАЦИИ ---
     elif content_type == 'news':
         add_news(title, "Added via Telegram", video_url)
         # --- ИНВАЛИДАЦИЯ КЭША ---
         cache_delete('news_list')
         cache_delete('news_page')
+        # --- НОВОЕ: Инвалидация кэша ETag ---
+        invalidate_etag_cache('news_page')
         # --- КОНЕЦ ИНВАЛИДАЦИИ ---
     update.message.reply_text(f"✅ '{content_type}' '{title}' добавлено по ссылке!")
     cache_delete('moments_list')
@@ -1379,18 +1438,24 @@ def handle_pending_video_file(update, context):
             # --- ИНВАЛИДАЦИЯ КЭША ---
             cache_delete('moments_list')
             cache_delete('moments_page')
+            # --- НОВОЕ: Инвалидация кэша ETag ---
+            invalidate_etag_cache('moments_page')
             # --- КОНЕЦ ИНВАЛИДАЦИИ ---
         elif content_type == 'trailer':
             add_trailer(title, "Added via Telegram", video_url)
             # --- ИНВАЛИДАЦИЯ КЭША ---
             cache_delete('trailers_list')
             cache_delete('trailers_page')
+            # --- НОВОЕ: Инвалидация кэша ETag ---
+            invalidate_etag_cache('trailers_page')
             # --- КОНЕЦ ИНВАЛИДАЦИИ ---
         elif content_type == 'news':
             add_news(title, "Added via Telegram", video_url)
             # --- ИНВАЛИДАЦИЯ КЭША ---
             cache_delete('news_list')
             cache_delete('news_page')
+            # --- НОВОЕ: Инвалидация кэша ETag ---
+            invalidate_etag_cache('news_page')
             # --- КОНЕЦ ИНВАЛИДАЦИИ ---
         success_msg = f"✅ '{content_type}' '{title}' добавлено из файла!"
         logger.info(success_msg)
@@ -1454,55 +1519,12 @@ def health_check():
     except Exception as e:
         logger.error(f"Health check error: {e}")
         return jsonify({'status': 'unhealthy', 'error': str(e)}), 500
-
-# --- ВРЕМЕННЫЙ МАРШРУТ ДЛЯ ИНИЦИАЛИЗАЦИИ БД ---
-@app.route('/init-db-extra')
-def init_db_extra():
-    """
-    ВРЕМЕННЫЙ маршрут для добавления недостающих столбцов.
-    Доступен всем, НЕ БЕЗОПАСНО для продакшена, использовать ТОЛЬКО для инициализации!
-    После использования РЕКОМЕНДУЕТСЯ удалить этот маршрут.
-    """
-    logger.info("Вызов временного маршрута /init-db-extra")
-    try:
-        from database import get_db_connection
-        conn = get_db_connection()
-        c = conn.cursor()
-        logger.info("Подключение к БД установлено")
-
-        # Добавляем столбец preview_url в таблицу moments
-        logger.info("Попытка добавить preview_url в таблицу moments...")
-        c.execute("ALTER TABLE moments ADD COLUMN IF NOT EXISTS preview_url TEXT;")
-        logger.info("Столбец preview_url добавлен в moments (если отсутствовал).")
-
-        # Добавляем столбец preview_url в таблицу trailers
-        logger.info("Попытка добавить preview_url в таблицу trailers...")
-        c.execute("ALTER TABLE trailers ADD COLUMN IF NOT EXISTS preview_url TEXT;")
-        logger.info("Столбец preview_url добавлен в trailers (если отсутствовал).")
-
-        conn.commit()
-        conn.close()
-        logger.info("Все изменения успешно применены к базе данных.")
-        return jsonify({"success": True, "message": "Столбцы preview_url успешно добавлены в таблицы moments и trailers."}), 200
-
-    except Exception as e:
-        logger.error(f"Ошибка в /init-db-extra: {e}", exc_info=True)
-        if 'conn' in locals():
-            try:
-                conn.rollback()
-                conn.close()
-            except:
-                pass
-        return jsonify({"success": False, "error": str(e)}), 500
-# --- КОНЕЦ ВРЕМЕННОГО МАРШРУТА ---
-
 # --- Main ---
-if __name__ == '__main__':
-    # Инициализация БД уже происходит выше, поэтому здесь повторять не нужно.
-    # Она была перемещена туда, чтобы работать и при запуске через gunicorn.
-    logger.info("Запуск Telegram бота...")
-    start_bot()
-    port = int(os.environ.get('PORT', 10000))
-    logger.info(f"Запуск Flask приложения на порту {port}...")
-    app.run(host='0.0.0.0', port=port)
-    logger.info("Flask приложение остановлено.")
+# Инициализация БД уже происходит выше, поэтому здесь повторять не нужно.
+# Она была перемещена туда, чтобы работать и при запуске через gunicorn.
+logger.info("Запуск Telegram бота...")
+start_bot()
+port = int(os.environ.get('PORT', 10000))
+logger.info(f"Запуск Flask приложения на порту {port}...")
+app.run(host='0.0.0.0', port=port)
+logger.info("Flask приложение остановлено.")
