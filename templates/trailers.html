@@ -52,28 +52,32 @@
                 <h3 class="card-title">{{ trailer.title }}</h3>
                 <p class="card-description">{{ trailer.description }}</p>
                 {% if trailer.video_url %}
-                <!-- Упрощенный контейнер для видео -->
-                <div class="video-wrapper" style="position: relative; width: 100%; margin-bottom: 15px;">
+                <!-- НОВОЕ: Контейнер для превью и видео -->
+                <div class="video-container" data-video-url="{{ trailer.video_url }}" style="position: relative; width: 100%;">
+                    <!-- Отображение превью, если оно есть -->
                     {% if trailer.preview_url %}
-                        <!-- Если есть превью, показываем его как кликабельное изображение -->
-                        <img src="{{ trailer.preview_url }}" alt="Превью {{ trailer.title }}" class="video-preview-trigger" data-video-url="{{ trailer.video_url }}" style="width: 100%; border-radius: 10px; cursor: pointer; display: block;">
+                        <img src="{{ trailer.preview_url }}" alt="Превью {{ trailer.title }}" class="video-preview" style="width: 100%; border-radius: 10px; cursor: pointer; display: block;">
                     {% else %}
-                        <!-- Если превью нет, показываем кнопку Play поверх заглушки -->
-                        <div class="video-placeholder-trigger" data-video-url="{{ trailer.video_url }}" style="width: 100%; height: 200px; background: #333; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #aaa; cursor: pointer; position: relative;">
-                            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0, 0, 0, 0.7); border-radius: 50%; padding: 15px; display: flex; align-items: center; justify-content: center;">
-                                <svg width="40" height="40" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M8 5V19L19 12L8 5Z" />
-                                </svg>
-                            </div>
+                        <!-- Если превью нет, показываем заглушку -->
+                        <div class="video-placeholder" style="width: 100%; height: 200px; background: #333; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #aaa; cursor: pointer;">
                             Превью недоступно. Нажмите для воспроизведения.
                         </div>
                     {% endif %}
                     <!-- Видео скрыто по умолчанию -->
-                    <video class="video-player" controls preload="none" controlsList="nodownload" style="width: 100%; border-radius: 10px; display: none; margin-top: 10px;">
-                        <source src="" type="video/mp4">
+                    <video class="card-media" controls preload="none" controlsList="nodownload" style="width: 100%; border-radius: 10px; display: none;">
+                        <source src="{{ trailer.video_url }}" type="video/mp4">
                         Ваш браузер не поддерживает видео.
                     </video>
+                    <!-- Кнопка Play поверх превью (опционально) -->
+                    {% if trailer.preview_url %}
+                    <div class="play-button-overlay" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0, 0, 0, 0.7); border-radius: 50%; padding: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M8 5V19L19 12L8 5Z" />
+                        </svg>
+                    </div>
+                    {% endif %}
                 </div>
+                <!-- КОНЕЦ НОВОГО -->
                 {% endif %}
                 
                 <div class="reactions">
@@ -207,55 +211,121 @@
         });
     }
     
-    // --- НОВАЯ УПРОЩЕННАЯ ЛОГИКА: Обработка кликов по превью или заглушке для запуска видео ---
+    // НОВАЯ ФУНКЦИЯ: Обработка кликов по превью для запуска видео
     document.addEventListener('DOMContentLoaded', function() {
-        // Обработчик для изображений-превью
-        document.querySelectorAll('.video-preview-trigger').forEach(img => {
-            img.addEventListener('click', function() {
-                const videoUrl = this.dataset.videoUrl;
-                const videoPlayer = this.nextElementSibling; // Предполагаем, что <video> идет сразу после
-                
-                if (videoPlayer && videoPlayer.tagName === 'VIDEO') {
-                    // Скрываем превью
-                    this.style.display = 'none';
-                    // Устанавливаем источник и показываем видео
-                    const source = videoPlayer.querySelector('source');
-                    if (source) {
-                        source.src = videoUrl;
-                    } else {
-                        videoPlayer.src = videoUrl;
-                    }
-                    videoPlayer.load();
-                    videoPlayer.style.display = 'block';
-                    // Автоплей
-                    videoPlayer.play().catch(e => console.error("Autoplay failed:", e));
-                }
-            });
-        });
+        // Обработчик для контейнеров видео
+        document.querySelectorAll('.video-container').forEach(container => {
+            const previewImg = container.querySelector('.video-preview');
+            const placeholder = container.querySelector('.video-placeholder');
+            const videoElement = container.querySelector('video');
+            const sourceElement = videoElement.querySelector('source');
+            const playButton = container.querySelector('.play-button-overlay');
+            const videoUrl = container.dataset.videoUrl;
 
-        // Обработчик для заглушек-триггеров
-        document.querySelectorAll('.video-placeholder-trigger').forEach(placeholder => {
-            placeholder.addEventListener('click', function() {
-                const videoUrl = this.dataset.videoUrl;
-                // Создаем новый видеоэлемент
-                const videoPlayer = document.createElement('video');
-                videoPlayer.className = 'video-player';
-                videoPlayer.controls = true;
-                videoPlayer.preload = 'none';
-                videoPlayer.controlsList = 'nodownload';
-                videoPlayer.style.cssText = 'width: 100%; border-radius: 10px; display: block; margin-top: 10px;';
+            // Функция для запуска видео
+            function playVideo() {
+                // Скрываем превью/заглушку и кнопку Play
+                if (previewImg) previewImg.style.display = 'none';
+                if (placeholder) placeholder.style.display = 'none';
+                if (playButton) playButton.style.display = 'none';
                 
-                const source = document.createElement('source');
-                source.src = videoUrl;
-                source.type = 'video/mp4';
-                videoPlayer.appendChild(source);
+                // Показываем и запускаем видео
+                videoElement.style.display = 'block';
+                sourceElement.src = videoUrl; // Устанавливаем источник
+                videoElement.load(); // Перезагружаем видео
+                // Добавляем autoplay после загрузки
+                videoElement.onloadeddata = function() {
+                    videoElement.play().catch(e => console.error("Autoplay failed:", e));
+                };
+            }
+
+            // Назначаем обработчики клика
+            if (previewImg) {
+                previewImg.addEventListener('click', playVideo);
+            }
+            if (placeholder) {
+                placeholder.addEventListener('click', playVideo);
+            }
+            if (playButton) {
+                playButton.addEventListener('click', playVideo);
+            }
+        });
+    });
+    
+    // НОВАЯ ФУНКЦИЯ: Обработка ошибок воспроизведения видео
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('video').forEach(video => {
+            video.addEventListener('error', async function(e) {
+                console.log('Ошибка воспроизведения видео:', e);
                 
-                // Заменяем заглушку на видео
-                this.parentNode.replaceChild(videoPlayer, this);
+                // Получаем родительский элемент с информацией о видео
+                const card = this.closest('.card');
+                if (!card) return;
                 
-                // Загружаем и воспроизводим
-                videoPlayer.load();
-                videoPlayer.play().catch(e => console.error("Autoplay failed:", e));
+                // Получаем ID трейлера
+                const trailerId = card.dataset.trailerId;
+                if (!trailerId) return;
+                
+                // Показываем уведомление пользователю
+                const errorNotice = document.createElement('div');
+                errorNotice.className = 'video-error-notice';
+                errorNotice.innerHTML = `
+                    <div style="background: rgba(255, 0, 0, 0.2); padding: 15px; border-radius: 8px; margin: 10px 0;">
+                        <p style="margin: 0 0 10px 0;">🔄 Видео недоступно. Пытаемся обновить ссылку...</p>
+                        <div class="loading-spinner" style="width: 20px; height: 20px; border: 2px solid #fff; border-top: 2px solid #00f3ff; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                    </div>
+                `;
+                errorNotice.style.cssText = 'position: relative; z-index: 10;';
+                
+                // Вставляем уведомление перед видео
+                this.parentNode.insertBefore(errorNotice, this);
+                
+                try {
+                    // Отправляем запрос на обновление ссылки
+                    const response = await fetch('/api/refresh_video_url', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            trailer_id: trailerId
+                        })
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success && result.new_url) {
+                        // Обновляем источник видео
+                        const source = this.querySelector('source');
+                        if (source) {
+                            source.src = result.new_url;
+                        } else {
+                            this.src = result.new_url;
+                        }
+                        
+                        // Перезагружаем видео
+                        this.load();
+                        
+                        // Удаляем уведомление об ошибке
+                        errorNotice.remove();
+                        
+                        console.log('Видео успешно обновлено');
+                    } else {
+                        // Показываем ошибку
+                        errorNotice.innerHTML = `
+                            <div style="background: rgba(255, 0, 0, 0.3); padding: 15px; border-radius: 8px; margin: 10px 0;">
+                                <p style="margin: 0;">❌ Не удалось обновить видео. ${result.error || 'Попробуйте позже.'}</p>
+                            </div>
+                        `;
+                    }
+                } catch (refreshError) {
+                    console.error('Ошибка при обновлении видео:', refreshError);
+                    errorNotice.innerHTML = `
+                        <div style="background: rgba(255, 0, 0, 0.3); padding: 15px; border-radius: 8px; margin: 10px 0;">
+                            <p style="margin: 0;">❌ Ошибка сети при обновлении видео. Попробуйте позже.</p>
+                        </div>
+                    `;
+                }
             });
         });
     });
