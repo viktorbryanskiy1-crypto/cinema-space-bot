@@ -1,4 +1,3 @@
-# app.py (полный код)
 import os
 import threading
 import logging
@@ -78,9 +77,10 @@ CACHE_CONFIG = {
     'static_expire': 2592000, # 30 дней для статики (CSS, JS, изображения)
     'video_url_cache_time': 21600 # 6 часов для кэша ссылок Telegram
 }
-
 # --- НОВОЕ: Декораторы для кэширования ---
 from functools import wraps
+import hashlib # <-- Добавлен импорт hashlib
+
 def cache_control(max_age):
     """Декоратор для установки заголовков кэширования."""
     def decorator(f):
@@ -91,7 +91,6 @@ def cache_control(max_age):
             return resp
         return decorated_function
     return decorator
-
 def etag_cache(key_generator_func):
     """Декоратор для кэширования с использованием ETags."""
     def decorator(f):
@@ -108,16 +107,12 @@ def etag_cache(key_generator_func):
                 if request.headers.get('If-None-Match') == etag:
                     logger.debug(f"ETag совпал для {cache_key_base}, возвращаю 304 Not Modified")
                     return '', 304 # Not Modified
-
             # Если кэш отсутствует или ETag не совпал, выполняем функцию
             html_content = f(*args, **kwargs)
-            
             # Генерируем ETag на основе содержимого
             etag = hashlib.md5(html_content.encode('utf-8')).hexdigest()
-            
             # Сохраняем в кэш с ETag
             cache_set(cache_key, {'html': html_content, 'etag': etag}, expire=CACHE_CONFIG['html_expire'])
-            
             # Возвращаем ответ с ETag
             resp = make_response(html_content)
             resp.headers['ETag'] = etag
@@ -126,18 +121,14 @@ def etag_cache(key_generator_func):
         return decorated_function
     return decorator
 # --- КОНЕЦ новых декораторов ---
-
 # --- УЛУЧШЕННОЕ КЭШИРОВАНИЕ ССЫЛОК С АВТООБНОВЛЕНИЕМ ---
 # Используем CACHE_CONFIG для времени кэширования
 video_url_cache_advanced = {}
-
 def get_cached_direct_video_url_advanced(file_id, cache_time=None):
     """Кэшированное получение прямой ссылки с возможностью автообновления"""
     if cache_time is None:
         cache_time = CACHE_CONFIG['video_url_cache_time']
-        
     current_time = time.time()
-    
     # Проверяем кэш
     if file_id in video_url_cache_advanced:
         url, expire_time, original_file_id = video_url_cache_advanced[file_id]
@@ -158,7 +149,6 @@ def get_cached_direct_video_url_advanced(file_id, cache_time=None):
                 # Не удалось обновить, возвращаем старую (может еще немного поработать)
                 logger.warning(f"Не удалось обновить ссылку для file_id {file_id}, возвращаю старую")
                 return url, False # Возвращаем старую, надеемся, она еще жива
-    
     # Если в кэше нет или истекло время жизни и не обновилось
     logger.debug(f"Генерация новой ссылки для file_id {file_id}")
     url = get_direct_video_url(file_id)
@@ -167,7 +157,6 @@ def get_cached_direct_video_url_advanced(file_id, cache_time=None):
         logger.debug(f"Ссылка для file_id {file_id} закэширована")
         return url, False # Новая ссылка
     return None, False
-
 def get_direct_video_url(file_id):
     """Преобразует file_id в прямую ссылку для веба"""
     bot_token = TOKEN
@@ -199,7 +188,6 @@ def get_direct_video_url(file_id):
     except Exception as e:
         logger.error(f"Неизвестная ошибка при получении ссылки для file_id {file_id}: {e}")
         return None
-
 # --- ИСПРАВЛЕННАЯ Функция для извлечения видео из поста Telegram ---
 # (Обновлённая версия: пересылает сообщения только в тестовую группу)
 async def extract_video_url_from_telegram_post(post_url):
@@ -265,7 +253,6 @@ async def extract_video_url_from_telegram_post(post_url):
     except Exception as e:
         logger.error(f"[ИЗВЛЕЧЕНИЕ] Ошибка извлечения видео из поста {post_url}: {e}", exc_info=True)
         return None, f"Ошибка при обработке ссылки на пост: {str(e)}"
-
 def extract_video_url_sync(post_url):
     """Синхронная обертка для асинхронной функции извлечения видео"""
     try:
@@ -283,7 +270,6 @@ def extract_video_url_sync(post_url):
     except Exception as e:
         logger.error(f"Ошибка в синхронной обертке extract_video_url_sync: {e}", exc_info=True)
         return None, f"Ошибка обработки запроса: {e}"
-
 # --- НОВАЯ ФУНКЦИЯ: Извлечение ссылки на изображение из поста Telegram ---
 async def extract_image_url_from_telegram_post(post_url):
     """
@@ -310,10 +296,8 @@ async def extract_image_url_from_telegram_post(post_url):
         else:
             logger.error(f"[ИЗВЛЕЧЕНИЕ ИЗОБРАЖЕНИЯ] Неверный формат ссылки на пост: {post_url}")
             return None, "Неверный формат ссылки на пост Telegram."
-
         if chat_id_or_username is None or message_id is None:
              return None, "Не удалось распарсить ссылку на пост"
-
         bot = Bot(token=TOKEN)
         # --- ИСПРАВЛЕНИЕ: Всегда пересылаем в тестовую группу ---
         YOUR_TEST_CHAT_ID = -1003045387627 # <<<--- ВАШ ID ТЕСТОВОЙ ГРУППЫ
@@ -330,33 +314,26 @@ async def extract_image_url_from_telegram_post(post_url):
             logger.error(f"[ИЗВЛЕЧЕНИЕ ИЗОБРАЖЕНИЯ] Не удалось получить сообщение через forward: {e1}")
             return None, "Не удалось получить сообщение. Убедитесь, что бот имеет доступ к сообщению."
         # --- КОНЕЦ ИСПРАВЛЕНИЯ ---
-
         if not message:
             logger.error("[ИЗВЛЕЧЕНИЕ ИЗОБРАЖЕНИЯ] Сообщение не найдено или бот не имеет доступа")
             return None, "Сообщение не найдено."
-
         # Проверяем наличие фото
         if not message.photo:
             logger.error("[ИЗВЛЕЧЕНИЕ ИЗОБРАЖЕНИЯ] В посте нет изображения")
             return None, "В указанном посте не найдено изображение."
-
         # Берем самую крупную миниатюру
         photo_obj = message.photo[-1]
         file_id = photo_obj.file_id
         logger.info(f"[ИЗВЛЕЧЕНИЕ ИЗОБРАЖЕНИЯ] Найден file_id фото: {file_id}")
-        
         direct_url, _ = get_cached_direct_video_url_advanced(file_id)
         if not direct_url:
             logger.error("[ИЗВЛЕЧЕНИЕ ИЗОБРАЖЕНИЯ] Не удалось получить прямую ссылку из file_id")
             return None, "Не удалось получить прямую ссылку на изображение из Telegram."
-            
         logger.info(f"[ИЗВЛЕЧЕНИЕ ИЗОБРАЖЕНИЯ] Успешно извлечена прямая ссылка: {direct_url[:50]}...")
         return direct_url, None
-        
     except Exception as e:
         logger.error(f"[ИЗВЛЕЧЕНИЕ ИЗОБРАЖЕНИЯ] Ошибка извлечения изображения из поста {post_url}: {e}", exc_info=True)
         return None, f"Ошибка при обработке ссылки на пост: {str(e)}"
-
 def extract_image_url_sync(post_url):
     """Синхронная обертка для асинхронной функции извлечения изображения."""
     try:
@@ -375,7 +352,6 @@ def extract_image_url_sync(post_url):
         logger.error(f"Ошибка в синхронной обертке extract_image_url_sync: {e}", exc_info=True)
         return None, f"Ошибка обработки запроса: {e}"
 # --- КОНЕЦ НОВОЙ ФУНКЦИИ ---
-
 # --- НОВАЯ ФУНКЦИЯ: Обновление устаревшей ссылки ---
 @app.route('/api/refresh_video_url', methods=['POST'])
 def refresh_video_url():
@@ -401,13 +377,11 @@ def refresh_video_url():
     except Exception as e:
         logger.error(f"[ОБНОВЛЕНИЕ ССЫЛКИ] Критическая ошибка: {e}", exc_info=True)
         return jsonify(success=False, error="Внутренняя ошибка сервера"), 500
-
 # --- ИЗМЕНЕННАЯ ФУНКЦИЯ: Кэширование HTML страниц с учетом ETag ---
 def get_cached_html(key, generate_func, expire=None):
     """Получает HTML из кэша или генерирует новый, используя ETag."""
     if expire is None:
         expire = CACHE_CONFIG['html_expire']
-        
     # Для простоты, будем использовать ключ как основу для ETag кэша
     etag_cache_key = f"etag_cache_{key}"
     cached_data = cache_get(etag_cache_key)
@@ -416,7 +390,6 @@ def get_cached_html(key, generate_func, expire=None):
         # Здесь просто возвращаем HTML, если он есть и не истек
         logger.info(f"HTML для {key} получен из кэша (с ETag)")
         return cached_data['html']
-
     # Генерируем новый HTML
     html = generate_func()
     if html:
@@ -426,7 +399,6 @@ def get_cached_html(key, generate_func, expire=None):
         cache_set(etag_cache_key, {'html': html, 'etag': etag}, expire=expire)
         logger.info(f"HTML для {key} закэширован на {expire} секунд (с ETag)")
     return html
-
 # --- Функция для установки Menu Button ---
 def set_menu_button():
     """Устанавливает кнопку меню для бота"""
@@ -451,7 +423,6 @@ def set_menu_button():
     except Exception as e:
         logger.error(f"❌ ОШИБКА в set_menu_button: {e}", exc_info=True)
         return False
-
 if TOKEN:
     updater = Updater(TOKEN, use_context=True)
     dp = updater.dispatcher
@@ -548,14 +519,12 @@ def build_extra_map(data, item_type_plural):
         if reactions is None: # Может быть {}, что тоже валидно
             reactions = get_reactions_count(item_type_plural, item_id) or {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}
             cache_set(reactions_cache_key, reactions, expire=CACHE_CONFIG['data_expire'])
-            
         # Попробуем получить комментарии из кэша
         comments_cache_key = f"comments_{item_type_plural}_{item_id}"
         comments = cache_get(comments_cache_key)
         if comments is None:
             comments = get_comments(item_type_plural, item_id) or []
             cache_set(comments_cache_key, comments, expire=CACHE_CONFIG['data_expire'])
-            
         extra[item_id] = {'reactions': reactions, 'comments_count': len(comments)}
     return extra
 # --- Routes (пользовательские) ---
@@ -563,7 +532,6 @@ def build_extra_map(data, item_type_plural):
 @cache_control(CACHE_CONFIG['html_expire']) # Кэшируем главную страницу
 def index():
     return render_template('index.html')
-
 # --- НОВЫЙ МАРШРУТ ДЛЯ ПОИСКА ПО ССЫЛКЕ ---
 @app.route('/search_by_link')
 @cache_control(CACHE_CONFIG['html_expire']) # Кэшируем страницу поиска
@@ -571,12 +539,10 @@ def search_by_link_page():
     """Отображает страницу поиска фильма по ссылке."""
     return render_template('search_by_link.html')
 # --- КОНЕЦ НОВОГО МАРШРУТА ---
-
 # --- ИЗМЕНЕННЫЕ: Кэшированные маршруты для вкладок с ETag ---
 # Функция для генерации ключа ETag для страницы списка
 def moments_page_key():
     return "moments_page"
-
 @app.route('/moments')
 @etag_cache(moments_page_key) # Используем ETag кэш
 def moments():
@@ -614,11 +580,9 @@ def moments():
             return render_template('error.html', error=str(e))
     # Теперь генерация происходит внутри @etag_cache
     return generate_moments_html()
-
 # Аналогично для /trailers
 def trailers_page_key():
     return "trailers_page"
-
 @app.route('/trailers')
 @etag_cache(trailers_page_key)
 def trailers():
@@ -655,11 +619,9 @@ def trailers():
             logger.error(f"API add_trailer error: {e}", exc_info=True)
             return render_template('error.html', error=str(e))
     return generate_trailers_html()
-
 # Аналогично для /news
 def news_page_key():
     return "news_page"
-
 @app.route('/news')
 @etag_cache(news_page_key)
 def news():
@@ -695,14 +657,12 @@ def news():
             logger.error(f"API add_news error: {e}", exc_info=True)
             return render_template('error.html', error=str(e))
     return generate_news_html()
-
 # --- ИЗМЕНЕННЫЕ: Маршруты для отдельных элементов с кэшированием данных ---
 @app.route('/moments/<int:item_id>')
 @cache_control(CACHE_CONFIG['html_expire']) # Кэшируем страницу деталей
 def moment_detail(item_id):
     """Отображает страницу одного момента."""
     logger.info(f"Запрос к /moments/{item_id}")
-    
     # Попробуем получить элемент из кэша
     item_cache_key = f"item_moments_{item_id}"
     item = cache_get(item_cache_key)
@@ -711,25 +671,21 @@ def moment_detail(item_id):
         if item:
              # Сохраняем в кэш
              cache_set(item_cache_key, item, expire=CACHE_CONFIG['data_expire'])
-    
     if not item:
         logger.warning(f"Момент с id={item_id} не найден")
         abort(404)
-    
     # Попробуем получить реакции из кэша
     reactions_cache_key = f"reactions_moments_{item_id}"
     reactions = cache_get(reactions_cache_key)
     if reactions is None: # Может быть {}, что тоже валидно
         reactions = get_reactions_count('moments', item_id)
         cache_set(reactions_cache_key, reactions, expire=CACHE_CONFIG['data_expire'])
-        
     # Попробуем получить комментарии из кэша
     comments_cache_key = f"comments_moments_{item_id}"
     comments = cache_get(comments_cache_key)
     if comments is None:
         comments = get_comments('moments', item_id)
         cache_set(comments_cache_key, comments, expire=CACHE_CONFIG['data_expire'])
-        
     logger.info(f"Момент {item_id} найден: {item[1] if len(item) > 1 else 'Без названия'}")
     item_dict = {
         'id': item[0],
@@ -740,37 +696,31 @@ def moment_detail(item_id):
         'created_at': item[5] if len(item) > 5 else None # Обновлен индекс
     }
     return render_template('moment_detail.html', item=item_dict, reactions=reactions, comments=comments)
-
 # Аналогично для трейлеров и новостей
 @app.route('/trailers/<int:item_id>')
 @cache_control(CACHE_CONFIG['html_expire'])
 def trailer_detail(item_id):
     """Отображает страницу одного трейлера."""
     logger.info(f"Запрос к /trailers/{item_id}")
-    
     item_cache_key = f"item_trailers_{item_id}"
     item = cache_get(item_cache_key)
     if not item:
         item = get_item_by_id('trailers', item_id)
         if item:
              cache_set(item_cache_key, item, expire=CACHE_CONFIG['data_expire'])
-    
     if not item:
         logger.warning(f"Трейлер с id={item_id} не найден")
         abort(404)
-    
     reactions_cache_key = f"reactions_trailers_{item_id}"
     reactions = cache_get(reactions_cache_key)
     if reactions is None:
         reactions = get_reactions_count('trailers', item_id)
         cache_set(reactions_cache_key, reactions, expire=CACHE_CONFIG['data_expire'])
-        
     comments_cache_key = f"comments_trailers_{item_id}"
     comments = cache_get(comments_cache_key)
     if comments is None:
         comments = get_comments('trailers', item_id)
         cache_set(comments_cache_key, comments, expire=CACHE_CONFIG['data_expire'])
-        
     logger.info(f"Трейлер {item_id} найден: {item[1] if len(item) > 1 else 'Без названия'}")
     item_dict = {
         'id': item[0],
@@ -781,36 +731,30 @@ def trailer_detail(item_id):
         'created_at': item[5] if len(item) > 5 else None # Обновлен индекс
     }
     return render_template('trailer_detail.html', item=item_dict, reactions=reactions, comments=comments)
-
 @app.route('/news/<int:item_id>')
 @cache_control(CACHE_CONFIG['html_expire'])
 def news_detail(item_id):
     """Отображает страницу одной новости."""
     logger.info(f"Запрос к /news/{item_id}")
-    
     item_cache_key = f"item_news_{item_id}"
     item = cache_get(item_cache_key)
     if not item:
         item = get_item_by_id('news', item_id)
         if item:
              cache_set(item_cache_key, item, expire=CACHE_CONFIG['data_expire'])
-    
     if not item:
         logger.warning(f"Новость с id={item_id} не найдена")
         abort(404)
-    
     reactions_cache_key = f"reactions_news_{item_id}"
     reactions = cache_get(reactions_cache_key)
     if reactions is None:
         reactions = get_reactions_count('news', item_id)
         cache_set(reactions_cache_key, reactions, expire=CACHE_CONFIG['data_expire'])
-        
     comments_cache_key = f"comments_news_{item_id}"
     comments = cache_get(comments_cache_key)
     if comments is None:
         comments = get_comments('news', item_id)
         cache_set(comments_cache_key, comments, expire=CACHE_CONFIG['data_expire'])
-        
     logger.info(f"Новость {item_id} найдена: {item[1] if len(item) > 1 else 'Без заголовка'}")
     item_dict = {
         'id': item[0],
@@ -820,7 +764,6 @@ def news_detail(item_id):
         'created_at': item[4] if len(item) > 4 else None
     }
     return render_template('news_detail.html', item=item_dict, reactions=reactions, comments=comments)
-
 # --- ИЗМЕНЕННЫЕ: API-эндпоинты с кэшированием ---
 @app.route('/api/comments', methods=['GET'])
 def api_get_comments():
@@ -828,13 +771,11 @@ def api_get_comments():
         item_type = request.args.get('type')
         item_id = int(request.args.get('id'))
         cache_key = f"api_comments_{item_type}_{item_id}"
-        
         # Проверяем кэш
         cached_comments = cache_get(cache_key)
         if cached_comments is not None:
             logger.debug(f"Комментарии для {item_type}/{item_id} получены из кэша")
             return jsonify(comments=cached_comments)
-        
         # Если нет в кэше, получаем из БД
         comments = get_comments(item_type, item_id)
         # Сохраняем в кэш
@@ -844,19 +785,16 @@ def api_get_comments():
     except Exception as e:
         logger.error(f"API get_comments error: {e}", exc_info=True)
         return jsonify(comments=[], error=str(e)), 500
-
 # Добавим GET для получения реакций по типу и ID
 @app.route('/api/reactions/<item_type>/<int:item_id>', methods=['GET'])
 def api_get_reactions(item_type, item_id):
     try:
         cache_key = f"api_reactions_{item_type}_{item_id}"
-        
         # Проверяем кэш
         cached_reactions = cache_get(cache_key)
         if cached_reactions is not None:
             logger.debug(f"Реакции для {item_type}/{item_id} получены из кэша")
             return jsonify(reactions=cached_reactions)
-        
         # Если нет в кэше, получаем из БД
         reactions = get_reactions_count(item_type, item_id)
         # Сохраняем в кэш
@@ -866,18 +804,15 @@ def api_get_reactions(item_type, item_id):
     except Exception as e:
         logger.error(f"API get_reactions error: {e}", exc_info=True)
         return jsonify(reactions={}, error=str(e)), 500
-
 # --- ИЗМЕНЕННЫЙ: Маршрут для отдачи статических файлов с кэшированием ---
 @app.route('/uploads/<filename>')
 @cache_control(CACHE_CONFIG['static_expire']) # Кэшируем загруженные файлы надолго
 def uploaded_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
-
 @app.route('/static/<path:filename>')
 @cache_control(CACHE_CONFIG['static_expire']) # Кэшируем статические файлы (CSS, JS, изображения из static) надолго
 def static_files(filename):
     return send_from_directory('static', filename)
-
 # --- Маршрут для Webhook от Telegram ---
 @app.route('/<string:token>', methods=['POST'])
 def telegram_webhook(token):
@@ -906,7 +841,6 @@ def webhook_info():
     except Exception as e:
         logger.error(f"Ошибка получения информации о webhook: {e}")
         return jsonify({'error': str(e)}), 500
-
 # --- ИЗМЕНЕННЫЕ: Маршруты API добавления контента с инвалидацией кэша ---
 @app.route('/api/add_moment', methods=['POST'])
 def api_add_moment():
@@ -995,7 +929,6 @@ def api_add_news():
     except Exception as e:
         logger.error(f"API add_news error: {e}", exc_info=True)
         return jsonify(success=False, error=str(e)), 500
-
 # --- ИЗМЕНЕННЫЙ: Маршрут API добавления комментария с инвалидацией кэша ---
 @app.route('/api/comment', methods=['POST'])
 def api_add_comment():
@@ -1018,7 +951,6 @@ def api_add_comment():
     except Exception as e:
         logger.error(f"API add_comment error: {e}", exc_info=True)
         return jsonify(success=False, error=str(e)), 500
-
 # --- ИЗМЕНЕННЫЙ: Маршрут API добавления реакции с инвалидацией кэша ---
 # Этот маршрут для получения реакций (GET)
 @app.route('/api/reaction', methods=['GET'])
@@ -1030,7 +962,6 @@ def api_get_reaction():
         return api_get_reactions(item_type, int(item_id))
     else:
         return jsonify(reactions={}, error="Не указаны type или id"), 400
-
 # Этот маршрут для добавления реакции (POST)
 @app.route('/api/reaction', methods=['POST'])
 def api_add_reaction_post():
@@ -1053,7 +984,6 @@ def api_add_reaction_post():
     except Exception as e:
         logger.error(f"API add_reaction error: {e}", exc_info=True)
         return jsonify(success=False, error=str(e)), 500
-
 @app.route('/admin/login', methods=['GET', 'POST'])
 def admin_login():
     if request.method == 'POST':
@@ -1085,7 +1015,6 @@ def admin_dashboard():
                            trailers_count=stats.get('trailers', 0),
                            news_count=stats.get('news', 0),
                            comments_count=stats.get('comments', 0))
-
 # --- ИСПРАВЛЕННЫЙ И ОБНОВЛЕННЫЙ МАРШРУТ ДЛЯ ДОБАВЛЕНИЯ КОНТЕНТА ЧЕРЕЗ АДМИНКУ С ПОДДЕРЖКОЙ ПРЕВЬЮ ---
 @app.route('/admin/add_content', methods=['GET', 'POST'])
 @admin_required
@@ -1098,21 +1027,17 @@ def admin_add_content():
             title = request.form.get('title', '').strip()
             description = request.form.get('description', '').strip()
             telegram_url = request.form.get('telegram_url', '').strip()
-            
             # --- НОВОЕ: Получаем данные превью ---
             preview_telegram_url = request.form.get('preview_telegram_url', '').strip()
             preview_url_for_content = None # URL превью, которое будет сохранено в БД
-            
             # Инициализируем URL контента как None
             content_url = None
-
             # 2. Приоритет: Ссылка на Telegram для видео
             if telegram_url:
                 logger.info(f"[ADMIN FORM] Обнаружена ссылка на Telegram пост: {telegram_url}")
                 # Базовая проверка формата ссылки
                 if 't.me/' not in telegram_url:
                      return render_template('admin/add_content.html', error="Ссылка должна вести на пост в Telegram (t.me/...)")
-                
                 # Извлекаем прямую ссылку на видео
                 direct_url, error = extract_video_url_sync(telegram_url)
                 if direct_url:
@@ -1121,32 +1046,25 @@ def admin_add_content():
                 else:
                     logger.error(f"[ADMIN FORM] Ошибка извлечения видео из поста: {error}")
                     return render_template('admin/add_content.html', error=error)
-
             # 3. Приоритет: Загруженный файл видео (если не было ссылки на Telegram)
             # --- ПРОДВИНУТАЯ ЛОГИКА: Отправка файла в Telegram без временного сохранения ---
             elif 'video_file' in request.files:
                 file = request.files['video_file']
                 # Проверяем, был ли загружен файл и имеет ли он имя
                 if file and file.filename != '':
-                    
                     try:
                         # 1. Определяем ID чата для хранения (ваша тестовая группа)
                         YOUR_TEST_CHAT_ID = -1003045387627 # <<<--- ВАШ ID тестовой группы
-                        
                         # 2. Создаем InputFile из объекта FileStorage Flask
                         # Это позволяет отправить файл напрямую из памяти без сохранения на диск
                         from telegram import Bot
                         bot = Bot(token=TOKEN)
-                        
                         # file.stream - это BytesIO объект
                         # Нужно убедиться, что указатель в начале
                         file.stream.seek(0)
-                        
                         # Создаем InputFile. Имя файла берем из оригинала
                         input_file = InputFile(file.stream, filename=file.filename)
-                        
                         logger.info(f"[ADMIN FORM] Отправка видео '{file.filename}' в Telegram (чат {YOUR_TEST_CHAT_ID})...")
-                        
                         # 3. Отправляем файл в Telegram
                         # Выбираем метод в зависимости от типа контента
                         sent_message = None
@@ -1158,12 +1076,10 @@ def admin_add_content():
                             # По умолчанию видео
                             sent_message = bot.send_video(chat_id=YOUR_TEST_CHAT_ID, video=input_file, supports_streaming=True)
                             file_key = 'video'
-                        
                         # 4. Получаем file_id из отправленного сообщения
                         if sent_message and getattr(sent_message, file_key, None):
                             new_file_id = getattr(sent_message, file_key).file_id
                             logger.info(f"[ADMIN FORM] Видео загружено в Telegram, file_id: {new_file_id}")
-                            
                             # 5. !!!ИСПРАВЛЕНИЕ!!! Получаем прямую ссылку из file_id (с использованием улучшенного кэша)
                             # И ВАЖНО: используем эту ссылку для сохранения в БД
                             direct_url, _ = get_cached_direct_video_url_advanced(new_file_id)
@@ -1176,17 +1092,14 @@ def admin_add_content():
                         else:
                             logger.error("[ADMIN FORM] Не удалось отправить видео в Telegram или получить file_id")
                             return render_template('admin/add_content.html', error="Ошибка отправки видео в Telegram.")
-                            
                     except Exception as e:
                         logger.error(f"[ADMIN FORM] Ошибка при работе с Telegram API для загрузки видео: {e}", exc_info=True)
                         return render_template('admin/add_content.html', error=f"Ошибка обработки видео: {e}")
                     # --- КОНЕЦ ПРОДВИНУТОЙ ЛОГИКИ ЗАГРУЗКИ ВИДЕО ---
-        
             # 4. Проверка: был ли определен URL/путь к видео
             if not content_url:
                 # Если ни ссылка на видео, ни файл не были предоставлены
                 return render_template('admin/add_content.html', error="Укажите ссылку на Telegram пост с видео или загрузите видео файл.")
-
             # --- НОВОЕ: Обработка превью ---
             # Приоритет 1: Ссылка на пост Telegram с превью
             if preview_telegram_url:
@@ -1196,13 +1109,11 @@ def admin_add_content():
                 else:
                     # Используем новую функцию для извлечения изображения
                     direct_preview_url, error_p = extract_image_url_sync(preview_telegram_url)
-                    
                     if direct_preview_url:
                         preview_url_for_content = direct_preview_url
                         logger.info(f"[ADMIN FORM] Извлечена прямая ссылка на превью из поста: {preview_url_for_content[:50]}...")
                     else:
                         logger.error(f"[ADMIN FORM] Ошибка извлечения превью из поста: {error_p}")
-
             # Приоритет 2: Загруженный файл превью (если не было ссылки на Telegram)
             elif 'preview_file' in request.files:
                 preview_file = request.files['preview_file']
@@ -1211,20 +1122,16 @@ def admin_add_content():
                         YOUR_TEST_CHAT_ID = -1003045387627 # <<<--- ВАШ ID тестовой группы
                         from telegram import Bot
                         bot = Bot(token=TOKEN)
-                        
                         preview_file.stream.seek(0)
                         input_file = InputFile(preview_file.stream, filename=preview_file.filename)
-                        
                         logger.info(f"[ADMIN FORM] Отправка превью '{preview_file.filename}' в Telegram (чат {YOUR_TEST_CHAT_ID})...")
                         # Отправляем как фото
                         sent_message = bot.send_photo(chat_id=YOUR_TEST_CHAT_ID, photo=input_file)
-                        
                         if sent_message and sent_message.photo:
                             # Берем самую крупную миниатюру
                             photo_obj = sent_message.photo[-1] 
                             new_file_id = photo_obj.file_id
                             logger.info(f"[ADMIN FORM] Превью загружено в Telegram, file_id: {new_file_id}")
-                            
                             direct_preview_url, _ = get_cached_direct_video_url_advanced(new_file_id) # Используем существующую функцию
                             if direct_preview_url:
                                 preview_url_for_content = direct_preview_url
@@ -1236,7 +1143,6 @@ def admin_add_content():
                     except Exception as e:
                         logger.error(f"[ADMIN FORM] Ошибка при работе с Telegram API для загрузки превью: {e}", exc_info=True)
             # --- КОНЕЦ ОБРАБОТКИ ПРЕВЬЮ ---
-
             # 5. Сохранение в БД в зависимости от типа контента
             # !!!Теперь content_url всегда содержит прямую ссылку на видео в Telegram!!!
             # !!!А preview_url_for_content содержит прямую ссылку на превью в Telegram!!!
@@ -1267,19 +1173,15 @@ def admin_add_content():
             else:
                 # На случай, если content_type некорректный (вдруг select был изменен)
                 return render_template('admin/add_content.html', error="Неверный тип контента.")
-
             # 6. Перенаправление после успешного добавления на страницу со всем контентом
             return redirect(url_for('admin_content'))
-
         except Exception as e:
             logger.error(f"[ADMIN FORM] add_content error: {e}", exc_info=True)
             # Отображаем форму с сообщением об ошибке
             return render_template('admin/add_content.html', error=f"Ошибка сервера: {e}")
-
     # 7. Если метод GET (первый заход на страницу), просто отображаем форму
     return render_template('admin/add_content.html')
 # --- КОНЕЦ ИСПРАВЛЕННОГО И ОБНОВЛЕННОГО МАРШРУТА ---
-
 @app.route('/admin/add_video')
 @admin_required
 def admin_add_video_form():
@@ -1539,6 +1441,48 @@ def health_check():
     except Exception as e:
         logger.error(f"Health check error: {e}")
         return jsonify({'status': 'unhealthy', 'error': str(e)}), 500
+
+# --- ВРЕМЕННЫЙ МАРШРУТ ДЛЯ ИНИЦИАЛИЗАЦИИ БД ---
+@app.route('/init-db-extra')
+def init_db_extra():
+    """
+    ВРЕМЕННЫЙ маршрут для добавления недостающих столбцов.
+    Доступен всем, НЕ БЕЗОПАСНО для продакшена, использовать ТОЛЬКО для инициализации!
+    После использования РЕКОМЕНДУЕТСЯ удалить этот маршрут.
+    """
+    logger.info("Вызов временного маршрута /init-db-extra")
+    try:
+        from database import get_db_connection
+        conn = get_db_connection()
+        c = conn.cursor()
+        logger.info("Подключение к БД установлено")
+
+        # Добавляем столбец preview_url в таблицу moments
+        logger.info("Попытка добавить preview_url в таблицу moments...")
+        c.execute("ALTER TABLE moments ADD COLUMN IF NOT EXISTS preview_url TEXT;")
+        logger.info("Столбец preview_url добавлен в moments (если отсутствовал).")
+
+        # Добавляем столбец preview_url в таблицу trailers
+        logger.info("Попытка добавить preview_url в таблицу trailers...")
+        c.execute("ALTER TABLE trailers ADD COLUMN IF NOT EXISTS preview_url TEXT;")
+        logger.info("Столбец preview_url добавлен в trailers (если отсутствовал).")
+
+        conn.commit()
+        conn.close()
+        logger.info("Все изменения успешно применены к базе данных.")
+        return jsonify({"success": True, "message": "Столбцы preview_url успешно добавлены в таблицы moments и trailers."}), 200
+
+    except Exception as e:
+        logger.error(f"Ошибка в /init-db-extra: {e}", exc_info=True)
+        if 'conn' in locals():
+            try:
+                conn.rollback()
+                conn.close()
+            except:
+                pass
+        return jsonify({"success": False, "error": str(e)}), 500
+# --- КОНЕЦ ВРЕМЕННОГО МАРШРУТА ---
+
 # --- Main ---
 if __name__ == '__main__':
     try:
