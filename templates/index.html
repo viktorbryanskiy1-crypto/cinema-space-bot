@@ -206,50 +206,28 @@
     </div>
 
     <!-- Основной контент (скрыт до загрузки) -->
-    <div id="app-content" class="app-container" style="display: none;">
-        <!-- Заголовок -->
-        <header class="app-header">
-            <div class="header-content">
-                <h1 class="app-logo">CINEMA<span>SPACE</span></h1>
+    <div id="app-content" class="container" style="display: none;">
+        <nav class="navbar">
+            <div class="nav-brand">
+                <h1>🌌 КиноВселенная</h1>
             </div>
-        </header>
-
-        <!-- Основной контент -->
-        <main class="main-content">
-            <!-- Поисковая строка -->
-            <div class="search-section">
-                <div class="search-container">
-                    <input type="text" id="search-input" class="search-input" placeholder="Поиск по названию...">
-                    <button id="search-btn" class="search-btn">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <circle cx="11" cy="11" r="8"></circle>
-                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                        </svg>
-                    </button>
-                </div>
+            <div class="nav-tabs">
+                <button class="tab-btn active" data-tab="moments">🎬 Моменты из кино</button>
+                <button class="tab-btn" data-tab="trailers">🎥 Трейлеры</button>
+                <button class="tab-btn" data-tab="news">📰 Новости</button>
             </div>
-
-            <!-- Контент вкладок -->
-            <div id="content-area">
-                <!-- Контент будет загружаться сюда -->
-            </div>
-        </main>
-
-        <!-- Навигационные вкладки внизу -->
-        <nav class="bottom-nav">
-            <div class="nav-item active" data-tab="moments">
-                <div class="nav-icon">🎬</div>
-                <span>Моменты</span>
-            </div>
-            <div class="nav-item" data-tab="trailers">
-                <div class="nav-icon">🎥</div>
-                <span>Трейлеры</span>
-            </div>
-            <div class="nav-item" data-tab="news">
-                <div class="nav-icon">📰</div>
-                <span>Новости</span>
+            <div class="search-container">
+                <input type="text" id="search-input" class="search-input" placeholder="Поиск по названиям...">
+                <button id="search-btn" class="search-btn">🔍</button>
             </div>
         </nav>
+        
+        <div id="content-area">
+            <div style="text-align: center; padding: 50px; color: var(--accent);">
+                <h2>🚀 Добро пожаловать в КиноВселенную!</h2>
+                <p>Здесь скоро появится космическое приложение с фильмами, трейлерами и новостями</p>
+            </div>
+        </div>
     </div>
     
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
