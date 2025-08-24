@@ -1,98 +1,98 @@
 <!-- templates/news.html -->
 <div class="content-section">
-    <!-- Сетка новостей -->
-    <div class="content-grid" id="news-grid">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+        <h2 style="background: linear-gradient(45deg, #00f3ff, #ff00c8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size: 2em;">📰 Новости</h2>
+        <button id="add-news-btn" class="tab-btn" style="padding: 12px 25px;">➕ Добавить новость</button>
+    </div>
+
+    <!-- Модальное окно -->
+    <div id="add-news-modal" class="modal" style="display: none; justify-content: center; align-items: center;">
+        <div class="modal-content" style="max-width: 500px; width: 90%; background: #222; padding: 20px; border-radius: 12px; position: relative;">
+            <h3>📰 Добавить новость</h3>
+            <form id="add-news-form" enctype="multipart/form-data">
+                <input type="text" name="title" placeholder="Заголовок новости" required
+                    style="width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid var(--accent); border-radius: 10px; background: rgba(255,255,255,0.1); color: white;">
+
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 10px;">Выберите способ добавления изображения:</label>
+                    <div>
+                        <input type="radio" name="image_type" value="upload" id="news_image_upload" checked>
+                        <label for="news_image_upload">Загрузить файл</label>
+                    </div>
+                    <div>
+                        <input type="radio" name="image_type" value="url" id="news_image_url">
+                        <label for="news_image_url">Ссылка на изображение</label>
+                    </div>
+                </div>
+
+                <div id="news-file-section">
+                    <input type="file" name="image_file" accept="image/*" style="width: 100%; margin-bottom: 15px; color: white;">
+                    <small style="color: var(--text-secondary);">Макс. размер: 16MB. Форматы: PNG, JPG, JPEG, GIF, WEBP</small>
+                </div>
+
+                <div id="news-url-section" style="display: none;">
+                    <input type="text" name="image_url" placeholder="URL изображения"
+                        style="width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid var(--accent); border-radius: 10px; background: rgba(255,255,255,0.1); color: white;">
+                </div>
+
+                <textarea name="text" placeholder="Текст новости" required
+                    style="width: 100%; padding: 12px; margin-bottom: 15px; height: 150px; border: 1px solid var(--accent); border-radius: 10px; background: rgba(255,255,255,0.1); color: white;"></textarea>
+
+                <button type="submit" class="submit-btn" style="width: 100%;">Добавить новость</button>
+                <button type="button" onclick="closeModal('add-news-modal')" class="tab-btn" style="width: 100%; margin-top: 10px;">Отмена</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="card-grid">
         {% if news %}
             {% for news_item in news %}
-            <!-- Карточка новости -->
-            <div class="video-card" data-id="{{ news_item.id }}" data-type="news">
-                <div class="video-thumbnail">
-                    {% if news_item.image_url %}
-                        <!-- Если есть изображение, показываем его -->
-                        <img src="{{ news_item.image_url }}" alt="{{ news_item.title }}" loading="lazy">
-                    {% else %}
-                        <!-- Если изображения нет, показываем заглушку -->
-                        <div class="video-placeholder">📰</div>
-                    {% endif %}
+            <div class="card" data-news-id="{{ news_item.id }}">
+                <h3 class="card-title">{{ news_item.title }}</h3>
+                {% if news_item.image_url %}
+                    <img class="card-media" src="{{ news_item.image_url }}" alt="{{ news_item.title }}" onerror="this.style.display='none'" style="border-radius: 10px; max-width: 100%;">
+                {% endif %}
+                <div class="card-text">{{ news_item.text }}</div>
+
+                <div class="reactions">
+                    <button class="reaction-btn" data-id="{{ news_item.id }}" data-type="news" data-reaction="like">
+                        👍 <span class="reaction-count">{{ news_item.reactions.like }}</span>
+                    </button>
+                    <button class="reaction-btn" data-id="{{ news_item.id }}" data-type="news" data-reaction="dislike">
+                        👎 <span class="reaction-count">{{ news_item.reactions.dislike }}</span>
+                    </button>
+                    <button class="reaction-btn" data-id="{{ news_item.id }}" data-type="news" data-reaction="star">
+                        ⭐ <span class="reaction-count">{{ news_item.reactions.star }}</span>
+                    </button>
+                    <button class="reaction-btn" data-id="{{ news_item.id }}" data-type="news" data-reaction="fire">
+                        🔥 <span class="reaction-count">{{ news_item.reactions.fire }}</span>
+                    </button>
                 </div>
-                <div class="video-info">
-                    <!-- Только название на главной сетке -->
-                    <h3 class="video-title">{{ news_item.title }}</h3>
+
+                <div class="comments-section">
+                    <button class="load-comments tab-btn" data-id="{{ news_item.id }}" data-type="news" style="margin-bottom: 15px; padding: 8px 15px;">
+                        💬 Показать комментарии ({{ news_item.comments_count }})
+                    </button>
+                    <div class="comments-list"></div>
+                    <form class="comment-form" data-id="{{ news_item.id }}" data-type="news">
+                        <textarea class="comment-input" placeholder="Написать комментарий..."></textarea>
+                        <button type="submit" class="submit-btn">Отправить</button>
+                    </form>
                 </div>
             </div>
             {% endfor %}
         {% else %}
-            <!-- Сообщение, если нет новостей -->
-            <div class="no-results">
-                <div style="text-align: center; padding: 50px; color: var(--accent);">
-                    <h2>📰 Новости</h2>
-                    <p>Пока нет добавленных новостей</p>
-                    <button id="add-news-btn-alt" class="tab-btn" style="margin-top: 20px;">➕ Добавить первую новость</button>
-                </div>
+            <div style="text-align: center; padding: 50px; color: var(--accent);">
+                <h2>📰 Новости</h2>
+                <p>Пока нет добавленных новостей</p>
+                <button id="add-news-btn-alt" class="tab-btn" style="margin-top: 20px;">➕ Добавить первую новость</button>
             </div>
         {% endif %}
     </div>
 </div>
 
-<!-- Модальное окно для добавления новости (остается без изменений по функциональности) -->
-<div id="add-news-modal" class="modal" style="display: none;">
-    <div class="modal-content">
-        <button class="close-modal" onclick="closeModal('add-news-modal')">&times;</button>
-        <h3>📰 Добавить новость</h3>
-        <form id="add-news-form" enctype="multipart/form-data">
-            <input type="text" name="title" placeholder="Заголовок новости" required
-                style="width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid var(--accent); border-radius: 10px; background: rgba(255,255,255,0.1); color: white;"><br>
-
-            <div style="margin-bottom: 15px;">
-                <label style="display: block; margin-bottom: 10px;">Выберите способ добавления изображения:</label>
-                <div>
-                    <input type="radio" name="image_type" value="upload" id="news_image_upload" checked>
-                    <label for="news_image_upload">Загрузить файл</label>
-                </div>
-                <div>
-                    <input type="radio" name="image_type" value="url" id="news_image_url">
-                    <label for="news_image_url">Ссылка на изображение</label>
-                </div>
-            </div>
-
-            <div id="news-file-section">
-                <input type="file" name="image_file" accept="image/*"
-                    style="width: 100%; margin-bottom: 15px; color: white;">
-                <small style="color: var(--text-secondary);">Макс. размер: 16MB. Форматы: PNG, JPG, JPEG, GIF, WEBP</small>
-            </div>
-
-            <div id="news-url-section" style="display: none;">
-                <input type="text" name="image_url" placeholder="URL изображения (Telegram, прямая ссылка)"
-                    style="width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid var(--accent); border-radius: 10px; background: rgba(255,255,255,0.1); color: white;">
-                <small style="color: var(--text-secondary);">Поддерживаются ссылки на Telegram посты с изображениями и прямые ссылки на изображения.</small>
-            </div>
-
-            <textarea name="text" placeholder="Текст новости" required
-                style="width: 100%; padding: 12px; margin-bottom: 15px; height: 150px; border: 1px solid var(--accent); border-radius: 10px; background: rgba(255,255,255,0.1); color: white;"></textarea><br>
-
-            <button type="submit" class="submit-btn" style="width: 100%;">Добавить новость</button>
-            <button type="button" onclick="closeModal('add-news-modal')" class="tab-btn"
-                style="width: 100%; margin-top: 10px;">Отмена</button>
-        </form>
-    </div>
-</div>
-
+<!-- Глобальные функции для этой страницы, если main.js еще не загрузился -->
 <script>
-// --- Обработчики кликов по карточкам для перехода на детали ---
-document.addEventListener('DOMContentLoaded', function() {
-    // Добавляем обработчики кликов по карточкам новостей
-    document.querySelectorAll('.video-card[data-type="news"]').forEach(card => {
-        card.addEventListener('click', function() {
-            const newsId = this.getAttribute('data-id');
-            // Переход на страницу деталей
-            window.location.href = `/news/${newsId}`;
-        });
-    });
-
-    // --- Сохраняем всю вашу существующую логику модальных окон и форм ---
-    // (Обратите внимание: основная логика теперь в main.js,
-    //  этот код останется резервным, если main.js не загрузится или не выполнится корректно)
-
     // Эти функции будут заменены на функции из main.js, если он загрузится
     if (typeof showAddNewsModal === 'undefined') {
         function showModal(id) {
@@ -106,82 +106,71 @@ document.addEventListener('DOMContentLoaded', function() {
         function showAddNewsModal() {
             showModal('add-news-modal');
         }
-
+        
         // Простой обработчик для кнопок на этой странице
-        const addBtn = document.getElementById('add-news-btn');
-        const addBtnAlt = document.getElementById('add-news-btn-alt');
-        if (addBtn) addBtn.addEventListener('click', showAddNewsModal);
-        if (addBtnAlt) addBtnAlt.addEventListener('click', showAddNewsModal);
-
-        // Переключатель загрузки файла / URL изображения
-        document.addEventListener('change', function(e) {
-            if (e.target.name === 'image_type' && e.target.closest('#add-news-modal')) {
-                if (e.target.value === 'upload') {
+        document.addEventListener('DOMContentLoaded', function() {
+            const addBtn = document.getElementById('add-news-btn');
+            const addBtnAlt = document.getElementById('add-news-btn-alt');
+            if (addBtn) addBtn.addEventListener('click', showAddNewsModal);
+            if (addBtnAlt) addBtnAlt.addEventListener('click', showAddNewsModal);
+            
+            // Показ и скрытие модального окна
+            document.addEventListener('change', (e) => {
+                if (e.target.name === 'image_type' && e.target.closest('#add-news-modal')) {
+                  if (e.target.value === 'upload') {
                     document.getElementById('news-file-section').style.display = 'block';
                     document.getElementById('news-url-section').style.display = 'none';
-                } else {
+                  } else {
                     document.getElementById('news-file-section').style.display = 'none';
                     document.getElementById('news-url-section').style.display = 'block';
-                }
-            }
-        });
-
-        // Обработчик формы добавления новости
-        const form = document.getElementById('add-news-form');
-        if (form) {
-            form.addEventListener('submit', async function(e) {
-                e.preventDefault();
-                const formData = new FormData(this);
-                const imageType = this.querySelector('input[name="image_type"]:checked').value;
-
-                try {
-                    let response;
-                    if (imageType === 'upload' && this.querySelector('input[name="image_file"]').files[0]) {
-                        // Загрузка файла
-                        response = await fetch('/api/add_news', {
-                            method: 'POST',
-                            body: formData
-                        });
-                    } else {
-                        // Отправка URL
-                        const jsonData = {
-                            title: formData.get('title'),
-                            text: formData.get('text'),
-                            image_url: formData.get('image_url') || ''
-                        };
-                        response = await fetch('/api/add_news', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify(jsonData)
-                        });
-                    }
-
-                    const result = await response.json();
-                    if (result.success) {
-                        closeModal('add-news-modal');
-                        // Вместо перезагрузки всей страницы, можно обновить только сетку
-                        // или перенаправить на главную. Пока оставим перезагрузку.
-                        location.reload();
-                    } else {
-                        alert('Ошибка: ' + (result.error || 'Не удалось добавить новость'));
-                    }
-                } catch (error) {
-                    alert('Ошибка загрузки: ' + error.message);
+                  }
                 }
             });
-        }
 
-        // Закрытие модального окна при клике вне его
-        window.addEventListener('click', function(e) {
-            const modals = document.querySelectorAll('.modal');
-            modals.forEach(modal => {
-                if (e.target === modal) {
-                    modal.style.display = 'none';
+            // Инициализация отображения при загрузке страницы
+            document.addEventListener('DOMContentLoaded', () => {
+                const checkedRadio = document.querySelector('input[name="image_type"]:checked');
+                if (checkedRadio) {
+                  checkedRadio.dispatchEvent(new Event('change'));
                 }
+            });
+
+            // Обработка отправки формы добавления новости через fetch
+            const form = document.getElementById('add-news-form');
+            if (form) {
+                form.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const formElement = e.target;
+                    const formData = new FormData(formElement);
+
+                    try {
+                      const response = await fetch('/api/add_news', {
+                        method: 'POST',
+                        body: formData
+                      });
+                      const result = await response.json();
+
+                      if (result.success) {
+                        closeModal('add-news-modal');
+                        location.reload();
+                      } else {
+                        alert('Ошибка: ' + (result.error || 'Не удалось добавить новость'));
+                      }
+                    } catch (err) {
+                      alert('Ошибка загрузки: ' + err.message);
+                    }
+                });
+            }
+            
+            // Закрытие модального окна при клике вне его
+            window.addEventListener('click', function(e) {
+                const modals = document.querySelectorAll('.modal');
+                modals.forEach(modal => {
+                    if (e.target === modal) {
+                        modal.style.display = 'none';
+                    }
+                });
             });
         });
     }
-});
 </script>
