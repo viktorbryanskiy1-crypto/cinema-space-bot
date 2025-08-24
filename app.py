@@ -1,14 +1,12 @@
-# app.py (полный код с изменениями для кэширования)
+# app.py (полный код)
 import os
 import threading
 import logging
 import uuid
-import hashlib
 import requests
 import time
 import re
 import asyncio
-import hashlib # <-- Перемещен сюда
 from datetime import datetime
 from flask import (
     Flask, render_template, request, jsonify,
@@ -19,6 +17,8 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, Bot
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 import redis
 import json
+# --- НОВОЕ: Добавлен импорт hashlib ---
+import hashlib
 from database import (
     get_or_create_user, get_user_role,
     add_moment, add_trailer, add_news,
@@ -77,9 +77,7 @@ try:
     logger.info("✅ База данных инициализирована.")
 except Exception as e:
     logger.error(f"❌ ОШИБКА инициализации БД: {e}", exc_info=True)
-    # В зависимости от требований, можно выбросить исключение,
-    # чтобы остановить запуск приложения, если БД критична.
-    # raise e
+    # raise e # Опционально: остановить запуск при критической ошибке БД
 # --- КОНЕЦ ИНИЦИАЛИЗАЦИИ БД ---
 
 # --- Telegram Bot ---
@@ -87,7 +85,6 @@ updater = None
 dp = None
 pending_video_data = {}
 # --- НОВОЕ: Конфигурация кэширования ---
-# --- ИЗМЕНЕНО: Уменьшено время кэширования ---
 CACHE_CONFIG = {
     'html_expire': 300,       # Было 1800 (30 минут), стало 5 минут
     'api_expire': 120,        # Было 300 (5 минут), стало 2 минуты
@@ -204,6 +201,14 @@ def get_direct_video_url(file_id):
     except Exception as e:
         logger.error(f"Неизвестная ошибка при получении ссылки для file_id {file_id}: {e}")
         return None
+
+# --- НОВОЕ: Функция для инвалидации ETag кэша ---
+def invalidate_etag_cache(cache_key_base):
+    """Удаляет кэш ETag для заданного ключа."""
+    cache_key = f"etag_cache_{cache_key_base}"
+    cache_delete(cache_key)
+    logger.debug(f"Кэш ETag для '{cache_key_base}' инвалидирован.")
+# --- КОНЕЦ НОВОГО ---
 
 # --- ИСПРАВЛЕННАЯ Функция для извлечения видео из поста Telegram ---
 # (Обновлённая версия: пересылает сообщения только в тестовую группу)
@@ -525,15 +530,6 @@ def cache_delete(key):
             redis_client.delete(key)
         except Exception:
             pass
-            
-# --- НОВОЕ: Функция для инвалидации ETag кэша ---
-def invalidate_etag_cache(cache_key_base):
-    """Удаляет кэш ETag для заданного ключа."""
-    cache_key = f"etag_cache_{cache_key_base}"
-    cache_delete(cache_key)
-    logger.debug(f"Кэш ETag для '{cache_key_base}' инвалидирован.")
-# --- КОНЕЦ НОВОГО ---
-
 def build_extra_map(data, item_type_plural):
     """Добавляет реакции и комментарии к каждому элементу данных."""
     extra = {}
@@ -879,6 +875,7 @@ def _get_payload():
         # но для наших форм подходит.
         # Для файлов request.files будет содержать их.
         return request.form.to_dict()
+
 # --- ИЗМЕНЕННЫЕ: Маршруты API добавления контента с инвалидацией кэша ---
 @app.route('/api/add_moment', methods=['POST'])
 def api_add_moment():
@@ -1519,12 +1516,29 @@ def health_check():
     except Exception as e:
         logger.error(f"Health check error: {e}")
         return jsonify({'status': 'unhealthy', 'error': str(e)}), 500
-# --- Main ---
-# Инициализация БД уже происходит выше, поэтому здесь повторять не нужно.
-# Она была перемещена туда, чтобы работать и при запуске через gunicorn.
-logger.info("Запуск Telegram бота...")
-start_bot()
-port = int(os.environ.get('PORT', 10000))
-logger.info(f"Запуск Flask приложения на порту {port}...")
-app.run(host='0.0.0.0', port=port)
-logger.info("Flask приложение остановлено.")
+
+# --- Main (удален или закомментирован для корректной работы с Gunicorn) ---
+# if __name__ == '__main__':
+#     # БЛОК УДАЛЕН/ЗАКОММЕНТИРОВАН для корректной работы с Gunicorn на Railway
+#     # Railway запускает приложение через Gunicorn, который сам вызывает app.
+#     # Этот блок может конфликтовать, пытаясь занять уже используемый порт.
+#     #
+#     # Для локального запуска без Gunicorn можно раскомментировать и использовать:
+#     # try:
+#     #     logger.info("Инициализация базы данных...")
+#     #     init_db()
+#     #     logger.info("База данных инициализирована.")
+#     # except Exception as e:
+#     #     logger.error(f"DB init error: {e}", exc_info=True)
+#     # logger.info("Запуск Telegram бота...")
+#     # start_bot() # Этот вызов уже происходит выше при импорте, если TOKEN есть
+#     # port = int(os.environ.get('PORT', 10000))
+#     # logger.info(f"Запуск Flask приложения на порту {port}...")
+#     # app.run(host='0.0.0.0', port=port) # <-- ЭТО вызывает OSError: Address already in use на Railway
+#     # logger.info("Flask приложение остановлено.")
+#     pass # Или просто удалите весь блок
+
+# --- Экспорт приложения для WSGI (например, Gunicorn) ---
+# Gunicorn импортирует этот модуль и ожидает переменную с именем 'app'
+# Объект app = Flask(...) уже создан выше в файле.
+# Никакого дополнительного кода здесь не нужно, просто убедитесь, что 'app' существует.
