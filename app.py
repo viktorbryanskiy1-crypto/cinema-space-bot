@@ -68,6 +68,7 @@ ALLOWED_VIDEO_EXTENSIONS = {'mp4', 'avi', 'mov', 'wmv', 'flv', 'webm'}
 ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 def allowed_file(filename, allowed_exts):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in allowed_exts
+
 # --- ИНИЦИАЛИЗАЦИЯ БД ---
 # Вызываем init_db() сразу после создания app и настройки Redis,
 # но до создания updater и других компонентов.
@@ -79,6 +80,7 @@ except Exception as e:
     logger.error(f"❌ ОШИБКА инициализации БД: {e}", exc_info=True)
     # raise e # Опционально: остановить запуск при критической ошибке БД
 # --- КОНЕЦ ИНИЦИАЛИЗАЦИИ БД ---
+
 # --- Telegram Bot ---
 updater = None
 dp = None
@@ -200,6 +202,7 @@ def get_direct_video_url(file_id):
     except Exception as e:
         logger.error(f"Неизвестная ошибка при получении ссылки для file_id {file_id}: {e}")
         return None
+
 # --- НОВОЕ: Функция для инвалидации ETag кэша ---
 def invalidate_etag_cache(cache_key_base):
     """Удаляет кэш ETag для заданного ключа."""
@@ -207,6 +210,7 @@ def invalidate_etag_cache(cache_key_base):
     cache_delete(cache_key)
     logger.debug(f"Кэш ETag для '{cache_key_base}' инвалидирован.")
 # --- КОНЕЦ НОВОГО ---
+
 # --- ИСПРАВЛЕННАЯ Функция для извлечения видео из поста Telegram ---
 # (Обновлённая версия: пересылает сообщения только в тестовую группу)
 async def extract_video_url_from_telegram_post(post_url):
@@ -593,10 +597,7 @@ def moments():
                 item_dict['comments_count'] = extra_info.get('comments_count', 0)
                 combined_data.append(item_dict)
             logger.info("Данные объединены успешно")
-            # --- ИЗМЕНЕНИЕ: Возвращаем шаблон moments.html вместо index.html ---
-            # Этот шаблон теперь содержит сетку карточек
             return render_template('moments.html', moments=combined_data)
-            # --- КОНЕЦ ИЗМЕНЕНИЯ ---
         except Exception as e:
             logger.error(f"API add_moment error: {e}", exc_info=True)
             return render_template('error.html', error=str(e))
@@ -636,9 +637,7 @@ def trailers():
                 item_dict['comments_count'] = extra_info.get('comments_count', 0)
                 combined_data.append(item_dict)
             logger.info("Данные объединены успешно")
-            # --- ИЗМЕНЕНИЕ: Возвращаем шаблон trailers.html вместо index.html ---
             return render_template('trailers.html', trailers=combined_data)
-            # --- КОНЕЦ ИЗМЕНЕНИЯ ---
         except Exception as e:
             logger.error(f"API add_trailer error: {e}", exc_info=True)
             return render_template('error.html', error=str(e))
@@ -676,9 +675,7 @@ def news():
                 item_dict['comments_count'] = extra_info.get('comments_count', 0)
                 combined_data.append(item_dict)
             logger.info("Данные объединены успешно")
-            # --- ИЗМЕНЕНИЕ: Возвращаем шаблон news.html вместо index.html ---
             return render_template('news.html', news=combined_data)
-            # --- КОНЕЦ ИЗМЕНЕНИЯ ---
         except Exception as e:
             logger.error(f"API add_news error: {e}", exc_info=True)
             return render_template('error.html', error=str(e))
@@ -867,6 +864,7 @@ def webhook_info():
     except Exception as e:
         logger.error(f"Ошибка получения информации о webhook: {e}")
         return jsonify({'error': str(e)}), 500
+
 # --- Вспомогательная функция для получения данных из формы или JSON ---
 def _get_payload():
     """Получает данные из формы или JSON в зависимости от типа запроса."""
@@ -878,6 +876,7 @@ def _get_payload():
         # но для наших форм подходит.
         # Для файлов request.files будет содержать их.
         return request.form.to_dict()
+
 # --- ИЗМЕНЕННЫЕ: Маршруты API добавления контента с инвалидацией кэша ---
 @app.route('/api/add_moment', methods=['POST'])
 def api_add_moment():
@@ -1518,6 +1517,7 @@ def health_check():
     except Exception as e:
         logger.error(f"Health check error: {e}")
         return jsonify({'status': 'unhealthy', 'error': str(e)}), 500
+
 # --- Main (удален или закомментирован для корректной работы с Gunicorn) ---
 # if __name__ == '__main__':
 #     # БЛОК УДАЛЕН/ЗАКОММЕНТИРОВАН для корректной работы с Gunicorn на Railway
@@ -1538,6 +1538,7 @@ def health_check():
 #     # app.run(host='0.0.0.0', port=port) # <-- ЭТО вызывает OSError: Address already in use на Railway
 #     # logger.info("Flask приложение остановлено.")
 #     pass # Или просто удалите весь блок
+
 # --- Экспорт приложения для WSGI (например, Gunicorn) ---
 # Gunicorn импортирует этот модуль и ожидает переменную с именем 'app'
 # Объект app = Flask(...) уже создан выше в файле.
