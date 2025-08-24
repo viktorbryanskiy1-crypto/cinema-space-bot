@@ -165,7 +165,7 @@ function initializeApp() {
         return;
     }
 
-    const tabBtns = document.querySelectorAll('.nav-item[data-tab]');
+    const tabBtns = document.querySelectorAll('.tab-btn[data-tab]');
 
     // --- НОВОЕ: Асинхронная функция загрузки контента вкладки с кэшированием ---
     async function loadTabContent(tabName) {
@@ -209,7 +209,6 @@ function initializeApp() {
         }
     }
 
-    // Обработчики кликов по вкладкам внизу
     tabBtns.forEach(btn => {
         btn.addEventListener('click', function () {
             tabBtns.forEach(b => b.classList.remove('active'));
@@ -262,7 +261,6 @@ function initializeApp() {
 
     // --- Инициализация вкладки ---
     if (tabBtns.length > 0) {
-        // Активируем первую вкладку
         tabBtns[0].classList.add('active');
         loadTabContent(tabBtns[0].dataset.tab);
     } else {
