@@ -593,7 +593,10 @@ def moments():
                 item_dict['comments_count'] = extra_info.get('comments_count', 0)
                 combined_data.append(item_dict)
             logger.info("Данные объединены успешно")
+            # --- ИЗМЕНЕНИЕ: Возвращаем шаблон moments.html вместо index.html ---
+            # Этот шаблон теперь содержит сетку карточек
             return render_template('moments.html', moments=combined_data)
+            # --- КОНЕЦ ИЗМЕНЕНИЯ ---
         except Exception as e:
             logger.error(f"API add_moment error: {e}", exc_info=True)
             return render_template('error.html', error=str(e))
@@ -633,7 +636,9 @@ def trailers():
                 item_dict['comments_count'] = extra_info.get('comments_count', 0)
                 combined_data.append(item_dict)
             logger.info("Данные объединены успешно")
+            # --- ИЗМЕНЕНИЕ: Возвращаем шаблон trailers.html вместо index.html ---
             return render_template('trailers.html', trailers=combined_data)
+            # --- КОНЕЦ ИЗМЕНЕНИЯ ---
         except Exception as e:
             logger.error(f"API add_trailer error: {e}", exc_info=True)
             return render_template('error.html', error=str(e))
@@ -671,7 +676,9 @@ def news():
                 item_dict['comments_count'] = extra_info.get('comments_count', 0)
                 combined_data.append(item_dict)
             logger.info("Данные объединены успешно")
+            # --- ИЗМЕНЕНИЕ: Возвращаем шаблон news.html вместо index.html ---
             return render_template('news.html', news=combined_data)
+            # --- КОНЕЦ ИЗМЕНЕНИЯ ---
         except Exception as e:
             logger.error(f"API add_news error: {e}", exc_info=True)
             return render_template('error.html', error=str(e))
