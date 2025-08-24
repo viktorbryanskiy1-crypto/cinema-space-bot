@@ -1,3 +1,4 @@
+# app.py (полный код с исправлениями)
 import os
 import threading
 import logging
@@ -17,6 +18,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, Bot
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 import redis
 import json
+import hashlib # <-- Добавлен импорт hashlib
 from database import (
     get_or_create_user, get_user_role,
     add_moment, add_trailer, add_news,
@@ -65,6 +67,19 @@ ALLOWED_VIDEO_EXTENSIONS = {'mp4', 'avi', 'mov', 'wmv', 'flv', 'webm'}
 ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 def allowed_file(filename, allowed_exts):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in allowed_exts
+# --- ИНИЦИАЛИЗАЦИЯ БД ---
+# Вызываем init_db() сразу после создания app и настройки Redis,
+# но до создания updater и других компонентов.
+try:
+    logger.info("Инициализация базы данных...")
+    init_db()
+    logger.info("✅ База данных инициализирована.")
+except Exception as e:
+    logger.error(f"❌ ОШИБКА инициализации БД: {e}", exc_info=True)
+    # В зависимости от требований, можно выбросить исключение,
+    # чтобы остановить запуск приложения, если БД критична.
+    # raise e
+# --- КОНЕЦ ИНИЦИАЛИЗАЦИИ БД ---
 # --- Telegram Bot ---
 updater = None
 dp = None
@@ -79,8 +94,6 @@ CACHE_CONFIG = {
 }
 # --- НОВОЕ: Декораторы для кэширования ---
 from functools import wraps
-import hashlib # <-- Добавлен импорт hashlib
-
 def cache_control(max_age):
     """Декоратор для установки заголовков кэширования."""
     def decorator(f):
@@ -110,7 +123,7 @@ def etag_cache(key_generator_func):
             # Если кэш отсутствует или ETag не совпал, выполняем функцию
             html_content = f(*args, **kwargs)
             # Генерируем ETag на основе содержимого
-            etag = hashlib.md5(html_content.encode('utf-8')).hexdigest()
+            etag = hashlib.md5(html_content.encode('utf-8')).hexdigest() # <-- hashlib используется здесь
             # Сохраняем в кэш с ETag
             cache_set(cache_key, {'html': html_content, 'etag': etag}, expire=CACHE_CONFIG['html_expire'])
             # Возвращаем ответ с ETag
@@ -394,7 +407,7 @@ def get_cached_html(key, generate_func, expire=None):
     html = generate_func()
     if html:
         # Генерируем ETag
-        etag = hashlib.md5(html.encode('utf-8')).hexdigest()
+        etag = hashlib.md5(html.encode('utf-8')).hexdigest() # <-- hashlib используется здесь
         # Сохраняем в кэш с ETag
         cache_set(etag_cache_key, {'html': html, 'etag': etag}, expire=expire)
         logger.info(f"HTML для {key} закэширован на {expire} секунд (с ETag)")
@@ -1485,12 +1498,8 @@ def init_db_extra():
 
 # --- Main ---
 if __name__ == '__main__':
-    try:
-        logger.info("Инициализация базы данных...")
-        init_db()
-        logger.info("База данных инициализирована.")
-    except Exception as e:
-        logger.error(f"DB init error: {e}", exc_info=True)
+    # Инициализация БД уже происходит выше, поэтому здесь повторять не нужно.
+    # Она была перемещена туда, чтобы работать и при запуске через gunicorn.
     logger.info("Запуск Telegram бота...")
     start_bot()
     port = int(os.environ.get('PORT', 10000))
