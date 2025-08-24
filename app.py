@@ -7,6 +7,7 @@ import requests
 import time
 import re
 import asyncio
+import hashlib
 from datetime import datetime
 from flask import (
     Flask, render_template, request, jsonify,
