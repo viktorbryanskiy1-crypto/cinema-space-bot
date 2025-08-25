@@ -1,4 +1,3 @@
-```python
 # app.py
 import os
 import threading
