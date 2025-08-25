@@ -73,6 +73,8 @@ def init_db():
                 item_id INTEGER NOT NULL,
                 user_name TEXT NOT NULL,
                 text TEXT NOT NULL,
+                likes INTEGER DEFAULT 0,      -- Новое поле для лайков
+                dislikes INTEGER DEFAULT 0,   -- Новое поле для дизлайков
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -114,6 +116,18 @@ def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        # --- НОВАЯ ТАБЛИЦА: Реакции на комментарии ---
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS comment_reactions (
+                id SERIAL PRIMARY KEY,
+                comment_id INTEGER NOT NULL REFERENCES comments(id) ON DELETE CASCADE,
+                user_id TEXT NOT NULL,
+                reaction_type TEXT NOT NULL, -- 'like' или 'dislike'
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(comment_id, user_id, reaction_type)
+            )
+        """)
+        # --- КОНЕЦ НОВОЙ ТАБЛИЦЫ ---
 
         # Админ по умолчанию
         password_hash = bcrypt.hashpw('admin'.encode('utf-8'), bcrypt.gensalt())
@@ -181,6 +195,8 @@ def delete_item(item_type, item_id):
         c.execute(f"DELETE FROM {item_type} WHERE id=%s", (item_id,))
         c.execute("DELETE FROM comments WHERE item_type=%s AND item_id=%s", (item_type, item_id))
         c.execute("DELETE FROM reactions WHERE item_type=%s AND item_id=%s", (item_type, item_id))
+        # Удаляем реакции на комментарии, связанные с этим элементом
+        # Это будет сделано автоматически благодаря ON DELETE CASCADE в comment_reactions.comment_id -> comments.id
         conn.commit()
     finally:
         conn.close()
@@ -266,7 +282,7 @@ def get_comments(item_type, item_id):
     c = conn.cursor()
     try:
         # --- УЛУЧШЕНИЕ: Добавлены LIMIT и ORDER BY ---
-        c.execute("SELECT user_name, text, created_at FROM comments WHERE item_type=%s AND item_id=%s ORDER BY created_at DESC LIMIT 50", (item_type, item_id))  # Ограничиваем количество
+        c.execute("SELECT user_name, text, created_at, likes, dislikes, id FROM comments WHERE item_type=%s AND item_id=%s ORDER BY created_at DESC LIMIT 50", (item_type, item_id))  # Ограничиваем количество
         return [tuple(c.values()) for c in c.fetchall()]
     finally:
         conn.close()
@@ -279,6 +295,88 @@ def add_comment(item_type, item_id, user_name, text):
         conn.commit()
     finally:
         conn.close()
+
+# --- НОВАЯ ФУНКЦИЯ: Реакции на комментарии ---
+def add_comment_reaction(comment_id, user_id, reaction_type):
+    """Добавляет реакцию (лайк/дизлайк) к комментарию"""
+    conn = get_db_connection()
+    c = conn.cursor()
+    try:
+        # Проверяем, существует ли уже такая реакция
+        c.execute("""
+            SELECT id FROM comment_reactions 
+            WHERE comment_id=%s AND user_id=%s AND reaction_type=%s
+        """, (comment_id, user_id, reaction_type))
+        
+        existing = c.fetchone()
+        
+        if existing:
+            # Если реакция уже есть, удаляем её (отменяем)
+            c.execute("""
+                DELETE FROM comment_reactions 
+                WHERE comment_id=%s AND user_id=%s AND reaction_type=%s
+            """, (comment_id, user_id, reaction_type))
+            
+            # Обновляем счетчики в таблице comments
+            if reaction_type == 'like':
+                c.execute("""
+                    UPDATE comments SET likes = GREATEST(0, likes - 1) 
+                    WHERE id=%s
+                """, (comment_id,))
+            else:  # dislike
+                c.execute("""
+                    UPDATE comments SET dislikes = GREATEST(0, dislikes - 1) 
+                    WHERE id=%s
+                """, (comment_id,))
+                
+            conn.commit()
+            return False  # Реакция удалена
+        else:
+            # Если реакции нет, добавляем её
+            c.execute("""
+                INSERT INTO comment_reactions (comment_id, user_id, reaction_type) 
+                VALUES (%s, %s, %s)
+            """, (comment_id, user_id, reaction_type))
+            
+            # Обновляем счетчики в таблице comments
+            if reaction_type == 'like':
+                c.execute("""
+                    UPDATE comments SET likes = likes + 1 
+                    WHERE id=%s
+                """, (comment_id,))
+            else:  # dislike
+                c.execute("""
+                    UPDATE comments SET dislikes = dislikes + 1 
+                    WHERE id=%s
+                """, (comment_id,))
+                
+            conn.commit()
+            return True  # Реакция добавлена
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"Ошибка при добавлении реакции к комментарию: {e}")
+        return False
+    finally:
+        conn.close()
+
+def get_comment_reactions_count(comment_id):
+    """Получает количество лайков и дизлайков для комментария"""
+    conn = get_db_connection()
+    c = conn.cursor()
+    try:
+        c.execute("""
+            SELECT likes, dislikes FROM comments WHERE id=%s
+        """, (comment_id,))
+        result = c.fetchone()
+        if result:
+            return {'likes': result['likes'], 'dislikes': result['dislikes']}
+        return {'likes': 0, 'dislikes': 0}
+    except Exception as e:
+        logger.error(f"Ошибка при получении реакций комментария: {e}")
+        return {'likes': 0, 'dislikes': 0}
+    finally:
+        conn.close()
+# --- КОНЕЦ НОВОЙ ФУНКЦИИ ---
 
 # ---------------- Реакции ----------------
 def get_reactions_count(item_type, item_id):
