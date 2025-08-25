@@ -1,4 +1,4 @@
-# app.py (полностью обновлённый и исправленный)
+# app.py (полностью обновлённый, исправленный и оптимизированный)
 import os
 import threading
 import logging
@@ -689,7 +689,7 @@ def news():
             extra_map = build_extra_map(data, 'news')
             logger.info("extra_map построен успешно")
             combined_data = []
-            for row in data:
+            for row in 
                 item_id = row[0]
                 item_dict = {
                     'id': row[0],
@@ -1028,7 +1028,7 @@ def api_add_comment():
         cache_delete(f"api_comments_{item_type}_{item_id}")
         cache_delete(f"comments_{item_type}_{item_id}") # Кэш для страницы деталей
         # Также может потребоваться обновить счетчик комментариев в build_extra_map
-        # Проще всего сбросить кэш страниц списка
+        # Проще всего сбросить кэш страницы списка
         cache_delete(f"{item_type}s_page")
         # --- НОВОЕ: Инвалидация кэша ETag для страницы списка ---
         invalidate_etag_cache(f"{item_type}s_page")
@@ -1284,6 +1284,7 @@ def admin_add_content():
     return render_template('admin/add_content.html')
 
 # --- КОНЕЦ ИСПРАВЛЕННОГО И ОБНОВЛЕННОГО МАРШРУТА ---
+
 @app.route('/admin/add_video')
 @admin_required
 def admin_add_video_form():
@@ -1358,7 +1359,7 @@ def admin_add_video_json():
     """API endpoint для добавления видео через форму add_video.html"""
     try:
         data = request.get_json()
-        if not data:
+        if not 
             return jsonify(success=False, error="Неверный формат данных (ожидается JSON)"), 400
         title = data.get('title', '').strip()
         description = data.get('description', '').strip()
