@@ -1,9 +1,10 @@
-# app.py (исправленный и стабильный)
+# app.py (полный код с улучшениями)
 import os
 import threading
 import logging
 import uuid
 import requests
+import time
 import re
 import asyncio
 from datetime import datetime
@@ -16,6 +17,8 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, Bot
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 import redis
 import json
+# --- НОВОЕ: Добавлен импорт hashlib ---
+import hashlib
 from database import (
     get_or_create_user, get_user_role,
     add_moment, add_trailer, add_news,
@@ -83,11 +86,11 @@ dp = None
 pending_video_data = {}
 # --- НОВОЕ: Конфигурация кэширования ---
 CACHE_CONFIG = {
-    'html_expire': 1800,       # 30 минут для HTML страниц
-    'api_expire': 300,        # 5 минут для API данных
-    'data_expire': 600,       # 10 минут для данных из БД
+    'html_expire': 3600,       # Было 1800 (30 минут), стало 5 минут
+    'api_expire': 120,        # Было 300 (5 минут), стало 2 минуты
+    'data_expire': 300,       # Было 600 (10 минут), стало 5 минут
     'static_expire': 2592000, # 30 дней для статики (CSS, JS, изображения)
-    'video_url_cache_time': 21600 # 6 часов для кэша ссылок Telegram
+    'video_url_cache_time': 86400 # 6 часов для кэша ссылок Telegram
 }
 # --- НОВОЕ: Декораторы для кэширования ---
 from functools import wraps
@@ -98,6 +101,35 @@ def cache_control(max_age):
         def decorated_function(*args, **kwargs):
             resp = make_response(f(*args, **kwargs))
             resp.headers['Cache-Control'] = f'public, max-age={max_age}'
+            return resp
+        return decorated_function
+    return decorator
+def etag_cache(key_generator_func):
+    """Декоратор для кэширования с использованием ETags."""
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            # Генерируем ключ для кэша на основе аргументов функции
+            cache_key_base = key_generator_func(*args, **kwargs)
+            cache_key = f"etag_cache_{cache_key_base}"
+            # Получаем закэшированные данные
+            cached_data = cache_get(cache_key)
+            if cached_data and isinstance(cached_data, dict) and 'html' in cached_data and 'etag' in cached_data:
+                etag = cached_data['etag']
+                # Проверяем, совпадает ли ETag в запросе
+                if request.headers.get('If-None-Match') == etag:
+                    logger.debug(f"ETag совпал для {cache_key_base}, возвращаю 304 Not Modified")
+                    return '', 304 # Not Modified
+            # Если кэш отсутствует или ETag не совпал, выполняем функцию
+            html_content = f(*args, **kwargs)
+            # Генерируем ETag на основе содержимого
+            etag = hashlib.md5(html_content.encode('utf-8')).hexdigest() # <-- Используется hashlib
+            # Сохраняем в кэш с ETag
+            cache_set(cache_key, {'html': html_content, 'etag': etag}, expire=CACHE_CONFIG['html_expire'])
+            # Возвращаем ответ с ETag
+            resp = make_response(html_content)
+            resp.headers['ETag'] = etag
+            resp.headers['Cache-Control'] = f'public, max-age={CACHE_CONFIG["html_expire"]}'
             return resp
         return decorated_function
     return decorator
@@ -169,6 +201,13 @@ def get_direct_video_url(file_id):
     except Exception as e:
         logger.error(f"Неизвестная ошибка при получении ссылки для file_id {file_id}: {e}")
         return None
+# --- НОВОЕ: Функция для инвалидации ETag кэша ---
+def invalidate_etag_cache(cache_key_base):
+    """Удаляет кэш ETag для заданного ключа."""
+    cache_key = f"etag_cache_{cache_key_base}"
+    cache_delete(cache_key)
+    logger.debug(f"Кэш ETag для '{cache_key_base}' инвалидирован.")
+# --- КОНЕЦ НОВОГО ---
 # --- ИСПРАВЛЕННАЯ Функция для извлечения видео из поста Telegram ---
 # (Обновлённая версия: пересылает сообщения только в тестовую группу)
 async def extract_video_url_from_telegram_post(post_url):
@@ -358,6 +397,28 @@ def refresh_video_url():
     except Exception as e:
         logger.error(f"[ОБНОВЛЕНИЕ ССЫЛКИ] Критическая ошибка: {e}", exc_info=True)
         return jsonify(success=False, error="Внутренняя ошибка сервера"), 500
+# --- ИЗМЕНЕННАЯ ФУНКЦИЯ: Кэширование HTML страниц с учетом ETag ---
+def get_cached_html(key, generate_func, expire=None):
+    """Получает HTML из кэша или генерирует новый, используя ETag."""
+    if expire is None:
+        expire = CACHE_CONFIG['html_expire']
+    # Для простоты, будем использовать ключ как основу для ETag кэша
+    etag_cache_key = f"etag_cache_{key}"
+    cached_data = cache_get(etag_cache_key)
+    if cached_data and isinstance(cached_data, dict) and 'html' in cached_data and 'etag' in cached_data:
+        # Проверка ETag (если нужно) должна быть на уровне декоратора @etag_cache
+        # Здесь просто возвращаем HTML, если он есть и не истек
+        logger.info(f"HTML для {key} получен из кэша (с ETag)")
+        return cached_data['html']
+    # Генерируем новый HTML
+    html = generate_func()
+    if html:
+        # Генерируем ETag
+        etag = hashlib.md5(html.encode('utf-8')).hexdigest() # <-- Используется hashlib
+        # Сохраняем в кэш с ETag
+        cache_set(etag_cache_key, {'html': html, 'etag': etag}, expire=expire)
+        logger.info(f"HTML для {key} закэширован на {expire} секунд (с ETag)")
+    return html
 # --- Функция для установки Menu Button ---
 def set_menu_button():
     """Устанавливает кнопку меню для бота"""
@@ -491,110 +552,131 @@ def build_extra_map(data, item_type_plural):
 @cache_control(CACHE_CONFIG['html_expire']) # Кэшируем главную страницу
 def index():
     return render_template('index.html')
-# --- ИЗМЕНЕННЫЕ: Кэшированные маршруты для вкладок ---
+# --- НОВЫЙ МАРШРУТ ДЛЯ ПОИСКА ПО ССЫЛКЕ ---
+@app.route('/search_by_link')
+@cache_control(CACHE_CONFIG['html_expire']) # Кэшируем страницу поиска
+def search_by_link_page():
+    """Отображает страницу поиска фильма по ссылке."""
+    return render_template('search_by_link.html')
+# --- КОНЕЦ НОВОГО МАРШРУТА ---
+# --- ИЗМЕНЕННЫЕ: Кэшированные маршруты для вкладок с ETag ---
+# Функция для генерации ключа ETag для страницы списка
+def moments_page_key():
+    return "moments_page"
 @app.route('/moments')
-@cache_control(CACHE_CONFIG['html_expire']) # Кэшируем страницу списка моментов
+@etag_cache(moments_page_key) # Используем ETag кэш
 def moments():
-    try:
-        logger.info("Запрос к /moments")
-        logger.info("Получение всех моментов из БД...")
-        data = get_all_moments() or []
-        logger.info(f"Получено {len(data)} моментов из БД")
-        logger.info("Построение extra_map...")
-        extra_map = build_extra_map(data, 'moments')
-        logger.info("extra_map построен успешно")
-        combined_data = []
-        for row in data:
-            item_id = row[0]
-            item_dict = {
-                'id': row[0],
-                'title': row[1] if len(row) > 1 else '',
-                'description': row[2] if len(row) > 2 else '',
-                'video_url': row[3] if len(row) > 3 else '',
-                'preview_url': row[4] if len(row) > 4 else '', # Новое поле
-                'created_at': row[5] if len(row) > 5 else None # Обновлен индекс
-            }
-            extra_info = extra_map.get(item_id, {'reactions': {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}, 'comments_count': 0})
-            if isinstance(extra_info.get('reactions'), dict):
-                item_dict['reactions'] = extra_info['reactions']
-            else:
-                item_dict['reactions'] = {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}
-            item_dict['comments_count'] = extra_info.get('comments_count', 0)
-            combined_data.append(item_dict)
-        logger.info("Данные объединены успешно")
-        return render_template('moments.html', moments=combined_data)
-    except Exception as e:
-        logger.error(f"API add_moment error: {e}", exc_info=True)
-        return render_template('error.html', error=str(e))
+    def generate_moments_html():
+        try:
+            logger.info("Запрос к /moments")
+            logger.info("Получение всех моментов из БД...")
+            data = get_all_moments() or []
+            logger.info(f"Получено {len(data)} моментов из БД")
+            logger.info("Построение extra_map...")
+            extra_map = build_extra_map(data, 'moments')
+            logger.info("extra_map построен успешно")
+            combined_data = []
+            for row in data:
+                item_id = row[0]
+                item_dict = {
+                    'id': row[0],
+                    'title': row[1] if len(row) > 1 else '',
+                    'description': row[2] if len(row) > 2 else '',
+                    'video_url': row[3] if len(row) > 3 else '',
+                    'preview_url': row[4] if len(row) > 4 else '', # Новое поле
+                    'created_at': row[5] if len(row) > 5 else None # Обновлен индекс
+                }
+                extra_info = extra_map.get(item_id, {'reactions': {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}, 'comments_count': 0})
+                if isinstance(extra_info.get('reactions'), dict):
+                    item_dict['reactions'] = extra_info['reactions']
+                else:
+                    item_dict['reactions'] = {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}
+                item_dict['comments_count'] = extra_info.get('comments_count', 0)
+                combined_data.append(item_dict)
+            logger.info("Данные объединены успешно")
+            return render_template('moments.html', moments=combined_data)
+        except Exception as e:
+            logger.error(f"API add_moment error: {e}", exc_info=True)
+            return render_template('error.html', error=str(e))
+    # Теперь генерация происходит внутри @etag_cache
+    return generate_moments_html()
 # Аналогично для /trailers
+def trailers_page_key():
+    return "trailers_page"
 @app.route('/trailers')
-@cache_control(CACHE_CONFIG['html_expire']) # Кэшируем страницу списка трейлеров
+@etag_cache(trailers_page_key)
 def trailers():
-    try:
-        logger.info("Запрос к /trailers")
-        logger.info("Получение всех трейлеров из БД...")
-        data = get_all_trailers() or []
-        logger.info(f"Получено {len(data)} трейлеров из БД")
-        logger.info("Построение extra_map...")
-        extra_map = build_extra_map(data, 'trailers')
-        logger.info("extra_map построен успешно")
-        combined_data = []
-        for row in data:
-            item_id = row[0]
-            item_dict = {
-                'id': row[0],
-                'title': row[1] if len(row) > 1 else '',
-                'description': row[2] if len(row) > 2 else '',
-                'video_url': row[3] if len(row) > 3 else '',
-                'preview_url': row[4] if len(row) > 4 else '', # Новое поле
-                'created_at': row[5] if len(row) > 5 else None # Обновлен индекс
-            }
-            extra_info = extra_map.get(item_id, {'reactions': {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}, 'comments_count': 0})
-            if isinstance(extra_info.get('reactions'), dict):
-                item_dict['reactions'] = extra_info['reactions']
-            else:
-                item_dict['reactions'] = {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}
-            item_dict['comments_count'] = extra_info.get('comments_count', 0)
-            combined_data.append(item_dict)
-        logger.info("Данные объединены успешно")
-        return render_template('trailers.html', trailers=combined_data)
-    except Exception as e:
-        logger.error(f"API add_trailer error: {e}", exc_info=True)
-        return render_template('error.html', error=str(e))
+    def generate_trailers_html():
+        try:
+            logger.info("Запрос к /trailers")
+            logger.info("Получение всех трейлеров из БД...")
+            data = get_all_trailers() or []
+            logger.info(f"Получено {len(data)} трейлеров из БД")
+            logger.info("Построение extra_map...")
+            extra_map = build_extra_map(data, 'trailers')
+            logger.info("extra_map построен успешно")
+            combined_data = []
+            for row in data:
+                item_id = row[0]
+                item_dict = {
+                    'id': row[0],
+                    'title': row[1] if len(row) > 1 else '',
+                    'description': row[2] if len(row) > 2 else '',
+                    'video_url': row[3] if len(row) > 3 else '',
+                    'preview_url': row[4] if len(row) > 4 else '', # Новое поле
+                    'created_at': row[5] if len(row) > 5 else None # Обновлен индекс
+                }
+                extra_info = extra_map.get(item_id, {'reactions': {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}, 'comments_count': 0})
+                if isinstance(extra_info.get('reactions'), dict):
+                    item_dict['reactions'] = extra_info['reactions']
+                else:
+                    item_dict['reactions'] = {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}
+                item_dict['comments_count'] = extra_info.get('comments_count', 0)
+                combined_data.append(item_dict)
+            logger.info("Данные объединены успешно")
+            return render_template('trailers.html', trailers=combined_data)
+        except Exception as e:
+            logger.error(f"API add_trailer error: {e}", exc_info=True)
+            return render_template('error.html', error=str(e))
+    return generate_trailers_html()
 # Аналогично для /news
+def news_page_key():
+    return "news_page"
 @app.route('/news')
-@cache_control(CACHE_CONFIG['html_expire']) # Кэшируем страницу списка новостей
+@etag_cache(news_page_key)
 def news():
-    try:
-        logger.info("Запрос к /news")
-        logger.info("Получение всех новостей из БД...")
-        data = get_all_news() or []
-        logger.info(f"Получено {len(data)} новостей из БД")
-        logger.info("Построение extra_map...")
-        extra_map = build_extra_map(data, 'news')
-        logger.info("extra_map построен успешно")
-        combined_data = []
-        for row in data:
-            item_id = row[0]
-            item_dict = {
-                'id': row[0],
-                'title': row[1] if len(row) > 1 else '',
-                'text': row[2] if len(row) > 2 else '',
-                'image_url': row[3] if len(row) > 3 else '',
-                'created_at': row[4] if len(row) > 4 else None
-            }
-            extra_info = extra_map.get(item_id, {'reactions': {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}, 'comments_count': 0})
-            if isinstance(extra_info.get('reactions'), dict):
-                item_dict['reactions'] = extra_info['reactions']
-            else:
-                item_dict['reactions'] = {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}
-            item_dict['comments_count'] = extra_info.get('comments_count', 0)
-            combined_data.append(item_dict)
-        logger.info("Данные объединены успешно")
-        return render_template('news.html', news=combined_data)
-    except Exception as e:
-        logger.error(f"API add_news error: {e}", exc_info=True)
-        return render_template('error.html', error=str(e))
+    def generate_news_html():
+        try:
+            logger.info("Запрос к /news")
+            logger.info("Получение всех новостей из БД...")
+            data = get_all_news() or []
+            logger.info(f"Получено {len(data)} новостей из БД")
+            logger.info("Построение extra_map...")
+            extra_map = build_extra_map(data, 'news')
+            logger.info("extra_map построен успешно")
+            combined_data = []
+            for row in data:
+                item_id = row[0]
+                item_dict = {
+                    'id': row[0],
+                    'title': row[1] if len(row) > 1 else '',
+                    'text': row[2] if len(row) > 2 else '',
+                    'image_url': row[3] if len(row) > 3 else '',
+                    'created_at': row[4] if len(row) > 4 else None
+                }
+                extra_info = extra_map.get(item_id, {'reactions': {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}, 'comments_count': 0})
+                if isinstance(extra_info.get('reactions'), dict):
+                    item_dict['reactions'] = extra_info['reactions']
+                else:
+                    item_dict['reactions'] = {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}
+                item_dict['comments_count'] = extra_info.get('comments_count', 0)
+                combined_data.append(item_dict)
+            logger.info("Данные объединены успешно")
+            return render_template('news.html', news=combined_data)
+        except Exception as e:
+            logger.error(f"API add_news error: {e}", exc_info=True)
+            return render_template('error.html', error=str(e))
+    return generate_news_html()
 # --- ИЗМЕНЕННЫЕ: Маршруты для отдельных элементов с кэшированием данных ---
 @app.route('/moments/<int:item_id>')
 @cache_control(CACHE_CONFIG['html_expire']) # Кэшируем страницу деталей
@@ -708,21 +790,27 @@ def api_get_comments():
     try:
         item_type = request.args.get('type')
         item_id = int(request.args.get('id'))
+        
         # Новые параметры
         sort_by = request.args.get('sort', 'latest')  # popular или latest
         limit = request.args.get('limit', type=int)   # ограничение количества
+        
         if not item_type or not item_id:
             return jsonify(comments=[], error="Не указаны type или id"), 400
+        
         # Ключ для кэширования
         cache_key = f"api_comments_{item_type}_{item_id}_{sort_by}_{limit}"
+        
         # Проверяем кэш
         cached_comments = cache_get(cache_key)
         if cached_comments is not None:
             logger.debug(f"Комментарии для {item_type}/{item_id} ({sort_by}, limit={limit}) получены из кэша")
             return jsonify(comments=cached_comments)
+        
         # Если нет в кэше, получаем из БД
         conn = get_db_connection()
         cursor = conn.cursor()
+        
         # Формируем SQL запрос в зависимости от сортировки
         if sort_by == 'latest':
             order_clause = "ORDER BY created_at DESC"
@@ -731,8 +819,10 @@ def api_get_comments():
             # Поскольку у нас нет отдельных полей likes/dislikes в таблице comments,
             # будем считать популярность по дате создания (новые выше)
             order_clause = "ORDER BY created_at DESC"
+        
         # Ограничиваем количество, если задано
         limit_clause = f"LIMIT {limit}" if limit else ""
+        
         # Выполняем запрос
         cursor.execute(f"""
             SELECT user_name, text, created_at 
@@ -741,16 +831,21 @@ def api_get_comments():
             {order_clause}
             {limit_clause}
         """, (item_type, item_id))
+        
         comments = cursor.fetchall()
+        
         # Преобразуем в список кортежей для совместимости
         comments_list = [tuple(c.values()) for c in comments]
+        
         # Сохраняем в кэш
         cache_set(cache_key, comments_list, expire=CACHE_CONFIG['api_expire'])
         logger.debug(f"Комментарии для {item_type}/{item_id} ({sort_by}, limit={limit}) получены из БД и закэшированы")
+        
         return jsonify(comments=comments_list)
     except Exception as e:
         logger.error(f"API get_comments error: {e}", exc_info=True)
         return jsonify(comments=[], error=str(e)), 500
+
 # Добавим GET для получения реакций по типу и ID
 @app.route('/api/reactions/<item_type>/<int:item_id>', methods=['GET'])
 def api_get_reactions(item_type, item_id):
@@ -770,6 +865,7 @@ def api_get_reactions(item_type, item_id):
     except Exception as e:
         logger.error(f"API get_reactions error: {e}", exc_info=True)
         return jsonify(reactions={}, error=str(e)), 500
+
 # --- НОВЫЙ ЭНДПОИНТ: Получение комментариев с сортировкой ---
 @app.route('/api/comments/<item_type>/<int:item_id>', methods=['GET'])
 def api_get_comments_sorted(item_type, item_id):
@@ -777,16 +873,20 @@ def api_get_comments_sorted(item_type, item_id):
         # Параметры запроса
         sort_by = request.args.get('sort', 'popular')  # popular или latest
         limit = request.args.get('limit', type=int)    # ограничение количества
+        
         # Ключ для кэширования
         cache_key = f"api_comments_{item_type}_{item_id}_{sort_by}_{limit}"
+        
         # Проверяем кэш
         cached_comments = cache_get(cache_key)
         if cached_comments is not None:
             logger.debug(f"Комментарии для {item_type}/{item_id} ({sort_by}, limit={limit}) получены из кэша")
             return jsonify(comments=cached_comments)
+        
         # Если нет в кэше, получаем из БД
         conn = get_db_connection()
         cursor = conn.cursor()
+        
         # Формируем SQL запрос в зависимости от сортировки
         if sort_by == 'latest':
             order_clause = "ORDER BY created_at DESC"
@@ -795,8 +895,10 @@ def api_get_comments_sorted(item_type, item_id):
             # Поскольку у нас нет отдельных полей likes/dislikes в таблице comments,
             # будем считать популярность по дате создания (новые выше)
             order_clause = "ORDER BY created_at DESC"
+        
         # Ограничиваем количество, если задано
         limit_clause = f"LIMIT {limit}" if limit else ""
+        
         # Выполняем запрос
         cursor.execute(f"""
             SELECT user_name, text, created_at 
@@ -805,16 +907,21 @@ def api_get_comments_sorted(item_type, item_id):
             {order_clause}
             {limit_clause}
         """, (item_type, item_id))
+        
         comments = cursor.fetchall()
+        
         # Преобразуем в список кортежей для совместимости
         comments_list = [tuple(c.values()) for c in comments]
+        
         # Сохраняем в кэш
         cache_set(cache_key, comments_list, expire=CACHE_CONFIG['api_expire'])
         logger.debug(f"Комментарии для {item_type}/{item_id} ({sort_by}, limit={limit}) получены из БД и закэшированы")
+        
         return jsonify(comments=comments_list)
     except Exception as e:
         logger.error(f"API get_comments_sorted error: {e}", exc_info=True)
         return jsonify(comments=[], error=str(e)), 500
+
 # --- ИЗМЕНЕННЫЙ: Маршрут для отдачи статических файлов с кэшированием ---
 @app.route('/uploads/<filename>')
 @cache_control(CACHE_CONFIG['static_expire']) # Кэшируем загруженные файлы надолго
@@ -890,6 +997,9 @@ def api_add_moment():
         add_moment(title, desc, video_url)
         # --- ИНВАЛИДАЦИЯ КЭША ---
         cache_delete('moments_list')
+        cache_delete('moments_page')  # Удаляем кэш страницы
+        # --- НОВОЕ: Инвалидация кэша ETag ---
+        invalidate_etag_cache('moments_page')
         # --- КОНЕЦ ИНВАЛИДАЦИИ ---
         logger.info(f"Добавлен момент: {title}")
         return jsonify(success=True)
@@ -922,6 +1032,9 @@ def api_add_trailer():
         add_trailer(title, desc, video_url)
         # --- ИНВАЛИДАЦИЯ КЭША ---
         cache_delete('trailers_list')
+        cache_delete('trailers_page')  # Удаляем кэш страницы
+        # --- НОВОЕ: Инвалидация кэша ETag ---
+        invalidate_etag_cache('trailers_page')
         # --- КОНЕЦ ИНВАЛИДАЦИИ ---
         logger.info(f"Добавлен трейлер: {title}")
         return jsonify(success=True)
@@ -942,6 +1055,9 @@ def api_add_news():
         add_news(title, text, image_url)
         # --- ИНВАЛИДАЦИЯ КЭША ---
         cache_delete('news_list')
+        cache_delete('news_page')  # Удаляем кэш страницы
+        # --- НОВОЕ: Инвалидация кэша ETag ---
+        invalidate_etag_cache('news_page')
         # --- КОНЕЦ ИНВАЛИДАЦИИ ---
         logger.info(f"Добавлена новость: {title}")
         return jsonify(success=True)
@@ -964,7 +1080,9 @@ def api_add_comment():
         cache_delete(f"comments_{item_type}_{item_id}") # Кэш для страницы деталей
         # Также может потребоваться обновить счетчик комментариев в build_extra_map
         # Проще всего сбросить кэш страниц списка
-        cache_delete(f"{item_type}s_list") # Например, 'moments_list', 'trailers_list'
+        cache_delete(f"{item_type}s_page") # Например, 'moments_page', 'trailers_page'
+        # --- НОВОЕ: Инвалидация кэша ETag для страницы списка ---
+        invalidate_etag_cache(f"{item_type}s_page")
         # --- КОНЕЦ ИНВАЛИДАЦИИ ---
         return jsonify(success=True)
     except Exception as e:
@@ -997,12 +1115,15 @@ def api_add_reaction_post():
             cache_delete(f"api_reactions_{item_type}_{item_id}")
             cache_delete(f"reactions_{item_type}_{item_id}") # Кэш для страницы деталей
             # Сбрасываем кэш страницы списка
-            cache_delete(f"{item_type}s_list") # Например, 'moments_list', 'trailers_list'
+            cache_delete(f"{item_type}s_page")
+            # --- НОВОЕ: Инвалидация кэша ETag для страницы списка ---
+            invalidate_etag_cache(f"{item_type}s_page")
             # --- КОНЕЦ ИНВАЛИДАЦИИ ---
         return jsonify(success=success)
     except Exception as e:
         logger.error(f"API add_reaction error: {e}", exc_info=True)
         return jsonify(success=False, error=str(e)), 500
+
 # --- НОВЫЙ ЭНДПОИНТ: Реакции на комментарии ---
 @app.route('/api/comment/reaction', methods=['POST'])
 def api_add_comment_reaction():
@@ -1011,18 +1132,24 @@ def api_add_comment_reaction():
         comment_id = int(data.get('comment_id'))
         user_id = data.get('user_id', 'anonymous')
         reaction_type = data.get('reaction_type')  # 'like' или 'dislike'
+        
         if reaction_type not in ['like', 'dislike']:
             return jsonify(success=False, error="Неверный тип реакции"), 400
+        
         # Добавляем/удаляем реакцию
         toggled = add_comment_reaction(comment_id, user_id, reaction_type)
+        
         # Получаем обновленные счетчики
         reactions = get_comment_reactions_count(comment_id)
+        
         # Инвалидируем кэш комментариев
         cache_delete(f"api_comments_*_{comment_id}_*")
+        
         return jsonify(success=True, toggled=toggled, reactions=reactions)
     except Exception as e:
         logger.error(f"API add_comment_reaction error: {e}", exc_info=True)
         return jsonify(success=False, error=str(e)), 500
+
 @app.route('/admin/login', methods=['GET', 'POST'])
 def admin_login():
     if request.method == 'POST':
@@ -1189,12 +1316,18 @@ def admin_add_content():
                 add_moment(title, description, content_url, preview_url_for_content) # <-- Добавлен preview_url_for_content
                 # --- ИНВАЛИДАЦИЯ КЭША ---
                 cache_delete('moments_list')
+                cache_delete('moments_page')
+                # --- НОВОЕ: Инвалидация кэша ETag ---
+                invalidate_etag_cache('moments_page')
                 # --- КОНЕЦ ИНВАЛИДАЦИИ ---
                 logger.info(f"[ADMIN FORM] Добавлен момент: {title}")
             elif content_type == 'trailer':
                 add_trailer(title, description, content_url, preview_url_for_content) # <-- Добавлен preview_url_for_content
                 # --- ИНВАЛИДАЦИЯ КЭША ---
                 cache_delete('trailers_list')
+                cache_delete('trailers_page')
+                # --- НОВОЕ: Инвалидация кэша ETag ---
+                invalidate_etag_cache('trailers_page')
                 # --- КОНЕЦ ИНВАЛИДАЦИИ ---
                 logger.info(f"[ADMIN FORM] Добавлен трейлер: {title}")
             elif content_type == 'news':
@@ -1204,6 +1337,9 @@ def admin_add_content():
                 add_news(title, description, content_url) # content_url здесь путь к изображению
                 # --- ИНВАЛИДАЦИЯ КЭША ---
                 cache_delete('news_list')
+                cache_delete('news_page')
+                # --- НОВОЕ: Инвалидация кэша ETag ---
+                invalidate_etag_cache('news_page')
                 # --- КОНЕЦ ИНВАЛИДАЦИИ ---
                 logger.info(f"[ADMIN FORM] Добавлена новость: {title}")
             else:
@@ -1243,16 +1379,25 @@ def admin_delete(content_type, content_id):
         delete_moment(content_id)
         # --- ИНВАЛИДАЦИЯ КЭША ---
         cache_delete('moments_list')
+        cache_delete('moments_page')  # Удаляем кэш страницы
+        # --- НОВОЕ: Инвалидация кэша ETag ---
+        invalidate_etag_cache('moments_page')
         # --- КОНЕЦ ИНВАЛИДАЦИИ ---
     elif content_type == 'trailer':
         delete_trailer(content_id)
         # --- ИНВАЛИДАЦИЯ КЭША ---
         cache_delete('trailers_list')
+        cache_delete('trailers_page')  # Удаляем кэш страницы
+        # --- НОВОЕ: Инвалидация кэша ETag ---
+        invalidate_etag_cache('trailers_page')
         # --- КОНЕЦ ИНВАЛИДАЦИИ ---
     elif content_type == 'news':
         delete_news(content_id)
         # --- ИНВАЛИДАЦИЯ КЭША ---
         cache_delete('news_list')
+        cache_delete('news_page')  # Удаляем кэш страницы
+        # --- НОВОЕ: Инвалидация кэша ETag ---
+        invalidate_etag_cache('news_page')
         # --- КОНЕЦ ИНВАЛИДАЦИИ ---
     return redirect(url_for('admin_content'))
 @app.route('/admin/access')
@@ -1299,16 +1444,25 @@ def admin_add_video_json():
             add_moment(title, description, video_url)
             # --- ИНВАЛИДАЦИЯ КЭША ---
             cache_delete('moments_list')
+            cache_delete('moments_page')  # Удаляем кэш страницы
+            # --- НОВОЕ: Инвалидация кэша ETag ---
+            invalidate_etag_cache('moments_page')
             # --- КОНЕЦ ИНВАЛИДАЦИИ ---
         elif category == 'trailer':
             add_trailer(title, description, video_url)
             # --- ИНВАЛИДАЦИЯ КЭША ---
             cache_delete('trailers_list')
+            cache_delete('trailers_page')  # Удаляем кэш страницы
+            # --- НОВОЕ: Инвалидация кэша ETag ---
+            invalidate_etag_cache('trailers_page')
             # --- КОНЕЦ ИНВАЛИДАЦИИ ---
         elif category == 'news':
             add_news(title, description, video_url if video_url.startswith(('http://', 'https://')) else None)
             # --- ИНВАЛИДАЦИЯ КЭША ---
             cache_delete('news_list')
+            cache_delete('news_page')  # Удаляем кэш страницы
+            # --- НОВОЕ: Инвалидация кэша ETag ---
+            invalidate_etag_cache('news_page')
             # --- КОНЕЦ ИНВАЛИДАЦИИ ---
         logger.info(f"[JSON API] Добавлен {category}: {title}")
         return jsonify(success=True, message="Видео успешно добавлено!")
@@ -1348,16 +1502,25 @@ def handle_pending_video_text(update, context):
         add_moment(title, "Added via Telegram", video_url)
         # --- ИНВАЛИДАЦИЯ КЭША ---
         cache_delete('moments_list')
+        cache_delete('moments_page')
+        # --- НОВОЕ: Инвалидация кэша ETag ---
+        invalidate_etag_cache('moments_page')
         # --- КОНЕЦ ИНВАЛИДАЦИИ ---
     elif content_type == 'trailer':
         add_trailer(title, "Added via Telegram", video_url)
         # --- ИНВАЛИДАЦИЯ КЭША ---
         cache_delete('trailers_list')
+        cache_delete('trailers_page')
+        # --- НОВОЕ: Инвалидация кэша ETag ---
+        invalidate_etag_cache('trailers_page')
         # --- КОНЕЦ ИНВАЛИДАЦИИ ---
     elif content_type == 'news':
         add_news(title, "Added via Telegram", video_url)
         # --- ИНВАЛИДАЦИЯ КЭША ---
         cache_delete('news_list')
+        cache_delete('news_page')
+        # --- НОВОЕ: Инвалидация кэша ETag ---
+        invalidate_etag_cache('news_page')
         # --- КОНЕЦ ИНВАЛИДАЦИИ ---
     update.message.reply_text(f"✅ '{content_type}' '{title}' добавлено по ссылке!")
     cache_delete('moments_list')
@@ -1392,16 +1555,25 @@ def handle_pending_video_file(update, context):
             add_moment(title, "Added via Telegram", video_url)
             # --- ИНВАЛИДАЦИЯ КЭША ---
             cache_delete('moments_list')
+            cache_delete('moments_page')
+            # --- НОВОЕ: Инвалидация кэша ETag ---
+            invalidate_etag_cache('moments_page')
             # --- КОНЕЦ ИНВАЛИДАЦИИ ---
         elif content_type == 'trailer':
             add_trailer(title, "Added via Telegram", video_url)
             # --- ИНВАЛИДАЦИЯ КЭША ---
             cache_delete('trailers_list')
+            cache_delete('trailers_page')
+            # --- НОВОЕ: Инвалидация кэша ETag ---
+            invalidate_etag_cache('trailers_page')
             # --- КОНЕЦ ИНВАЛИДАЦИИ ---
         elif content_type == 'news':
             add_news(title, "Added via Telegram", video_url)
             # --- ИНВАЛИДАЦИЯ КЭША ---
             cache_delete('news_list')
+            cache_delete('news_page')
+            # --- НОВОЕ: Инвалидация кэша ETag ---
+            invalidate_etag_cache('news_page')
             # --- КОНЕЦ ИНВАЛИДАЦИИ ---
         success_msg = f"✅ '{content_type}' '{title}' добавлено из файла!"
         logger.info(success_msg)
