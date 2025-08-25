@@ -1,4 +1,4 @@
-# app.py (полностью обновлённый, исправленный и оптимизированный)
+# app.py (обновлённый фрагмент с усиленной инвалидацией кэша)
 import os
 import threading
 import logging
@@ -112,6 +112,7 @@ def cache_control(max_age):
         return decorated_function
     return decorator
 
+# --- УЛУЧШЕННЫЙ Декоратор ETag кэша ---
 def etag_cache(key_generator_func):
     """Декоратор для кэширования с использованием ETags."""
     def decorator(f):
@@ -119,7 +120,11 @@ def etag_cache(key_generator_func):
         def decorated_function(*args, **kwargs):
             # Генерируем ключ для кэша на основе аргументов функции
             cache_key_base = key_generator_func(*args, **kwargs)
-            cache_key = f"etag_cache_{cache_key_base}"
+            # --- УЛУЧШЕНИЕ: Добавляем версию данных в ключ ---
+            # Это гарантирует, что кэш инвалидируется при любом изменении данных
+            data_version = get_data_version(cache_key_base) # <-- НОВОЕ
+            cache_key = f"etag_cache_{cache_key_base}_v{data_version}" # <-- УЛУЧШЕНИЕ
+            # --- КОНЕЦ УЛУЧШЕНИЯ ---
             # Получаем закэшированные данные
             cached_data = cache_get(cache_key)
             if cached_data and isinstance(cached_data, dict) and 'html' in cached_data and 'etag' in cached_:
@@ -141,7 +146,33 @@ def etag_cache(key_generator_func):
             return resp
         return decorated_function
     return decorator
-# --- КОНЕЦ новых декораторов ---
+# --- КОНЕЦ УЛУЧШЕННОГО декоратора ---
+
+# --- НОВАЯ ФУНКЦИЯ: Получение версии данных для ETag ---
+def get_data_version(cache_key_base):
+    """Получает версию данных для заданного ключа кэша. 
+    Версия увеличивается при любом изменении данных, связанных с этим ключом."""
+    version_key = f"data_version_{cache_key_base}"
+    version = cache_get(version_key)
+    if version is None:
+        version = 1
+        cache_set(version_key, version, expire=86400) # Храним версию 1 день
+    return version
+
+# --- НОВАЯ ФУНКЦИЯ: Инкремент версии данных ---
+def increment_data_version(cache_key_base):
+    """Инкрементирует версию данных для заданного ключа кэша."""
+    version_key = f"data_version_{cache_key_base}"
+    current_version = cache_get(version_key)
+    if current_version is None:
+        current_version = 1
+    else:
+        current_version = int(current_version)
+    new_version = current_version + 1
+    cache_set(version_key, new_version, expire=86400) # Храним версию 1 день
+    logger.debug(f"Версия данных для '{cache_key_base}' увеличена с {current_version} до {new_version}")
+    return new_version
+# --- КОНЕЦ НОВЫХ ФУНКЦИЙ ---
 
 # --- УЛУЧШЕННОЕ КЭШИРОВАНИЕ ССЫЛОК С АВТООБНОВЛЕНИЕМ ---
 # Используем CACHE_CONFIG для времени кэширования
@@ -386,7 +417,7 @@ def refresh_video_url():
     """Обновляет устаревшую ссылку на видео по Telegram посту"""
     try:
         data = request.get_json()
-        if not data:
+        if not 
             logger.warning("[ОБНОВЛЕНИЕ ССЫЛКИ] Неверный формат данных")
             return jsonify(success=False, error="Неверный формат данных"), 400
         post_url = data.get('post_url', '').strip()
@@ -409,11 +440,15 @@ def refresh_video_url():
 # --- ИЗМЕНЕННАЯ Функция для инвалидации ETag кэша ---
 # --- НОВОЕ: Функция для инвалидации ETag кэша ---
 def invalidate_etag_cache(cache_key_base):
-    """Удаляет кэш ETag для заданного ключа."""
+    """Удаляет кэш ETag для заданного ключа и инкрементирует версию данных."""
     cache_key = f"etag_cache_{cache_key_base}"
     cache_delete(cache_key)
     logger.debug(f"Кэш ETag для '{cache_key_base}' инвалидирован.")
-# --- КОНЕЦ ИЗМЕНЕННОЙ ФУНКЦИИ ---
+    # --- УЛУЧШЕНИЕ: Инкрементируем версию данных ---
+    increment_data_version(cache_key_base)
+    logger.debug(f"Версия данных для '{cache_key_base}' увеличена.")
+    # --- КОНЕЦ УЛУЧШЕНИЯ ---
+# --- КОНЕЦ НОВОГО ---
 
 # --- ИЗМЕНЕННАЯ Функция: Кэширование HTML страниц с учетом ETag ---
 def get_cached_html(key, generate_func, expire=None):
@@ -554,10 +589,11 @@ def cache_delete(key):
         except Exception:
             pass
 
+# --- НОВОЕ: Функция для построения extra_map ---
 def build_extra_map(data, item_type_plural):
     """Добавляет реакции и комментарии к каждому элементу данных."""
     extra = {}
-    for row in data:
+    for row in 
         item_id = row[0]
         # Попробуем получить реакции из кэша
         reactions_cache_key = f"reactions_{item_type_plural}_{item_id}"
@@ -573,6 +609,7 @@ def build_extra_map(data, item_type_plural):
             cache_set(comments_cache_key, comments, expire=CACHE_CONFIG['data_expire'])
         extra[item_id] = {'reactions': reactions, 'comments_count': len(comments)}
     return extra
+# --- КОНЕЦ НОВОГО ---
 
 # --- Routes (пользовательские) ---
 @app.route('/')
@@ -606,7 +643,7 @@ def moments():
             extra_map = build_extra_map(data, 'moments')
             logger.info("extra_map построен успешно")
             combined_data = []
-            for row in data:
+            for row in 
                 item_id = row[0]
                 item_dict = {
                     'id': row[0],
@@ -648,7 +685,7 @@ def trailers():
             extra_map = build_extra_map(data, 'trailers')
             logger.info("extra_map построен успешно")
             combined_data = []
-            for row in data:
+            for row in 
                 item_id = row[0]
                 item_dict = {
                     'id': row[0],
@@ -1137,7 +1174,7 @@ def admin_add_content():
                 direct_url, error = extract_video_url_sync(telegram_url)
                 if direct_url:
                     content_url = direct_url
-                    logger.info(f"[ADMIN FORM] Извлечена прямая ссылка на видео из поста: {content_url[:50]}...")
+                    logger.info(f"[ADMIN FORM] Извлечена прямая ссылка из поста: {content_url[:50]}...")
                 else:
                     logger.error(f"[ADMIN FORM] Ошибка извлечения видео из поста: {error}")
                     return render_template('admin/add_content.html', error=error)
@@ -1359,7 +1396,7 @@ def admin_add_video_json():
     """API endpoint для добавления видео через форму add_video.html"""
     try:
         data = request.get_json()
-        if not data:
+        if not 
             return jsonify(success=False, error="Неверный формат данных (ожидается JSON)"), 400
         title = data.get('title', '').strip()
         description = data.get('description', '').strip()
@@ -1430,7 +1467,7 @@ def add_video_command(update, context):
 def handle_pending_video_text(update, context):
     user = update.message.from_user
     telegram_id = str(user.id)
-    if telegram_id not in pending_video_data:
+    if telegram_id not in pending_video_
         return
     data = pending_video_data.pop(telegram_id)
     content_type, title = data['content_type'], data['title']
@@ -1472,7 +1509,7 @@ def handle_pending_video_file(update, context):
     user = update.message.from_user
     telegram_id = str(user.id)
     logger.info(f"Получен видеофайл от пользователя {telegram_id}")
-    if telegram_id not in pending_video_data:
+    if telegram_id not in pending_video_
         logger.debug("Нет ожидающих данных для видео")
         return
     data = pending_video_data.pop(telegram_id)
@@ -1581,7 +1618,7 @@ def health_check():
         })
     except Exception as e:
         logger.error(f"Health check error: {e}")
-        return jsonify({'status': 'unhealthy', 'error': str(e)}), 500
+        return jsonify({'status': 'unhealthy', error=str(e)}), 500
 
 # --- Main ---
 # Инициализация БД уже происходит выше, поэтому здесь повторять не нужно.
