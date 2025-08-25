@@ -386,7 +386,7 @@ def refresh_video_url():
     """Обновляет устаревшую ссылку на видео по Telegram посту"""
     try:
         data = request.get_json()
-        if not 
+        if not data:
             logger.warning("[ОБНОВЛЕНИЕ ССЫЛКИ] Неверный формат данных")
             return jsonify(success=False, error="Неверный формат данных"), 400
         post_url = data.get('post_url', '').strip()
@@ -557,7 +557,7 @@ def cache_delete(key):
 def build_extra_map(data, item_type_plural):
     """Добавляет реакции и комментарии к каждому элементу данных."""
     extra = {}
-    for row in 
+    for row in data:
         item_id = row[0]
         # Попробуем получить реакции из кэша
         reactions_cache_key = f"reactions_{item_type_plural}_{item_id}"
@@ -648,7 +648,7 @@ def trailers():
             extra_map = build_extra_map(data, 'trailers')
             logger.info("extra_map построен успешно")
             combined_data = []
-            for row in 
+            for row in data:
                 item_id = row[0]
                 item_dict = {
                     'id': row[0],
@@ -689,7 +689,7 @@ def news():
             extra_map = build_extra_map(data, 'news')
             logger.info("extra_map построен успешно")
             combined_data = []
-            for row in 
+            for row in data:
                 item_id = row[0]
                 item_dict = {
                     'id': row[0],
