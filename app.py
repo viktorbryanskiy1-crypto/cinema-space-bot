@@ -1296,7 +1296,7 @@ def add_video_command(update, context):
 def handle_pending_video_text(update, context):
     user = update.message.from_user
     telegram_id = str(user.id)
-    if telegram_id not in pending_video_
+    if telegram_id not in pending_video_data:
         return
     data = pending_video_data.pop(telegram_id)
     content_type, title = data['content_type'], data['title']
