@@ -25,13 +25,13 @@
             👍 <span id="likes-count">{{ reactions['like'] if reactions else 0 }}</span>
         </button>
         <button class="reaction-btn dislike" onclick="sendReaction('dislike')">
-            👎 <span id="dislikes-count">{{ reactions['dislike'] if reactions else 0 }}</span>
+            👎 <span id="dislike-count">{{ reactions['dislike'] if reactions else 0 }}</span>
         </button>
         <button class="reaction-btn star" onclick="sendReaction('star')">
-            ⭐ <span id="stars-count">{{ reactions['star'] if reactions else 0 }}</span>
+            ⭐ <span id="star-count">{{ reactions['star'] if reactions else 0 }}</span>
         </button>
         <button class="reaction-btn fire" onclick="sendReaction('fire')">
-            🔥 <span id="fires-count">{{ reactions['fire'] if reactions else 0 }}</span>
+            🔥 <span id="fire-count">{{ reactions['fire'] if reactions else 0 }}</span>
         </button>
     </div>
     
@@ -42,7 +42,7 @@
                 <div class="description-text" id="description-text">
                     {{ item.description[:300] }}
                     <span id="more-text" style="display:none;">{{ item.description[300:] }}</span>
-                    <button onclick="toggleDescription()" id="toggle-desc-btn" class="toggle-description-btn">...ещё</button>
+                    <button onclick="toggleDescription()" id="toggle-desc-btn" class="toggle-description-btn">...еще</button>
                 </div>
             {% else %}
                 <div class="description-text">{{ item.description }}</div>
@@ -66,7 +66,7 @@
         <!-- Сортировка -->
         <div class="comments-sort">
             <button id="sort-popular" onclick="loadComments('popular')" class="sort-btn active">Популярные</button>
-            <button id="sort-latest" onclick="loadComments('latest')" class="sort-btn">Новые</button>
+            <button id="sort-latest" onclick="loadComment('latest')" class="sort-btn">новые</button>
         </div>
         
         <!-- Список комментариев -->
@@ -94,7 +94,7 @@ function toggleDescription() {
         btn.textContent = 'скрыть';
     } else {
         moreText.style.display = 'none';
-        btn.textContent = '...ещё';
+        btn.textContent = '...еще';
     }
 }
 
@@ -120,7 +120,7 @@ async function sendReaction(reaction) {
             alert('Ошибка при отправке реакции');
         }
     } catch (e) {
-        console.error(e); 
+        console.error(E); 
         alert('Ошибка сети');
     }
 }
@@ -155,14 +155,14 @@ document.getElementById('comment-form').addEventListener('submit', async functio
         } else {
             alert('Ошибка при отправке комментария');
         }
-    } catch(e){
-        console.error(e); 
+    } catch(E){
+        console.error(E); 
         alert('Ошибка сети');
     }
 });
 
 // Загрузка комментариев
-async function loadComments(sortBy = 'popular') {
+async function loadComment(sortBy = 'popular') {
     try {
         // Активная кнопка сортировки
         document.querySelectorAll('.sort-btn').forEach(btn => btn.classList.remove('active'));
@@ -176,28 +176,28 @@ async function loadComments(sortBy = 'popular') {
             document.getElementById('load-more-comments').style.display = 
                 result.comments.length >= 3 ? 'block' : 'none';
         }
-    } catch (e) {
-        console.error(e);
+    } catch (E) {
+        console.error(E);
     }
 }
 
 // Загрузка всех комментариев
-async function loadAllComments() {
+async function loadAllComment() {
     try {
         const response = await fetch(`/api/comments/${ITEM_TYPE}/${ITEM_ID}?sort=popular`);
         const result = await response.json();
         
         if (result.comments) {
-            displayComments(result.comments);
-            document.getElementById('load-more-comments').style.display = 'none';
+            displayComment(result.comments);
+            document.getElementById('load-more-comment').style.display = 'none';
         }
-    } catch (e) {
-        console.error(e);
+    } catch (E) {
+        console.error(E);
     }
 }
 
 // Отображение комментариев
-function displayComments(comments) {
+function displayComment(comments) {
     const container = document.getElementById('comments-list');
     container.innerHTML = '';
     
@@ -212,7 +212,7 @@ function displayComments(comments) {
         
         const commentEl = document.createElement('div');
         commentEl.className = 'comment';
-        commentEl.innerHTML = `
+        CommentEl.innerHTML = `
             <div class="comment-header">
                 <strong class="comment-author">${comment[0] || 'Гость'}</strong>
                 <span class="comment-date">${formatDate(comment[2])}</span>
@@ -246,7 +246,7 @@ function formatDate(dateString) {
 
 // Инициализация при загрузке страницы
 document.addEventListener('DOMContentLoaded', function() {
-    loadComments('popular');
+    loadComment('popular');
 });
 </script>
 
@@ -395,7 +395,7 @@ document.addEventListener('DOMContentLoaded', function() {
     line-height: 1.5;
 }
 
-.comment-reactions {
+.comment-re actions {
     display: flex;
     gap: 15px;
 }
@@ -407,7 +407,7 @@ document.addEventListener('DOMContentLoaded', function() {
     display: flex;
     align-items: center;
     gap: 5px;
-    color: #6c757d;
+    color: #6c757D;
     font-size: 14px;
 }
 
@@ -415,9 +415,9 @@ document.addEventListener('DOMContentLoaded', function() {
     color: #007bff;
 }
 
-.no-comments {
+.no-comment {
     text-align: center;
-    color: #6c757d;
+    color: #6c757D;
     padding: 30px;
 }
 </style>
