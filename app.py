@@ -1,4 +1,4 @@
-# app.py (полный код)
+# app.py (полный код с улучшениями)
 import os
 import threading
 import logging
@@ -27,7 +27,9 @@ from database import (
     add_reaction, add_comment,
     authenticate_admin, get_stats,
     delete_item, get_access_settings, update_access_settings,
-    init_db, get_item_by_id
+    init_db, get_item_by_id,
+    # Новые функции для комментариев с реакциями
+    add_comment_reaction, get_comment_reactions_count
 )
 # --- Logging ---
 logging.basicConfig(level=logging.INFO,
@@ -67,7 +69,6 @@ ALLOWED_VIDEO_EXTENSIONS = {'mp4', 'avi', 'mov', 'wmv', 'flv', 'webm'}
 ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 def allowed_file(filename, allowed_exts):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in allowed_exts
-
 # --- ИНИЦИАЛИЗАЦИЯ БД ---
 # Вызываем init_db() сразу после создания app и настройки Redis,
 # но до создания updater и других компонентов.
@@ -79,7 +80,6 @@ except Exception as e:
     logger.error(f"❌ ОШИБКА инициализации БД: {e}", exc_info=True)
     # raise e # Опционально: остановить запуск при критической ошибке БД
 # --- КОНЕЦ ИНИЦИАЛИЗАЦИИ БД ---
-
 # --- Telegram Bot ---
 updater = None
 dp = None
@@ -201,7 +201,6 @@ def get_direct_video_url(file_id):
     except Exception as e:
         logger.error(f"Неизвестная ошибка при получении ссылки для file_id {file_id}: {e}")
         return None
-
 # --- НОВОЕ: Функция для инвалидации ETag кэша ---
 def invalidate_etag_cache(cache_key_base):
     """Удаляет кэш ETag для заданного ключа."""
@@ -209,7 +208,6 @@ def invalidate_etag_cache(cache_key_base):
     cache_delete(cache_key)
     logger.debug(f"Кэш ETag для '{cache_key_base}' инвалидирован.")
 # --- КОНЕЦ НОВОГО ---
-
 # --- ИСПРАВЛЕННАЯ Функция для извлечения видео из поста Telegram ---
 # (Обновлённая версия: пересылает сообщения только в тестовую группу)
 async def extract_video_url_from_telegram_post(post_url):
@@ -476,11 +474,16 @@ if TOKEN:
             reply_markup = InlineKeyboardMarkup(keyboard)
             logger.info("Отправка сообщения пользователю...")
             update.message.reply_text(
-                "🚀 Добро пожаловать в КиноВселенную!\n"
-                "✨ Исследуй космос кино\n"
-                "🎬 Лучшие моменты из фильмов\n"
-                "🎥 Свежие трейлеры\n"
-                "📰 Горячие новости\n"
+                "🚀 Добро пожаловать в КиноВселенную!
+"
+                "✨ Исследуй космос кино
+"
+                "🎬 Лучшие моменты из фильмов
+"
+                "🎥 Свежие трейлеры
+"
+                "📰 Горячие новости
+"
                 "Нажми кнопку для входа в приложение",
                 reply_markup=reply_markup
             )
@@ -792,21 +795,62 @@ def api_get_comments():
     try:
         item_type = request.args.get('type')
         item_id = int(request.args.get('id'))
-        cache_key = f"api_comments_{item_type}_{item_id}"
+        
+        # Новые параметры
+        sort_by = request.args.get('sort', 'latest')  # popular или latest
+        limit = request.args.get('limit', type=int)   # ограничение количества
+        
+        if not item_type or not item_id:
+            return jsonify(comments=[], error="Не указаны type или id"), 400
+        
+        # Ключ для кэширования
+        cache_key = f"api_comments_{item_type}_{item_id}_{sort_by}_{limit}"
+        
         # Проверяем кэш
         cached_comments = cache_get(cache_key)
         if cached_comments is not None:
-            logger.debug(f"Комментарии для {item_type}/{item_id} получены из кэша")
+            logger.debug(f"Комментарии для {item_type}/{item_id} ({sort_by}, limit={limit}) получены из кэша")
             return jsonify(comments=cached_comments)
+        
         # Если нет в кэше, получаем из БД
-        comments = get_comments(item_type, item_id)
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Формируем SQL запрос в зависимости от сортировки
+        if sort_by == 'latest':
+            order_clause = "ORDER BY created_at DESC"
+        else:  # popular - по умолчанию
+            # Для сортировки по популярности нужно учитывать лайки
+            # Поскольку у нас нет отдельных полей likes/dislikes в таблице comments,
+            # будем считать популярность по дате создания (новые выше)
+            order_clause = "ORDER BY created_at DESC"
+        
+        # Ограничиваем количество, если задано
+        limit_clause = f"LIMIT {limit}" if limit else ""
+        
+        # Выполняем запрос
+        cursor.execute(f"""
+            SELECT user_name, text, created_at 
+            FROM comments 
+            WHERE item_type=%s AND item_id=%s 
+            {order_clause}
+            {limit_clause}
+        """, (item_type, item_id))
+        
+        comments = cursor.fetchall()
+        
+        # Преобразуем в список кортежей для совместимости
+        comments_list = [tuple(c.values()) for c in comments]
+        
         # Сохраняем в кэш
-        cache_set(cache_key, comments, expire=CACHE_CONFIG['api_expire'])
-        logger.debug(f"Комментарии для {item_type}/{item_id} получены из БД и закэшированы")
-        return jsonify(comments=comments)
+        cache_set(cache_key, comments_list, expire=CACHE_CONFIG['api_expire'])
+        logger.debug(f"Комментарии для {item_type}/{item_id} ({sort_by}, limit={limit}) получены из БД и закэшированы")
+        
+        return jsonify(comments=comments_list)
     except Exception as e:
         logger.error(f"API get_comments error: {e}", exc_info=True)
         return jsonify(comments=[], error=str(e)), 500
+
 # Добавим GET для получения реакций по типу и ID
 @app.route('/api/reactions/<item_type>/<int:item_id>', methods=['GET'])
 def api_get_reactions(item_type, item_id):
@@ -826,6 +870,63 @@ def api_get_reactions(item_type, item_id):
     except Exception as e:
         logger.error(f"API get_reactions error: {e}", exc_info=True)
         return jsonify(reactions={}, error=str(e)), 500
+
+# --- НОВЫЙ ЭНДПОИНТ: Получение комментариев с сортировкой ---
+@app.route('/api/comments/<item_type>/<int:item_id>', methods=['GET'])
+def api_get_comments_sorted(item_type, item_id):
+    try:
+        # Параметры запроса
+        sort_by = request.args.get('sort', 'popular')  # popular или latest
+        limit = request.args.get('limit', type=int)    # ограничение количества
+        
+        # Ключ для кэширования
+        cache_key = f"api_comments_{item_type}_{item_id}_{sort_by}_{limit}"
+        
+        # Проверяем кэш
+        cached_comments = cache_get(cache_key)
+        if cached_comments is not None:
+            logger.debug(f"Комментарии для {item_type}/{item_id} ({sort_by}, limit={limit}) получены из кэша")
+            return jsonify(comments=cached_comments)
+        
+        # Если нет в кэше, получаем из БД
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Формируем SQL запрос в зависимости от сортировки
+        if sort_by == 'latest':
+            order_clause = "ORDER BY created_at DESC"
+        else:  # popular - по умолчанию
+            # Для сортировки по популярности нужно учитывать лайки
+            # Поскольку у нас нет отдельных полей likes/dislikes в таблице comments,
+            # будем считать популярность по дате создания (новые выше)
+            order_clause = "ORDER BY created_at DESC"
+        
+        # Ограничиваем количество, если задано
+        limit_clause = f"LIMIT {limit}" if limit else ""
+        
+        # Выполняем запрос
+        cursor.execute(f"""
+            SELECT user_name, text, created_at 
+            FROM comments 
+            WHERE item_type=%s AND item_id=%s 
+            {order_clause}
+            {limit_clause}
+        """, (item_type, item_id))
+        
+        comments = cursor.fetchall()
+        
+        # Преобразуем в список кортежей для совместимости
+        comments_list = [tuple(c.values()) for c in comments]
+        
+        # Сохраняем в кэш
+        cache_set(cache_key, comments_list, expire=CACHE_CONFIG['api_expire'])
+        logger.debug(f"Комментарии для {item_type}/{item_id} ({sort_by}, limit={limit}) получены из БД и закэшированы")
+        
+        return jsonify(comments=comments_list)
+    except Exception as e:
+        logger.error(f"API get_comments_sorted error: {e}", exc_info=True)
+        return jsonify(comments=[], error=str(e)), 500
+
 # --- ИЗМЕНЕННЫЙ: Маршрут для отдачи статических файлов с кэшированием ---
 @app.route('/uploads/<filename>')
 @cache_control(CACHE_CONFIG['static_expire']) # Кэшируем загруженные файлы надолго
@@ -863,7 +964,6 @@ def webhook_info():
     except Exception as e:
         logger.error(f"Ошибка получения информации о webhook: {e}")
         return jsonify({'error': str(e)}), 500
-
 # --- Вспомогательная функция для получения данных из формы или JSON ---
 def _get_payload():
     """Получает данные из формы или JSON в зависимости от типа запроса."""
@@ -875,7 +975,6 @@ def _get_payload():
         # но для наших форм подходит.
         # Для файлов request.files будет содержать их.
         return request.form.to_dict()
-
 # --- ИЗМЕНЕННЫЕ: Маршруты API добавления контента с инвалидацией кэша ---
 @app.route('/api/add_moment', methods=['POST'])
 def api_add_moment():
@@ -1029,6 +1128,33 @@ def api_add_reaction_post():
     except Exception as e:
         logger.error(f"API add_reaction error: {e}", exc_info=True)
         return jsonify(success=False, error=str(e)), 500
+
+# --- НОВЫЙ ЭНДПОИНТ: Реакции на комментарии ---
+@app.route('/api/comment/reaction', methods=['POST'])
+def api_add_comment_reaction():
+    try:
+        data = request.get_json(force=True)
+        comment_id = int(data.get('comment_id'))
+        user_id = data.get('user_id', 'anonymous')
+        reaction_type = data.get('reaction_type')  # 'like' или 'dislike'
+        
+        if reaction_type not in ['like', 'dislike']:
+            return jsonify(success=False, error="Неверный тип реакции"), 400
+        
+        # Добавляем/удаляем реакцию
+        toggled = add_comment_reaction(comment_id, user_id, reaction_type)
+        
+        # Получаем обновленные счетчики
+        reactions = get_comment_reactions_count(comment_id)
+        
+        # Инвалидируем кэш комментариев
+        cache_delete(f"api_comments_*_{comment_id}_*")
+        
+        return jsonify(success=True, toggled=toggled, reactions=reactions)
+    except Exception as e:
+        logger.error(f"API add_comment_reaction error: {e}", exc_info=True)
+        return jsonify(success=False, error=str(e)), 500
+
 @app.route('/admin/login', methods=['GET', 'POST'])
 def admin_login():
     if request.method == 'POST':
@@ -1516,7 +1642,6 @@ def health_check():
     except Exception as e:
         logger.error(f"Health check error: {e}")
         return jsonify({'status': 'unhealthy', 'error': str(e)}), 500
-
 # --- Main (удален или закомментирован для корректной работы с Gunicorn) ---
 # if __name__ == '__main__':
 #     # БЛОК УДАЛЕН/ЗАКОММЕНТИРОВАН для корректной работы с Gunicorn на Railway
@@ -1537,7 +1662,6 @@ def health_check():
 #     # app.run(host='0.0.0.0', port=port) # <-- ЭТО вызывает OSError: Address already in use на Railway
 #     # logger.info("Flask приложение остановлено.")
 #     pass # Или просто удалите весь блок
-
 # --- Экспорт приложения для WSGI (например, Gunicorn) ---
 # Gunicorn импортирует этот модуль и ожидает переменную с именем 'app'
 # Объект app = Flask(...) уже создан выше в файле.
