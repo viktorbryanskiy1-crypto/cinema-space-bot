@@ -10,7 +10,7 @@
         <button id="add-trailer-btn" class="tab-btn" style="padding: 12px 25px;">➕ Добавить трейлер</button>
         {% endif %}
     </div>
-    
+
     <div class="card-grid">
         {% if trailers %}
         {% for trailer in trailers %}
@@ -31,7 +31,7 @@
                 </div>
             </a>
             
-            <!-- Название -->
+            <!-- Название под превью -->
             <h3 class="card-title">
                 <a href="{{ url_for('trailer_detail', item_id=trailer.id) }}" class="title-link">{{ trailer.title }}</a>
             </h3>
