@@ -1544,7 +1544,7 @@ def health_check():
         })
     except Exception as e:
         logger.error(f"Health check error: {e}")
-        return jsonify({'status': 'unhealthy', error=str(e)}), 500
+        return jsonify({'status': 'unhealthy', 'error': str(e)}), 500
 # --- Main ---
 # Инициализация БД уже происходит выше, поэтому здесь повторять не нужно.
 # Она была перемещена туда, чтобы работать и при запуске через gunicorn.
