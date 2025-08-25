@@ -508,7 +508,7 @@ def invalidate_etag_cache(cache_key_base):
 def build_extra_map(data, item_type_plural):
     """Добавляет реакции и комментарии к каждому элементу данных."""
     extra = {}
-    for row in 
+    for row in data:
         item_id = row[0]
         reactions_cache_key = f"reactions_{item_type_plural}_{item_id}"
         reactions = cache_get(reactions_cache_key)
