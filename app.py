@@ -1,10 +1,9 @@
-# app.py (полный код с улучшениями)
+# app.py (исправленный)
 import os
 import threading
 import logging
 import uuid
 import requests
-import time
 import re
 import asyncio
 from datetime import datetime
@@ -17,8 +16,6 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, Bot
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 import redis
 import json
-# --- НОВОЕ: Добавлен импорт hashlib ---
-import hashlib
 from database import (
     get_or_create_user, get_user_role,
     add_moment, add_trailer, add_news,
@@ -86,11 +83,11 @@ dp = None
 pending_video_data = {}
 # --- НОВОЕ: Конфигурация кэширования ---
 CACHE_CONFIG = {
-    'html_expire': 3600,       # Было 1800 (30 минут), стало 5 минут
-    'api_expire': 120,        # Было 300 (5 минут), стало 2 минуты
-    'data_expire': 300,       # Было 600 (10 минут), стало 5 минут
+    'html_expire': 1800,       # 30 минут для HTML страниц
+    'api_expire': 300,        # 5 минут для API данных
+    'data_expire': 600,       # 10 минут для данных из БД
     'static_expire': 2592000, # 30 дней для статики (CSS, JS, изображения)
-    'video_url_cache_time': 86400 # 6 часов для кэша ссылок Telegram
+    'video_url_cache_time': 21600 # 6 часов для кэша ссылок Telegram
 }
 # --- НОВОЕ: Декораторы для кэширования ---
 from functools import wraps
@@ -101,35 +98,6 @@ def cache_control(max_age):
         def decorated_function(*args, **kwargs):
             resp = make_response(f(*args, **kwargs))
             resp.headers['Cache-Control'] = f'public, max-age={max_age}'
-            return resp
-        return decorated_function
-    return decorator
-def etag_cache(key_generator_func):
-    """Декоратор для кэширования с использованием ETags."""
-    def decorator(f):
-        @wraps(f)
-        def decorated_function(*args, **kwargs):
-            # Генерируем ключ для кэша на основе аргументов функции
-            cache_key_base = key_generator_func(*args, **kwargs)
-            cache_key = f"etag_cache_{cache_key_base}"
-            # Получаем закэшированные данные
-            cached_data = cache_get(cache_key)
-            if cached_data and isinstance(cached_data, dict) and 'html' in cached_data and 'etag' in cached_data:
-                etag = cached_data['etag']
-                # Проверяем, совпадает ли ETag в запросе
-                if request.headers.get('If-None-Match') == etag:
-                    logger.debug(f"ETag совпал для {cache_key_base}, возвращаю 304 Not Modified")
-                    return '', 304 # Not Modified
-            # Если кэш отсутствует или ETag не совпал, выполняем функцию
-            html_content = f(*args, **kwargs)
-            # Генерируем ETag на основе содержимого
-            etag = hashlib.md5(html_content.encode('utf-8')).hexdigest() # <-- Используется hashlib
-            # Сохраняем в кэш с ETag
-            cache_set(cache_key, {'html': html_content, 'etag': etag}, expire=CACHE_CONFIG['html_expire'])
-            # Возвращаем ответ с ETag
-            resp = make_response(html_content)
-            resp.headers['ETag'] = etag
-            resp.headers['Cache-Control'] = f'public, max-age={CACHE_CONFIG["html_expire"]}'
             return resp
         return decorated_function
     return decorator
@@ -553,38 +521,6 @@ def build_extra_map(data, item_type_plural):
 def index():
     return render_template('index.html')
 
-# --- НОВОЕ: Хелпер для добавления cache-busting к URL ---
-def add_cache_buster(url):
-    """Добавляет timestamp к URL для предотвращения кэширования."""
-    if not url:
-        return url
-    separator = '&' if '?' in url else '?'
-    return f"{url}{separator}t={int(time.time())}"
-
-# --- ИЗМЕНЕННЫЙ: Маршрут для отдачи статических файлов с кэшированием ---
-@app.route('/uploads/<filename>')
-# Убираем общий cache_control для видео, будем управлять индивидуально
-# @cache_control(CACHE_CONFIG['static_expire'])
-def uploaded_file(filename):
-    response = send_from_directory(app.config['UPLOAD_FOLDER'], filename)
-    # Проверяем, является ли файл видео
-    if any(filename.lower().endswith(ext) for ext in ['.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm']):
-        # Для видео отключаем кэширование или делаем его очень коротким
-        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, private'
-        response.headers['Pragma'] = 'no-cache'
-        response.headers['Expires'] = '0'
-        # Альтернатива: очень короткий max-age
-        # response.headers['Cache-Control'] = f'public, max-age=60' # 1 минута
-    else:
-        # Для других файлов (изображений, документов) - долгое кэширование
-        response.headers['Cache-Control'] = f'public, max-age={CACHE_CONFIG["static_expire"]}'
-    return response
-
-@app.route('/static/<path:filename>')
-@cache_control(CACHE_CONFIG['static_expire']) # Кэшируем статические файлы надолго
-def static_files(filename):
-    return send_from_directory('static', filename)
-
 # --- ИЗМЕНЕННЫЕ: Кэшированные маршруты для вкладок с ETag ---
 # Функция для генерации ключа ETag для страницы списка
 def moments_page_key():
@@ -608,7 +544,7 @@ def moments():
                     'id': row[0],
                     'title': row[1] if len(row) > 1 else '',
                     'description': row[2] if len(row) > 2 else '',
-                    'video_url': add_cache_buster(row[3]) if len(row) > 3 else '', # <-- Добавлен cache-busting
+                    'video_url': row[3] if len(row) > 3 else '',
                     'preview_url': row[4] if len(row) > 4 else '', # Новое поле
                     'created_at': row[5] if len(row) > 5 else None # Обновлен индекс
                 }
@@ -648,7 +584,7 @@ def trailers():
                     'id': row[0],
                     'title': row[1] if len(row) > 1 else '',
                     'description': row[2] if len(row) > 2 else '',
-                    'video_url': add_cache_buster(row[3]) if len(row) > 3 else '', # <-- Добавлен cache-busting
+                    'video_url': row[3] if len(row) > 3 else '',
                     'preview_url': row[4] if len(row) > 4 else '', # Новое поле
                     'created_at': row[5] if len(row) > 5 else None # Обновлен индекс
                 }
@@ -737,7 +673,7 @@ def moment_detail(item_id):
         'id': item[0],
         'title': item[1] if len(item) > 1 else '',
         'description': item[2] if len(item) > 2 else '',
-        'video_url': add_cache_buster(item[3]) if len(item) > 3 else '', # <-- Добавлен cache-busting
+        'video_url': item[3] if len(item) > 3 else '',
         'preview_url': item[4] if len(item) > 4 else '', # Новое поле
         'created_at': item[5] if len(item) > 5 else None # Обновлен индекс
     }
@@ -772,7 +708,7 @@ def trailer_detail(item_id):
         'id': item[0],
         'title': item[1] if len(item) > 1 else '',
         'description': item[2] if len(item) > 2 else '',
-        'video_url': add_cache_buster(item[3]) if len(item) > 3 else '', # <-- Добавлен cache-busting
+        'video_url': item[3] if len(item) > 3 else '',
         'preview_url': item[4] if len(item) > 4 else '', # Новое поле
         'created_at': item[5] if len(item) > 5 else None # Обновлен индекс
     }
@@ -923,6 +859,15 @@ def api_get_comments_sorted(item_type, item_id):
     except Exception as e:
         logger.error(f"API get_comments_sorted error: {e}", exc_info=True)
         return jsonify(comments=[], error=str(e)), 500
+# --- ИЗМЕНЕННЫЙ: Маршрут для отдачи статических файлов с кэшированием ---
+@app.route('/uploads/<filename>')
+@cache_control(CACHE_CONFIG['static_expire']) # Кэшируем загруженные файлы надолго
+def uploaded_file(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+@app.route('/static/<path:filename>')
+@cache_control(CACHE_CONFIG['static_expire']) # Кэшируем статические файлы (CSS, JS, изображения из static) надолго
+def static_files(filename):
+    return send_from_directory('static', filename)
 # --- Маршрут для Webhook от Telegram ---
 @app.route('/<string:token>', methods=['POST'])
 def telegram_webhook(token):
