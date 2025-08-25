@@ -49,13 +49,13 @@
             👍 <span id="likes-count">{{ reactions['like'] if reactions else 0 }}</span>
         </button>
         <button class="reaction-btn dislike" onclick="sendReaction('dislike')">
-            👎 <span id="dislikes-count">{{ reactions['dislike'] if reactions else 0 }}</span>
+            👎 <span id="dislike-count">{{ reactions['dislike'] if reactions else 0 }}</span>
         </button>
         <button class="reaction-btn star" onclick="sendReaction('star')">
-            ⭐ <span id="stars-count">{{ reactions['star'] if reactions else 0 }}</span>
+            ⭐ <span id="star-count">{{ reactions['star'] if reactions else 0 }}</span>
         </button>
         <button class="reaction-btn fire" onclick="sendReaction('fire')">
-            🔥 <span id="fires-count">{{ reactions['fire'] if reactions else 0 }}</span>
+            🔥 <span id="fire-count">{{ reactions['fire'] if reactions else 0 }}</span>
         </button>
     </div>
     
@@ -66,7 +66,7 @@
                 <div class="description-text" id="description-text">
                     {{ item.description[:300] }}
                     <span id="more-text" style="display:none;">{{ item.description[300:] }}</span>
-                    <button onclick="toggleDescription()" id="toggle-desc-btn" class="toggle-description-btn">...ещё</button>
+                    <button onclick="toggleDescription()" id="toggle-desc-btn" class="toggle-description-btn">...еще</button>
                 </div>
             {% else %}
                 <div class="description-text">{{ item.description }}</div>
@@ -118,7 +118,7 @@ function toggleDescription() {
         btn.textContent = 'скрыть';
     } else {
         moreText.style.display = 'none';
-        btn.textContent = '...ещё';
+        btn.textContent = '...еще';
     }
 }
 
@@ -296,6 +296,7 @@ document.addEventListener('DOMContentLoaded', function() {
     font-size: 24px;
     margin: 20px 0 15px 0;
     font-weight: bold;
+    color: var(--text);
 }
 
 .video-reactions {
@@ -315,6 +316,7 @@ document.addEventListener('DOMContentLoaded', function() {
     align-items: center;
     gap: 5px;
     transition: all 0.2s;
+    color: #333;
 }
 
 .reaction-btn:hover {
@@ -325,8 +327,9 @@ document.addEventListener('DOMContentLoaded', function() {
 .video-description {
     margin: 25px 0;
     padding: 15px;
-    background: #f9f9f9;
+    background: rgba(255, 255, 255, 0.05);
     border-radius: 8px;
+    color: var(--text-secondary);
 }
 
 .description-text {
@@ -337,14 +340,16 @@ document.addEventListener('DOMContentLoaded', function() {
 .toggle-description-btn {
     background: none;
     border: none;
-    color: #007bff;
+    color: var(--accent);
     cursor: pointer;
     font-size: 16px;
     margin-left: 5px;
+    text-decoration: underline;
 }
 
 .comments-section {
     margin-top: 40px;
+    color: var(--text);
 }
 
 .comment-form {
@@ -356,9 +361,11 @@ document.addEventListener('DOMContentLoaded', function() {
     width: 100%;
     padding: 10px;
     margin-bottom: 10px;
-    border: 1px solid #ddd;
+    border: 1px solid var(--border);
     border-radius: 4px;
     font-family: inherit;
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text);
 }
 
 .comment-form textarea {
@@ -368,11 +375,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
 .comment-form button {
     padding: 10px 20px;
-    background: #007bff;
-    color: white;
+    background: var(--accent);
+    color: #0f0c29;
     border: none;
     border-radius: 4px;
     cursor: pointer;
+    font-weight: bold;
 }
 
 .comments-sort {
@@ -383,21 +391,25 @@ document.addEventListener('DOMContentLoaded', function() {
 
 .sort-btn {
     padding: 8px 15px;
-    background: #e9ecef;
-    border: none;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--border);
     border-radius: 20px;
     cursor: pointer;
+    color: var(--text-secondary);
 }
 
 .sort-btn.active {
-    background: #007bff;
-    color: white;
+    background: var(--accent);
+    color: #0f0c29;
+    border-color: var(--accent);
 }
 
 .comment {
     padding: 15px;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
     margin-bottom: 15px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 4px;
 }
 
 .comment-header {
@@ -408,10 +420,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
 .comment-author {
     font-weight: bold;
+    color: var(--accent);
 }
 
 .comment-date {
-    color: #6c757d;
+    color: var(--text-secondary);
     font-size: 14px;
 }
 
@@ -432,18 +445,38 @@ document.addEventListener('DOMContentLoaded', function() {
     display: flex;
     align-items: center;
     gap: 5px;
-    color: #6c757d;
+    color: var(--text-secondary);
     font-size: 14px;
 }
 
 .comment-reaction-btn:hover {
-    color: #007bff;
+    color: var(--accent);
 }
 
 .no-comments {
     text-align: center;
-    color: #6c757d;
+    color: var(--text-secondary);
     padding: 30px;
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+    .video-detail-container {
+        padding: 15px;
+    }
+    
+    .video-title {
+        font-size: 20px;
+    }
+    
+    .reaction-btn {
+        padding: 6px 12px;
+        font-size: 14px;
+    }
+    
+    .comments-sort {
+        flex-wrap: wrap;
+    }
 }
 </style>
 {% endblock %}
