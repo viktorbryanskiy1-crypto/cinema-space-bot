@@ -1471,7 +1471,7 @@ def handle_pending_video_file(update, context):
     user = update.message.from_user
     telegram_id = str(user.id)
     logger.info(f"Получен видеофайл от пользователя {telegram_id}")
-    if telegram_id not in pending_video_
+    if telegram_id not in pending_video_data:
         logger.debug("Нет ожидающих данных для видео")
         return
     data = pending_video_data.pop(telegram_id)
