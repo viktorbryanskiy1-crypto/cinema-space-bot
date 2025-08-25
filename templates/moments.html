@@ -31,7 +31,7 @@
                 </div>
             </a>
             
-            <!-- Название -->
+            <!-- Название под превью -->
             <h3 class="card-title">
                 <a href="{{ url_for('moment_detail', item_id=moment.id) }}" class="title-link">{{ moment.title }}</a>
             </h3>
@@ -163,18 +163,18 @@
     .card-grid {
         grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
         gap: 20px;
-        padding: 15px;
+        padding: 15 px;
     }
     
     .card-title {
         font-size: 16px;
-        padding: 12px;
+        padding: 12 px;
     }
     
     .play-button {
         width: 50px;
         height: 50px;
-        font-size: 20px;
+        font-size: 20 px;
     }
 }
 </style>
