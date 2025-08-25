@@ -1,4 +1,4 @@
-# app.py (Финальная версия с исправлениями)
+# app.py (полностью обновлённый и исправленный)
 import os
 import threading
 import logging
@@ -39,6 +39,7 @@ logger = logging.getLogger(__name__)
 
 # --- Config ---
 TOKEN = os.environ.get('TELEGRAM_TOKEN')
+# Исправлено: убраны лишние пробелы
 WEBHOOK_URL = os.environ.get('WEBHOOK_URL', 'https://cinema-space-bot.onrender.com').strip().rstrip('/')
 REDIS_URL = os.environ.get('REDIS_URL', None)
 if not TOKEN:
@@ -90,14 +91,13 @@ pending_video_data = {}
 
 # --- НОВОЕ: Конфигурация кэширования ---
 CACHE_CONFIG = {
-    'html_expire': 3600,       # Было 1800 (30 минут), стало 1 час
+    'html_expire': 300,       # Было 1800 (30 минут), стало 5 минут
     'api_expire': 120,        # Было 300 (5 минут), стало 2 минуты
     'data_expire': 300,       # Было 600 (10 минут), стало 5 минут
     'static_expire': 2592000, # 30 дней для статики (CSS, JS, изображения)
-    'video_url_cache_time': 86400, # Было 21600 (6 часов), стало 24 часа
+    'video_url_cache_time': 21600, # 6 часов для кэша ссылок Telegram
     'default_expire': 300     # Значение по умолчанию
 }
-
 # --- НОВОЕ: Декораторы для кэширования ---
 from functools import wraps
 
@@ -117,17 +117,24 @@ def etag_cache(key_generator_func):
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
+            # Генерируем ключ для кэша на основе аргументов функции
             cache_key_base = key_generator_func(*args, **kwargs)
             cache_key = f"etag_cache_{cache_key_base}"
+            # Получаем закэшированные данные
             cached_data = cache_get(cache_key)
             if cached_data and isinstance(cached_data, dict) and 'html' in cached_data and 'etag' in cached_:
                 etag = cached_data['etag']
+                # Проверяем, совпадает ли ETag в запросе
                 if request.headers.get('If-None-Match') == etag:
                     logger.debug(f"ETag совпал для {cache_key_base}, возвращаю 304 Not Modified")
-                    return '', 304
+                    return '', 304 # Not Modified
+            # Если кэш отсутствует или ETag не совпал, выполняем функцию
             html_content = f(*args, **kwargs)
-            etag = hashlib.md5(html_content.encode('utf-8')).hexdigest()
+            # Генерируем ETag на основе содержимого
+            etag = hashlib.md5(html_content.encode('utf-8')).hexdigest() # <-- Используется hashlib
+            # Сохраняем в кэш с ETag
             cache_set(cache_key, {'html': html_content, 'etag': etag}, expire=CACHE_CONFIG['html_expire'])
+            # Возвращаем ответ с ETag
             resp = make_response(html_content)
             resp.headers['ETag'] = etag
             resp.headers['Cache-Control'] = f'public, max-age={CACHE_CONFIG["html_expire"]}'
@@ -137,6 +144,7 @@ def etag_cache(key_generator_func):
 # --- КОНЕЦ новых декораторов ---
 
 # --- УЛУЧШЕННОЕ КЭШИРОВАНИЕ ССЫЛОК С АВТООБНОВЛЕНИЕМ ---
+# Используем CACHE_CONFIG для времени кэширования
 video_url_cache_advanced = {}
 
 def get_cached_direct_video_url_advanced(file_id, cache_time=None):
@@ -144,27 +152,33 @@ def get_cached_direct_video_url_advanced(file_id, cache_time=None):
     if cache_time is None:
         cache_time = CACHE_CONFIG['video_url_cache_time']
     current_time = time.time()
+    # Проверяем кэш
     if file_id in video_url_cache_advanced:
         url, expire_time, original_file_id = video_url_cache_advanced[file_id]
+        # Если срок действия ссылки еще не истек
         if current_time < expire_time:
             logger.debug(f"Ссылка для file_id {file_id} получена из кэша (осталось {int(expire_time - current_time)} сек)")
-            return url, False
+            return url, False # False = не обновлялась
         else:
+            # Срок действия истек, пытаемся обновить
             logger.info(f"Срок действия ссылки для file_id {file_id} истек. Попытка обновления...")
             new_url = get_direct_video_url(original_file_id)
             if new_url:
+                # Обновляем кэш
                 video_url_cache_advanced[file_id] = (new_url, current_time + cache_time, original_file_id)
                 logger.info(f"Ссылка для file_id {file_id} успешно обновлена")
-                return new_url, True
+                return new_url, True # True = была обновлена
             else:
+                # Не удалось обновить, возвращаем старую (может еще немного поработать)
                 logger.warning(f"Не удалось обновить ссылку для file_id {file_id}, возвращаю старую")
-                return url, False
+                return url, False # Возвращаем старую, надеемся, она еще жива
+    # Если в кэше нет или истекло время жизни и не обновилось
     logger.debug(f"Генерация новой ссылки для file_id {file_id}")
     url = get_direct_video_url(file_id)
     if url:
         video_url_cache_advanced[file_id] = (url, current_time + cache_time, file_id)
         logger.debug(f"Ссылка для file_id {file_id} закэширована")
-        return url, False
+        return url, False # Новая ссылка
     return None, False
 
 def get_direct_video_url(file_id):
@@ -174,6 +188,7 @@ def get_direct_video_url(file_id):
         logger.error("TELEGRAM_TOKEN не установлен для генерации ссылки")
         return None
     try:
+        # ИСПРАВЛЕНО: Убраны лишние пробелы в URL
         file_info_url = f"https://api.telegram.org/bot{bot_token}/getFile?file_id={file_id}"
         logger.debug(f"Запрос к Telegram API: {file_info_url}")
         response = requests.get(file_info_url, timeout=10)
@@ -184,6 +199,7 @@ def get_direct_video_url(file_id):
             logger.error(f"Ошибка от Telegram API: {json_response}")
             return None
         file_path = json_response['result']['file_path']
+        # ИСПРАВЛЕНО: Убраны лишние пробелы в URL
         direct_url = f"https://api.telegram.org/file/bot{bot_token}/{file_path}"
         logger.info(f"Сгенерирована прямая ссылка для file_id {file_id}")
         return direct_url
@@ -198,10 +214,16 @@ def get_direct_video_url(file_id):
         return None
 
 # --- ИСПРАВЛЕННАЯ Функция для извлечения видео из поста Telegram ---
+# (Обновлённая версия: пересылает сообщения только в тестовую группу)
 async def extract_video_url_from_telegram_post(post_url):
-    """Извлекает прямую ссылку на видео из поста Telegram."""
+    """
+    Извлекает прямую ссылку на видео из поста Telegram.
+    Совместимо с python-telegram-bot v13.15.
+    Исправлено: теперь пересылает сообщения только в тестовую группу.
+    """
     try:
         logger.info(f"[ИЗВЛЕЧЕНИЕ] Попытка извлечь видео из поста: {post_url}")
+        # Парсим ссылку
         post_url = post_url.strip()
         public_match = re.search(r'https?://t\.me/([^/\s]+)/(\d+)', post_url)
         private_match = re.search(r'https?://t.me/c/(\d+)/(\d+)', post_url)
@@ -222,19 +244,23 @@ async def extract_video_url_from_telegram_post(post_url):
         if chat_id_or_username is None or message_id is None:
              return None, "Не удалось распарсить ссылку на пост"
         bot = Bot(token=TOKEN)
-        YOUR_TEST_CHAT_ID = -1003045387627
+        # --- ИСПРАВЛЕНИЕ: Всегда пересылаем в тестовую группу ---
+        # Это предотвращает дублирование в исходном канале
+        YOUR_TEST_CHAT_ID = -1003045387627 # <<<--- ВАШ ID ТЕСТОВОЙ ГРУППЫ
         try:
             logger.debug(f"[ИЗВЛЕЧЕНИЕ] Пересылаем сообщение в тестовую группу {YOUR_TEST_CHAT_ID}...")
+            # ИСПРАВЛЕНО: Убран await, так как forward_message возвращает объект Message, а не coroutine
             forwarded_message = bot.forward_message(
-                chat_id=YOUR_TEST_CHAT_ID,
-                from_chat_id=chat_id_or_username,
-                message_id=message_id
+                chat_id=YOUR_TEST_CHAT_ID,        # <<<--- ВСЕГДА в тестовую группу
+                from_chat_id=chat_id_or_username, # Откуда - из исходного чата
+                message_id=message_id            # Какое сообщение
             )
             message = forwarded_message
             logger.info("[ИЗВЛЕЧЕНИЕ] Сообщение успешно получено через forward_message (в тестовую группу)")
         except Exception as e1:
             logger.error(f"[ИЗВЛЕЧЕНИЕ] Не удалось получить сообщение через forward: {e1}")
             return None, "Не удалось получить сообщение. Убедитесь, что бот имеет доступ к сообщению."
+        # --- КОНЕЦ ИСПРАВЛЕНИЯ ---
         if not message:
             logger.error("[ИЗВЛЕЧЕНИЕ] Сообщение не найдено или бот не имеет доступа")
             return None, "Сообщение не найдено."
@@ -273,9 +299,13 @@ def extract_video_url_sync(post_url):
 
 # --- НОВАЯ ФУНКЦИЯ: Извлечение ссылки на изображение из поста Telegram ---
 async def extract_image_url_from_telegram_post(post_url):
-    """Извлекает прямую ссылку на изображение из поста Telegram."""
+    """
+    Извлекает прямую ссылку на изображение из поста Telegram.
+    Совместимо с python-telegram-bot v13.15.
+    """
     try:
         logger.info(f"[ИЗВЛЕЧЕНИЕ ИЗОБРАЖЕНИЯ] Попытка извлечь изображение из поста: {post_url}")
+        # Парсим ссылку
         post_url = post_url.strip()
         public_match = re.search(r'https?://t\.me/([^/\s]+)/(\d+)', post_url)
         private_match = re.search(r'https?://t.me/c/(\d+)/(\d+)', post_url)
@@ -296,7 +326,8 @@ async def extract_image_url_from_telegram_post(post_url):
         if chat_id_or_username is None or message_id is None:
              return None, "Не удалось распарсить ссылку на пост"
         bot = Bot(token=TOKEN)
-        YOUR_TEST_CHAT_ID = -1003045387627
+        # --- ИСПРАВЛЕНИЕ: Всегда пересылаем в тестовую группу ---
+        YOUR_TEST_CHAT_ID = -1003045387627 # <<<--- ВАШ ID ТЕСТОВОЙ ГРУППЫ
         try:
             logger.debug(f"[ИЗВЛЕЧЕНИЕ ИЗОБРАЖЕНИЯ] Пересылаем сообщение в тестовую группу {YOUR_TEST_CHAT_ID}...")
             forwarded_message = bot.forward_message(
@@ -309,12 +340,15 @@ async def extract_image_url_from_telegram_post(post_url):
         except Exception as e1:
             logger.error(f"[ИЗВЛЕЧЕНИЕ ИЗОБРАЖЕНИЯ] Не удалось получить сообщение через forward: {e1}")
             return None, "Не удалось получить сообщение. Убедитесь, что бот имеет доступ к сообщению."
+        # --- КОНЕЦ ИСПРАВЛЕНИЯ ---
         if not message:
             logger.error("[ИЗВЛЕЧЕНИЕ ИЗОБРАЖЕНИЯ] Сообщение не найдено или бот не имеет доступа")
             return None, "Сообщение не найдено."
+        # Проверяем наличие фото
         if not message.photo:
             logger.error("[ИЗВЛЕЧЕНИЕ ИЗОБРАЖЕНИЯ] В посте нет изображения")
             return None, "В указанном посте не найдено изображение."
+        # Берем самую крупную миниатюру
         photo_obj = message.photo[-1]
         file_id = photo_obj.file_id
         logger.info(f"[ИЗВЛЕЧЕНИЕ ИЗОБРАЖЕНИЯ] Найден file_id фото: {file_id}")
@@ -352,7 +386,7 @@ def refresh_video_url():
     """Обновляет устаревшую ссылку на видео по Telegram посту"""
     try:
         data = request.get_json()
-        if not data:
+        if not 
             logger.warning("[ОБНОВЛЕНИЕ ССЫЛКИ] Неверный формат данных")
             return jsonify(success=False, error="Неверный формат данных"), 400
         post_url = data.get('post_url', '').strip()
@@ -360,6 +394,7 @@ def refresh_video_url():
             logger.warning("[ОБНОВЛЕНИЕ ССЫЛКИ] Не указана ссылка на пост")
             return jsonify(success=False, error="Не указана ссылка на пост"), 400
         logger.info(f"[ОБНОВЛЕНИЕ ССЫЛКИ] Запрошено обновление для ссылки: {post_url[:50]}...")
+        # Извлекаем новую ссылку
         direct_url, error = extract_video_url_sync(post_url)
         if direct_url:
             logger.info(f"[ОБНОВЛЕНИЕ ССЫЛКИ] Новая ссылка успешно получена")
@@ -371,19 +406,34 @@ def refresh_video_url():
         logger.error(f"[ОБНОВЛЕНИЕ ССЫЛКИ] Критическая ошибка: {e}", exc_info=True)
         return jsonify(success=False, error="Внутренняя ошибка сервера"), 500
 
-# --- ИЗМЕНЕННАЯ ФУНКЦИЯ: Кэширование HTML страниц с учетом ETag ---
+# --- ИЗМЕНЕННАЯ Функция для инвалидации ETag кэша ---
+# --- НОВОЕ: Функция для инвалидации ETag кэша ---
+def invalidate_etag_cache(cache_key_base):
+    """Удаляет кэш ETag для заданного ключа."""
+    cache_key = f"etag_cache_{cache_key_base}"
+    cache_delete(cache_key)
+    logger.debug(f"Кэш ETag для '{cache_key_base}' инвалидирован.")
+# --- КОНЕЦ ИЗМЕНЕННОЙ ФУНКЦИИ ---
+
+# --- ИЗМЕНЕННАЯ Функция: Кэширование HTML страниц с учетом ETag ---
 def get_cached_html(key, generate_func, expire=None):
     """Получает HTML из кэша или генерирует новый, используя ETag."""
     if expire is None:
         expire = CACHE_CONFIG['html_expire']
+    # Для простоты, будем использовать ключ как основу для ETag кэша
     etag_cache_key = f"etag_cache_{key}"
     cached_data = cache_get(etag_cache_key)
     if cached_data and isinstance(cached_data, dict) and 'html' in cached_data and 'etag' in cached_:
+        # Проверка ETag (если нужно) должна быть на уровне декоратора @etag_cache
+        # Здесь просто возвращаем HTML, если он есть и не истек
         logger.info(f"HTML для {key} получен из кэша (с ETag)")
         return cached_data['html']
+    # Генерируем новый HTML
     html = generate_func()
     if html:
-        etag = hashlib.md5(html.encode('utf-8')).hexdigest()
+        # Генерируем ETag
+        etag = hashlib.md5(html.encode('utf-8')).hexdigest() # <-- Используется hashlib
+        # Сохраняем в кэш с ETag
         cache_set(etag_cache_key, {'html': html, 'etag': etag}, expire=expire)
         logger.info(f"HTML для {key} закэширован на {expire} секунд (с ETag)")
     return html
@@ -392,16 +442,17 @@ def get_cached_html(key, generate_func, expire=None):
 def set_menu_button():
     """Устанавливает кнопку меню для бота"""
     if not TOKEN:
-        logger.error("TELEGRAM_TOKEN не установлен для установки Menu Button")
+        logger.error("TELEGRAM_TOKEN not set для установки Menu Button")
         return False
     try:
         logger.info("Начало выполнения set_menu_button")
         bot = Bot(token=TOKEN)
         logger.info("Объект Bot создан")
+        # Установка Menu Button
         app_url = f"{WEBHOOK_URL}/?mode=fullscreen"
         logger.info(f"URL для Menu Button: {app_url}")
         menu_button = MenuButtonWebApp(
-            text="movies",
+            text="movies",  # <-- Изменено на "movies"
             web_app=WebAppInfo(url=app_url)
         )
         logger.info("Объект MenuButtonWebApp создан")
@@ -415,7 +466,9 @@ def set_menu_button():
 if TOKEN:
     updater = Updater(TOKEN, use_context=True)
     dp = updater.dispatcher
+    # --- Обработчик команды /start ---
     def start(update, context):
+        """Обработчик команды /start"""
         try:
             logger.info("Обработчик /start ВЫЗВАН")
             user = update.message.from_user
@@ -452,7 +505,10 @@ if TOKEN:
             logger.info("Сообщение отправлено успешно")
         except Exception as e:
             logger.error(f"КРИТИЧЕСКАЯ ОШИБКА в обработчике /start: {e}", exc_info=True)
+
+    # --- Обработчик команды /menu для установки Menu Button ---
     def menu_command(update, context):
+        """Команда для установки/переустановки Menu Button"""
         try:
             success = set_menu_button()
             if success:
@@ -485,6 +541,7 @@ def cache_get(key):
 def cache_set(key, value, expire=300):
     if redis_client:
         try:
+            # Используем CACHE_CONFIG по умолчанию, если expire не передан или 0
             actual_expire = expire if expire > 0 else CACHE_CONFIG.get('default_expire', 300)
             redis_client.set(key, json.dumps(value), ex=actual_expire)
         except Exception as e:
@@ -497,24 +554,18 @@ def cache_delete(key):
         except Exception:
             pass
 
-# --- НОВОЕ: Функция для инвалидации ETag кэша ---
-def invalidate_etag_cache(cache_key_base):
-    """Удаляет кэш ETag для заданного ключа."""
-    cache_key = f"etag_cache_{cache_key_base}"
-    cache_delete(cache_key)
-    logger.debug(f"Кэш ETag для '{cache_key_base}' инвалидирован.")
-# --- КОНЕЦ НОВОГО ---
-
 def build_extra_map(data, item_type_plural):
     """Добавляет реакции и комментарии к каждому элементу данных."""
     extra = {}
-    for row in data:
+    for row in 
         item_id = row[0]
+        # Попробуем получить реакции из кэша
         reactions_cache_key = f"reactions_{item_type_plural}_{item_id}"
         reactions = cache_get(reactions_cache_key)
-        if reactions is None:
+        if reactions is None: # Может быть {}, что тоже валидно
             reactions = get_reactions_count(item_type_plural, item_id) or {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}
             cache_set(reactions_cache_key, reactions, expire=CACHE_CONFIG['data_expire'])
+        # Попробуем получить комментарии из кэша
         comments_cache_key = f"comments_{item_type_plural}_{item_id}"
         comments = cache_get(comments_cache_key)
         if comments is None:
@@ -525,31 +576,35 @@ def build_extra_map(data, item_type_plural):
 
 # --- Routes (пользовательские) ---
 @app.route('/')
-@cache_control(CACHE_CONFIG['html_expire'])
+@cache_control(CACHE_CONFIG['html_expire']) # Кэшируем главную страницу
 def index():
     return render_template('index.html')
 
 # --- НОВЫЙ МАРШРУТ ДЛЯ ПОИСКА ПО ССЫЛКЕ ---
 @app.route('/search_by_link')
-@cache_control(CACHE_CONFIG['html_expire'])
+@cache_control(CACHE_CONFIG['html_expire']) # Кэшируем страницу поиска
 def search_by_link_page():
     """Отображает страницу поиска фильма по ссылке."""
     return render_template('search_by_link.html')
 # --- КОНЕЦ НОВОГО МАРШРУТА ---
 
 # --- ИЗМЕНЕННЫЕ: Кэшированные маршруты для вкладок с ETag ---
+# Функция для генерации ключа ETag для страницы списка
 def moments_page_key():
     return "moments_page"
 
 @app.route('/moments')
-@etag_cache(moments_page_key)
+@etag_cache(moments_page_key) # Используем ETag кэш
 def moments():
     def generate_moments_html():
         try:
             logger.info("Запрос к /moments")
+            logger.info("Получение всех моментов из БД...")
             data = get_all_moments() or []
             logger.info(f"Получено {len(data)} моментов из БД")
+            logger.info("Построение extra_map...")
             extra_map = build_extra_map(data, 'moments')
+            logger.info("extra_map построен успешно")
             combined_data = []
             for row in data:
                 item_id = row[0]
@@ -558,8 +613,8 @@ def moments():
                     'title': row[1] if len(row) > 1 else '',
                     'description': row[2] if len(row) > 2 else '',
                     'video_url': row[3] if len(row) > 3 else '',
-                    'preview_url': row[4] if len(row) > 4 else '',
-                    'created_at': row[5] if len(row) > 5 else None
+                    'preview_url': row[4] if len(row) > 4 else '', # Новое поле
+                    'created_at': row[5] if len(row) > 5 else None # Обновлен индекс
                 }
                 extra_info = extra_map.get(item_id, {'reactions': {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}, 'comments_count': 0})
                 if isinstance(extra_info.get('reactions'), dict):
@@ -573,8 +628,10 @@ def moments():
         except Exception as e:
             logger.error(f"API add_moment error: {e}", exc_info=True)
             return render_template('error.html', error=str(e))
+    # Теперь генерация происходит внутри @etag_cache
     return generate_moments_html()
 
+# Аналогично для /trailers
 def trailers_page_key():
     return "trailers_page"
 
@@ -584,19 +641,22 @@ def trailers():
     def generate_trailers_html():
         try:
             logger.info("Запрос к /trailers")
+            logger.info("Получение всех трейлеров из БД...")
             data = get_all_trailers() or []
             logger.info(f"Получено {len(data)} трейлеров из БД")
+            logger.info("Построение extra_map...")
             extra_map = build_extra_map(data, 'trailers')
+            logger.info("extra_map построен успешно")
             combined_data = []
-            for row in data:
+            for row in 
                 item_id = row[0]
                 item_dict = {
                     'id': row[0],
                     'title': row[1] if len(row) > 1 else '',
                     'description': row[2] if len(row) > 2 else '',
                     'video_url': row[3] if len(row) > 3 else '',
-                    'preview_url': row[4] if len(row) > 4 else '',
-                    'created_at': row[5] if len(row) > 5 else None
+                    'preview_url': row[4] if len(row) > 4 else '', # Новое поле
+                    'created_at': row[5] if len(row) > 5 else None # Обновлен индекс
                 }
                 extra_info = extra_map.get(item_id, {'reactions': {'like': 0, 'dislike': 0, 'star': 0, 'fire': 0}, 'comments_count': 0})
                 if isinstance(extra_info.get('reactions'), dict):
@@ -612,6 +672,7 @@ def trailers():
             return render_template('error.html', error=str(e))
     return generate_trailers_html()
 
+# Аналогично для /news
 def news_page_key():
     return "news_page"
 
@@ -621,11 +682,14 @@ def news():
     def generate_news_html():
         try:
             logger.info("Запрос к /news")
+            logger.info("Получение всех новостей из БД...")
             data = get_all_news() or []
             logger.info(f"Получено {len(data)} новостей из БД")
+            logger.info("Построение extra_map...")
             extra_map = build_extra_map(data, 'news')
+            logger.info("extra_map построен успешно")
             combined_data = []
-            for row in data:
+            for row in 
                 item_id = row[0]
                 item_dict = {
                     'id': row[0],
@@ -647,27 +711,30 @@ def news():
             logger.error(f"API add_news error: {e}", exc_info=True)
             return render_template('error.html', error=str(e))
     return generate_news_html()
-
 # --- ИЗМЕНЕННЫЕ: Маршруты для отдельных элементов с кэшированием данных ---
 @app.route('/moments/<int:item_id>')
-@cache_control(CACHE_CONFIG['html_expire'])
+@cache_control(CACHE_CONFIG['html_expire']) # Кэшируем страницу деталей
 def moment_detail(item_id):
     """Отображает страницу одного момента."""
     logger.info(f"Запрос к /moments/{item_id}")
+    # Попробуем получить элемент из кэша
     item_cache_key = f"item_moments_{item_id}"
     item = cache_get(item_cache_key)
     if not item:
         item = get_item_by_id('moments', item_id)
         if item:
+             # Сохраняем в кэш
              cache_set(item_cache_key, item, expire=CACHE_CONFIG['data_expire'])
     if not item:
         logger.warning(f"Момент с id={item_id} не найден")
         abort(404)
+    # Попробуем получить реакции из кэша
     reactions_cache_key = f"reactions_moments_{item_id}"
     reactions = cache_get(reactions_cache_key)
-    if reactions is None:
+    if reactions is None: # Может быть {}, что тоже валидно
         reactions = get_reactions_count('moments', item_id)
         cache_set(reactions_cache_key, reactions, expire=CACHE_CONFIG['data_expire'])
+    # Попробуем получить комментарии из кэша
     comments_cache_key = f"comments_moments_{item_id}"
     comments = cache_get(comments_cache_key)
     if comments is None:
@@ -679,8 +746,8 @@ def moment_detail(item_id):
         'title': item[1] if len(item) > 1 else '',
         'description': item[2] if len(item) > 2 else '',
         'video_url': item[3] if len(item) > 3 else '',
-        'preview_url': item[4] if len(item) > 4 else '',
-        'created_at': item[5] if len(item) > 5 else None
+        'preview_url': item[4] if len(item) > 4 else '', # Новое поле
+        'created_at': item[5] if len(item) > 5 else None # Обновлен индекс
     }
     return render_template('moment_detail.html', item=item_dict, reactions=reactions, comments=comments)
 
@@ -715,8 +782,8 @@ def trailer_detail(item_id):
         'title': item[1] if len(item) > 1 else '',
         'description': item[2] if len(item) > 2 else '',
         'video_url': item[3] if len(item) > 3 else '',
-        'preview_url': item[4] if len(item) > 4 else '',
-        'created_at': item[5] if len(item) > 5 else None
+        'preview_url': item[4] if len(item) > 4 else '', # Новое поле
+        'created_at': item[5] if len(item) > 5 else None # Обновлен индекс
     }
     return render_template('trailer_detail.html', item=item_dict, reactions=reactions, comments=comments)
 
@@ -761,11 +828,14 @@ def api_get_comments():
         item_type = request.args.get('type')
         item_id = int(request.args.get('id'))
         cache_key = f"api_comments_{item_type}_{item_id}"
+        # Проверяем кэш
         cached_comments = cache_get(cache_key)
         if cached_comments is not None:
             logger.debug(f"Комментарии для {item_type}/{item_id} получены из кэша")
             return jsonify(comments=cached_comments)
+        # Если нет в кэше, получаем из БД
         comments = get_comments(item_type, item_id)
+        # Сохраняем в кэш
         cache_set(cache_key, comments, expire=CACHE_CONFIG['api_expire'])
         logger.debug(f"Комментарии для {item_type}/{item_id} получены из БД и закэшированы")
         return jsonify(comments=comments)
@@ -778,11 +848,14 @@ def api_get_comments():
 def api_get_reactions(item_type, item_id):
     try:
         cache_key = f"api_reactions_{item_type}_{item_id}"
+        # Проверяем кэш
         cached_reactions = cache_get(cache_key)
         if cached_reactions is not None:
             logger.debug(f"Реакции для {item_type}/{item_id} получены из кэша")
             return jsonify(reactions=cached_reactions)
+        # Если нет в кэше, получаем из БД
         reactions = get_reactions_count(item_type, item_id)
+        # Сохраняем в кэш
         cache_set(cache_key, reactions, expire=CACHE_CONFIG['api_expire'])
         logger.debug(f"Реакции для {item_type}/{item_id} получены из БД и закэшированы")
         return jsonify(reactions=reactions)
@@ -792,12 +865,12 @@ def api_get_reactions(item_type, item_id):
 
 # --- ИЗМЕНЕННЫЙ: Маршрут для отдачи статических файлов с кэшированием ---
 @app.route('/uploads/<filename>')
-@cache_control(CACHE_CONFIG['static_expire'])
+@cache_control(CACHE_CONFIG['static_expire']) # Кэшируем загруженные файлы надолго
 def uploaded_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 @app.route('/static/<path:filename>')
-@cache_control(CACHE_CONFIG['static_expire'])
+@cache_control(CACHE_CONFIG['static_expire']) # Кэшируем статические файлы (CSS, JS, изображения из static) надолго
 def static_files(filename):
     return send_from_directory('static', filename)
 
@@ -837,6 +910,10 @@ def _get_payload():
     if request.is_json:
         return request.get_json()
     else:
+        # Для multipart/form-data или application/x-www-form-urlencoded
+        # request.form.to_dict() не обрабатывает вложенные структуры,
+        # но для наших форм подходит.
+        # Для файлов request.files будет содержать их.
         return request.form.to_dict()
 
 # --- ИЗМЕНЕННЫЕ: Маршруты API добавления контента с инвалидацией кэша ---
@@ -866,7 +943,7 @@ def api_add_moment():
         add_moment(title, desc, video_url)
         # --- ИНВАЛИДАЦИЯ КЭША ---
         cache_delete('moments_list')
-        cache_delete('moments_page')
+        cache_delete('moments_page')  # Удаляем кэш страницы
         # --- НОВОЕ: Инвалидация кэша ETag ---
         invalidate_etag_cache('moments_page')
         # --- КОНЕЦ ИНВАЛИДАЦИИ ---
@@ -902,7 +979,7 @@ def api_add_trailer():
         add_trailer(title, desc, video_url)
         # --- ИНВАЛИДАЦИЯ КЭША ---
         cache_delete('trailers_list')
-        cache_delete('trailers_page')
+        cache_delete('trailers_page')  # Удаляем кэш страницы
         # --- НОВОЕ: Инвалидация кэша ETag ---
         invalidate_etag_cache('trailers_page')
         # --- КОНЕЦ ИНВАЛИДАЦИИ ---
@@ -926,7 +1003,7 @@ def api_add_news():
         add_news(title, text, image_url)
         # --- ИНВАЛИДАЦИЯ КЭША ---
         cache_delete('news_list')
-        cache_delete('news_page')
+        cache_delete('news_page')  # Удаляем кэш страницы
         # --- НОВОЕ: Инвалидация кэша ETag ---
         invalidate_etag_cache('news_page')
         # --- КОНЕЦ ИНВАЛИДАЦИИ ---
@@ -947,8 +1024,11 @@ def api_add_comment():
         text = data.get('text')
         add_comment(item_type, item_id, user_name, text)
         # --- ИНВАЛИДАЦИЯ КЭША ---
+        # Удаляем кэш для комментариев этого элемента
         cache_delete(f"api_comments_{item_type}_{item_id}")
-        cache_delete(f"comments_{item_type}_{item_id}")
+        cache_delete(f"comments_{item_type}_{item_id}") # Кэш для страницы деталей
+        # Также может потребоваться обновить счетчик комментариев в build_extra_map
+        # Проще всего сбросить кэш страниц списка
         cache_delete(f"{item_type}s_page")
         # --- НОВОЕ: Инвалидация кэша ETag для страницы списка ---
         invalidate_etag_cache(f"{item_type}s_page")
@@ -959,8 +1039,10 @@ def api_add_comment():
         return jsonify(success=False, error=str(e)), 500
 
 # --- ИЗМЕНЕННЫЙ: Маршрут API добавления реакции с инвалидацией кэша ---
+# Этот маршрут для получения реакций (GET)
 @app.route('/api/reaction', methods=['GET'])
 def api_get_reaction():
+    # Перенаправляем на новый маршрут
     item_type = request.args.get('type')
     item_id = request.args.get('id')
     if item_type and item_id:
@@ -968,6 +1050,7 @@ def api_get_reaction():
     else:
         return jsonify(reactions={}, error="Не указаны type или id"), 400
 
+# Этот маршрут для добавления реакции (POST)
 @app.route('/api/reaction', methods=['POST'])
 def api_add_reaction_post():
     try:
@@ -979,8 +1062,10 @@ def api_add_reaction_post():
         success = add_reaction(item_type, item_id, user_id, reaction)
         if success:
             # --- ИНВАЛИДАЦИЯ КЭША ---
+            # Удаляем кэш для реакций этого элемента
             cache_delete(f"api_reactions_{item_type}_{item_id}")
-            cache_delete(f"reactions_{item_type}_{item_id}")
+            cache_delete(f"reactions_{item_type}_{item_id}") # Кэш для страницы деталей
+            # Сбрасываем кэш страницы списка
             cache_delete(f"{item_type}s_page")
             # --- НОВОЕ: Инвалидация кэша ETag для страницы списка ---
             invalidate_etag_cache(f"{item_type}s_page")
@@ -1032,19 +1117,23 @@ def admin_add_content():
     """Отображает форму добавления контента и обрабатывает её."""
     if request.method == 'POST':
         try:
+            # 1. Получаем данные из формы
             content_type = request.form.get('content_type', '').strip()
             title = request.form.get('title', '').strip()
             description = request.form.get('description', '').strip()
             telegram_url = request.form.get('telegram_url', '').strip()
             # --- НОВОЕ: Получаем данные превью ---
             preview_telegram_url = request.form.get('preview_telegram_url', '').strip()
-            preview_url_for_content = None
+            preview_url_for_content = None # URL превью, которое будет сохранено в БД
+            # Инициализируем URL контента как None
             content_url = None
-            # --- Приоритет 1: Ссылка на Telegram для видео ---
+            # 2. Приоритет: Ссылка на Telegram для видео
             if telegram_url:
                 logger.info(f"[ADMIN FORM] Обнаружена ссылка на Telegram пост: {telegram_url}")
+                # Базовая проверка формата ссылки
                 if 't.me/' not in telegram_url:
                      return render_template('admin/add_content.html', error="Ссылка должна вести на пост в Telegram (t.me/...)")
+                # Извлекаем прямую ссылку на видео
                 direct_url, error = extract_video_url_sync(telegram_url)
                 if direct_url:
                     content_url = direct_url
@@ -1052,24 +1141,45 @@ def admin_add_content():
                 else:
                     logger.error(f"[ADMIN FORM] Ошибка извлечения видео из поста: {error}")
                     return render_template('admin/add_content.html', error=error)
-            # --- Приоритет 2: Загруженный файл видео ---
+            # 3. Приоритет: Загруженный файл видео (если не было ссылки на Telegram)
+            # --- ПРОДВИНУТАЯ ЛОГИКА: Отправка файла в Telegram без временного сохранения ---
             elif 'video_file' in request.files:
                 file = request.files['video_file']
+                # Проверяем, был ли загружен файл и имеет ли он имя
                 if file and file.filename != '':
                     try:
-                        YOUR_TEST_CHAT_ID = -1003045387627
+                        # 1. Определяем ID чата для хранения (ваша тестовая группа)
+                        YOUR_TEST_CHAT_ID = -1003045387627 # <<<--- ВАШ ID тестовой группы
+                        # 2. Создаем InputFile из объекта FileStorage Flask
+                        # Это позволяет отправить файл напрямую из памяти без сохранения на диск
                         from telegram import Bot
                         bot = Bot(token=TOKEN)
+                        # file.stream - это BytesIO объект
+                        # Нужно убедиться, что указатель в начале
                         file.stream.seek(0)
+                        # Создаем InputFile. Имя файла берем из оригинала
                         input_file = InputFile(file.stream, filename=file.filename)
                         logger.info(f"[ADMIN FORM] Отправка видео '{file.filename}' в Telegram (чат {YOUR_TEST_CHAT_ID})...")
-                        sent_message = bot.send_video(chat_id=YOUR_TEST_CHAT_ID, video=input_file, supports_streaming=True)
-                        if sent_message and sent_message.video:
-                            new_file_id = sent_message.video.file_id
+                        # 3. Отправляем файл в Telegram
+                        # Выбираем метод в зависимости от типа контента
+                        sent_message = None
+                        file_key = None
+                        if content_type in ['moment', 'trailer']:
+                            sent_message = bot.send_video(chat_id=YOUR_TEST_CHAT_ID, video=input_file, supports_streaming=True)
+                            file_key = 'video'
+                        else:
+                            # По умолчанию видео
+                            sent_message = bot.send_video(chat_id=YOUR_TEST_CHAT_ID, video=input_file, supports_streaming=True)
+                            file_key = 'video'
+                        # 4. Получаем file_id из отправленного сообщения
+                        if sent_message and getattr(sent_message, file_key, None):
+                            new_file_id = getattr(sent_message, file_key).file_id
                             logger.info(f"[ADMIN FORM] Видео загружено в Telegram, file_id: {new_file_id}")
+                            # 5. !!!ИСПРАВЛЕНИЕ!!! Получаем прямую ссылку из file_id (с использованием улучшенного кэша)
+                            # И ВАЖНО: используем эту ссылку для сохранения в БД
                             direct_url, _ = get_cached_direct_video_url_advanced(new_file_id)
                             if direct_url:
-                                content_url = direct_url
+                                content_url = direct_url # <-- Вот ключевое исправление
                                 logger.info(f"[ADMIN FORM] Получена прямая ссылка на видео из Telegram: {content_url[:50]}...")
                             else:
                                 logger.error("[ADMIN FORM] Не удалось получить прямую ссылку для загруженного видео")
@@ -1080,8 +1190,10 @@ def admin_add_content():
                     except Exception as e:
                         logger.error(f"[ADMIN FORM] Ошибка при работе с Telegram API для загрузки видео: {e}", exc_info=True)
                         return render_template('admin/add_content.html', error=f"Ошибка обработки видео: {e}")
-            # --- Проверка: был ли определен URL/путь к видео ---
+                    # --- КОНЕЦ ПРОДВИНУТОЙ ЛОГИКИ ЗАГРУЗКИ ВИДЕО ---
+            # 4. Проверка: был ли определен URL/путь к видео
             if not content_url:
+                # Если ни ссылка на видео, ни файл не были предоставлены
                 return render_template('admin/add_content.html', error="Укажите ссылку на Telegram пост с видео или загрузите видео файл.")
             # --- НОВОЕ: Обработка превью ---
             # Приоритет 1: Ссылка на пост Telegram с превью
@@ -1090,29 +1202,32 @@ def admin_add_content():
                 if 't.me/' not in preview_telegram_url:
                     logger.warning("[ADMIN FORM] Неверный формат ссылки на превью. Продолжаем без превью.")
                 else:
+                    # Используем новую функцию для извлечения изображения
                     direct_preview_url, error_p = extract_image_url_sync(preview_telegram_url)
                     if direct_preview_url:
                         preview_url_for_content = direct_preview_url
                         logger.info(f"[ADMIN FORM] Извлечена прямая ссылка на превью из поста: {preview_url_for_content[:50]}...")
                     else:
                         logger.error(f"[ADMIN FORM] Ошибка извлечения превью из поста: {error_p}")
-            # Приоритет 2: Загруженный файл превью
+            # Приоритет 2: Загруженный файл превью (если не было ссылки на Telegram)
             elif 'preview_file' in request.files:
                 preview_file = request.files['preview_file']
                 if preview_file and preview_file.filename != '':
                     try:
-                        YOUR_TEST_CHAT_ID = -1003045387627
+                        YOUR_TEST_CHAT_ID = -1003045387627 # <<<--- ВАШ ID тестовой группы
                         from telegram import Bot
                         bot = Bot(token=TOKEN)
                         preview_file.stream.seek(0)
                         input_file = InputFile(preview_file.stream, filename=preview_file.filename)
                         logger.info(f"[ADMIN FORM] Отправка превью '{preview_file.filename}' в Telegram (чат {YOUR_TEST_CHAT_ID})...")
+                        # Отправляем как фото
                         sent_message = bot.send_photo(chat_id=YOUR_TEST_CHAT_ID, photo=input_file)
                         if sent_message and sent_message.photo:
-                            photo_obj = sent_message.photo[-1]
+                            # Берем самую крупную миниатюру
+                            photo_obj = sent_message.photo[-1] 
                             new_file_id = photo_obj.file_id
                             logger.info(f"[ADMIN FORM] Превью загружено в Telegram, file_id: {new_file_id}")
-                            direct_preview_url, _ = get_cached_direct_video_url_advanced(new_file_id)
+                            direct_preview_url, _ = get_cached_direct_video_url_advanced(new_file_id) # Используем существующую функцию
                             if direct_preview_url:
                                 preview_url_for_content = direct_preview_url
                                 logger.info(f"[ADMIN FORM] Получена прямая ссылка на превью из Telegram: {preview_url_for_content[:50]}...")
@@ -1123,37 +1238,49 @@ def admin_add_content():
                     except Exception as e:
                         logger.error(f"[ADMIN FORM] Ошибка при работе с Telegram API для загрузки превью: {e}", exc_info=True)
             # --- КОНЕЦ ОБРАБОТКИ ПРЕВЬЮ ---
-            # --- Сохранение в БД ---
+            # 5. Сохранение в БД в зависимости от типа контента
+            # !!!Теперь content_url всегда содержит прямую ссылку на видео в Telegram!!!
+            # !!!А preview_url_for_content содержит прямую ссылку на превью в Telegram!!!
             if content_type == 'moment':
-                add_moment(title, description, content_url, preview_url_for_content)
+                add_moment(title, description, content_url, preview_url_for_content) # <-- Добавлен preview_url_for_content
                 # --- ИНВАЛИДАЦИЯ КЭША ---
                 cache_delete('moments_list')
-                cache_delete('moments_page')
+                cache_delete('moments_page')  # Удаляем кэш страницы
+                # --- НОВОЕ: Инвалидация кэша ETag ---
                 invalidate_etag_cache('moments_page')
                 # --- КОНЕЦ ИНВАЛИДАЦИИ ---
                 logger.info(f"[ADMIN FORM] Добавлен момент: {title}")
             elif content_type == 'trailer':
-                add_trailer(title, description, content_url, preview_url_for_content)
+                add_trailer(title, description, content_url, preview_url_for_content) # <-- Добавлен preview_url_for_content
                 # --- ИНВАЛИДАЦИЯ КЭША ---
                 cache_delete('trailers_list')
-                cache_delete('trailers_page')
+                cache_delete('trailers_page')  # Удаляем кэш страницы
+                # --- НОВОЕ: Инвалидация кэша ETag ---
                 invalidate_etag_cache('trailers_page')
                 # --- КОНЕЦ ИНВАЛИДАЦИИ ---
                 logger.info(f"[ADMIN FORM] Добавлен трейлер: {title}")
             elif content_type == 'news':
-                add_news(title, description, content_url)
+                # Для новости content_url - это прямая ссылка на изображение в Telegram
+                # News пока не поддерживает превью в этой логике, так как news уже имеет image_url
+                # Если нужно добавить превью для news, нужно аналогично обновить add_news
+                add_news(title, description, content_url) # content_url здесь путь к изображению
                 # --- ИНВАЛИДАЦИЯ КЭША ---
                 cache_delete('news_list')
-                cache_delete('news_page')
+                cache_delete('news_page')  # Удаляем кэш страницы
+                # --- НОВОЕ: Инвалидация кэша ETag ---
                 invalidate_etag_cache('news_page')
                 # --- КОНЕЦ ИНВАЛИДАЦИИ ---
                 logger.info(f"[ADMIN FORM] Добавлена новость: {title}")
             else:
+                # На случай, если content_type некорректный (вдруг select был изменен)
                 return render_template('admin/add_content.html', error="Неверный тип контента.")
+            # 6. Перенаправление после успешного добавления на страницу со всем контентом
             return redirect(url_for('admin_content'))
         except Exception as e:
             logger.error(f"[ADMIN FORM] add_content error: {e}", exc_info=True)
+            # Отображаем форму с сообщением об ошибке
             return render_template('admin/add_content.html', error=f"Ошибка сервера: {e}")
+    # 7. Если метод GET (первый заход на страницу), просто отображаем форму
     return render_template('admin/add_content.html')
 
 # --- КОНЕЦ ИСПРАВЛЕННОГО И ОБНОВЛЕННОГО МАРШРУТА ---
@@ -1187,21 +1314,24 @@ def admin_delete(content_type, content_id):
         delete_moment(content_id)
         # --- ИНВАЛИДАЦИЯ КЭША ---
         cache_delete('moments_list')
-        cache_delete('moments_page')
+        cache_delete('moments_page')  # Удаляем кэш страницы
+        # --- НОВОЕ: Инвалидация кэша ETag ---
         invalidate_etag_cache('moments_page')
         # --- КОНЕЦ ИНВАЛИДАЦИИ ---
     elif content_type == 'trailer':
         delete_trailer(content_id)
         # --- ИНВАЛИДАЦИЯ КЭША ---
         cache_delete('trailers_list')
-        cache_delete('trailers_page')
+        cache_delete('trailers_page')  # Удаляем кэш страницы
+        # --- НОВОЕ: Инвалидация кэша ETag ---
         invalidate_etag_cache('trailers_page')
         # --- КОНЕЦ ИНВАЛИДАЦИИ ---
     elif content_type == 'news':
         delete_news(content_id)
         # --- ИНВАЛИДАЦИЯ КЭША ---
         cache_delete('news_list')
-        cache_delete('news_page')
+        cache_delete('news_page')  # Удаляем кэш страницы
+        # --- НОВОЕ: Инвалидация кэша ETag ---
         invalidate_etag_cache('news_page')
         # --- КОНЕЦ ИНВАЛИДАЦИИ ---
     return redirect(url_for('admin_content'))
@@ -1252,21 +1382,24 @@ def admin_add_video_json():
             add_moment(title, description, video_url)
             # --- ИНВАЛИДАЦИЯ КЭША ---
             cache_delete('moments_list')
-            cache_delete('moments_page')
+            cache_delete('moments_page')  # Удаляем кэш страницы
+            # --- НОВОЕ: Инвалидация кэша ETag ---
             invalidate_etag_cache('moments_page')
             # --- КОНЕЦ ИНВАЛИДАЦИИ ---
         elif category == 'trailer':
             add_trailer(title, description, video_url)
             # --- ИНВАЛИДАЦИЯ КЭША ---
             cache_delete('trailers_list')
-            cache_delete('trailers_page')
+            cache_delete('trailers_page')  # Удаляем кэш страницы
+            # --- НОВОЕ: Инвалидация кэша ETag ---
             invalidate_etag_cache('trailers_page')
             # --- КОНЕЦ ИНВАЛИДАЦИИ ---
         elif category == 'news':
             add_news(title, description, video_url if video_url.startswith(('http://', 'https://')) else None)
             # --- ИНВАЛИДАЦИЯ КЭША ---
             cache_delete('news_list')
-            cache_delete('news_page')
+            cache_delete('news_page')  # Удаляем кэш страницы
+            # --- НОВОЕ: Инвалидация кэша ETag ---
             invalidate_etag_cache('news_page')
             # --- КОНЕЦ ИНВАЛИДАЦИИ ---
         logger.info(f"[JSON API] Добавлен {category}: {title}")
@@ -1296,7 +1429,7 @@ def add_video_command(update, context):
 def handle_pending_video_text(update, context):
     user = update.message.from_user
     telegram_id = str(user.id)
-    if telegram_id not in pending_video_data:
+    if telegram_id not in pending_video_
         return
     data = pending_video_data.pop(telegram_id)
     content_type, title = data['content_type'], data['title']
@@ -1310,6 +1443,7 @@ def handle_pending_video_text(update, context):
         # --- ИНВАЛИДАЦИЯ КЭША ---
         cache_delete('moments_list')
         cache_delete('moments_page')
+        # --- НОВОЕ: Инвалидация кэша ETag ---
         invalidate_etag_cache('moments_page')
         # --- КОНЕЦ ИНВАЛИДАЦИИ ---
     elif content_type == 'trailer':
@@ -1317,6 +1451,7 @@ def handle_pending_video_text(update, context):
         # --- ИНВАЛИДАЦИЯ КЭША ---
         cache_delete('trailers_list')
         cache_delete('trailers_page')
+        # --- НОВОЕ: Инвалидация кэша ETag ---
         invalidate_etag_cache('trailers_page')
         # --- КОНЕЦ ИНВАЛИДАЦИИ ---
     elif content_type == 'news':
@@ -1324,6 +1459,7 @@ def handle_pending_video_text(update, context):
         # --- ИНВАЛИДАЦИЯ КЭША ---
         cache_delete('news_list')
         cache_delete('news_page')
+        # --- НОВОЕ: Инвалидация кэша ETag ---
         invalidate_etag_cache('news_page')
         # --- КОНЕЦ ИНВАЛИДАЦИИ ---
     update.message.reply_text(f"✅ '{content_type}' '{title}' добавлено по ссылке!")
@@ -1335,7 +1471,7 @@ def handle_pending_video_file(update, context):
     user = update.message.from_user
     telegram_id = str(user.id)
     logger.info(f"Получен видеофайл от пользователя {telegram_id}")
-    if telegram_id not in pending_video_data:
+    if telegram_id not in pending_video_
         logger.debug("Нет ожидающих данных для видео")
         return
     data = pending_video_data.pop(telegram_id)
@@ -1361,6 +1497,7 @@ def handle_pending_video_file(update, context):
             # --- ИНВАЛИДАЦИЯ КЭША ---
             cache_delete('moments_list')
             cache_delete('moments_page')
+            # --- НОВОЕ: Инвалидация кэша ETag ---
             invalidate_etag_cache('moments_page')
             # --- КОНЕЦ ИНВАЛИДАЦИИ ---
         elif content_type == 'trailer':
@@ -1368,6 +1505,7 @@ def handle_pending_video_file(update, context):
             # --- ИНВАЛИДАЦИЯ КЭША ---
             cache_delete('trailers_list')
             cache_delete('trailers_page')
+            # --- НОВОЕ: Инвалидация кэша ETag ---
             invalidate_etag_cache('trailers_page')
             # --- КОНЕЦ ИНВАЛИДАЦИИ ---
         elif content_type == 'news':
@@ -1375,6 +1513,7 @@ def handle_pending_video_file(update, context):
             # --- ИНВАЛИДАЦИЯ КЭША ---
             cache_delete('news_list')
             cache_delete('news_page')
+            # --- НОВОЕ: Инвалидация кэша ETag ---
             invalidate_etag_cache('news_page')
             # --- КОНЕЦ ИНВАЛИДАЦИИ ---
         success_msg = f"✅ '{content_type}' '{title}' добавлено из файла!"
@@ -1412,13 +1551,16 @@ def start_bot():
 def health_check():
     """Проверка состояния приложения"""
     try:
+        # Проверяем Redis
         redis_status = "OK" if redis_client else "Not configured"
         if redis_client:
             try:
                 redis_client.ping()
             except Exception as e:
                 redis_status = f"Connection error: {str(e)}"
+        # Проверяем Telegram бот
         bot_status = "OK" if TOKEN else "Not configured"
+        # Проверяем базу данных
         db_status = "Unknown"
         try:
             from database import get_db_connection
@@ -1438,14 +1580,18 @@ def health_check():
         })
     except Exception as e:
         logger.error(f"Health check error: {e}")
-        # ИСПРАВЛЕНО: синтаксическая ошибка
         return jsonify({'status': 'unhealthy', 'error': str(e)}), 500
 
 # --- Main ---
+# Инициализация БД уже происходит выше, поэтому здесь повторять не нужно.
+# Она была перемещена туда, чтобы работать и при запуске через gunicorn.
 logger.info("Запуск Telegram бота...")
 start_bot()
 port = int(os.environ.get('PORT', 10000))
-logger.info(f"Flask приложение будет запущено Gunicorn'ом на порту {port}...")
+logger.info(f"Запуск Flask приложения на порту {port}...")
+# app.run(host='0.0.0.0', port=port) # <-- ЭТО вызывает OSError: Address already in use на Railway
+# logger.info("Flask приложение остановлено.")
+
 # --- Экспорт приложения для WSGI (например, Gunicorn) ---
 # Gunicorn импортирует этот модуль и ожидает переменную с именем 'app'
 # Объект app = Flask(...) уже создан выше в файле.
