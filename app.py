@@ -689,7 +689,7 @@ def news():
             extra_map = build_extra_map(data, 'news')
             logger.info("extra_map построен успешно")
             combined_data = []
-            for row in 
+            for row in data:
                 item_id = row[0]
                 item_dict = {
                     'id': row[0],
