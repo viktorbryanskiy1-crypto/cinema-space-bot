@@ -3,249 +3,447 @@
 {% block title %}{{ item.title }} — Трейлер{% endblock %}
 
 {% block content %}
-<div class="row">
-  <div class="col-12">
-    <h1>{{ item.title }}</h1>
-    {% if item.created_at %}
-      <p class="text-muted small">Добавлено: {{ item.created_at }}</p>
-    {% endif %}
-  </div>
-</div>
-
-<div class="row">
-  <div class="col-12 video-wrap" data-trailer-id="{{ item.id }}">
-    {% if item.video_url %}
-      {% if item.video_url.startswith('/uploads/') %}
-        <video controls preload="metadata" style="width:100%; max-height:720px;" data-post-url="{{ item.video_url }}">
-          <source src="{{ item.video_url }}" />
-          Ваш браузер не поддерживает тег video.
-        </video>
-      {% elif 'youtube.com' in item.video_url or 'youtu.be' in item.video_url %}
-        <iframe class="card-media" src="{{ item.video_url.replace('watch?v=', 'embed/').replace('youtu.be/', 'youtube.com/embed/') }}"
-            frameborder="0" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            style="width: 100%; height: 315px; border-radius: 10px;"></iframe>
-      {% elif 'vimeo.com' in item.video_url %}
-        <iframe class="card-media" src="{{ item.video_url.replace('vimeo.com/', 'player.vimeo.com/video/') }}"
-            frameborder="0" allowfullscreen allow="autoplay; fullscreen; picture-in-picture"
-            style="width: 100%; height: 315px; border-radius: 10px;"></iframe>
-       {% elif item.video_url.startswith('https://t.me/') %}
-        <!-- Telegram Widget для постов -->
-        <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 10px; margin-bottom: 15px;">
-            <script async src="https://telegram.org/js/telegram-widget.js?22" 
-                    data-telegram-post="{{ item.video_url.replace('https://t.me/', '') }}" 
-                    data-width="100%" data-height="100%"
-                    style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none;">
-            </script>
+<div class="video-detail-container">
+    <!-- Видео плеер -->
+    <div class="video-player">
+        {% if item.video_url %}
+            {% if item.video_url.startswith('/uploads/') %}
+                <video controls autoplay>
+                    <source src="{{ item.video_url }}" type="video/mp4">
+                    Ваш браузер не поддерживает видео.
+                </video>
+            {% elif 'youtube.com' in item.video_url or 'youtu.be' in item.video_url %}
+                <iframe src="{{ item.video_url.replace('watch?v=', 'embed/').replace('youtu.be/', 'youtube.com/embed/') }}"
+                    frameborder="0" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    style="width: 100%; height: 450px; border-radius: 8px;"></iframe>
+            {% elif 'vimeo.com' in item.video_url %}
+                <iframe src="{{ item.video_url.replace('vimeo.com/', 'player.vimeo.com/video/') }}"
+                    frameborder="0" allowfullscreen allow="autoplay; fullscreen; picture-in-picture"
+                    style="width: 100%; height: 450px; border-radius: 8px;"></iframe>
+            {% elif item.video_url.startswith('https://t.me/') %}
+                <!-- Telegram Widget для постов -->
+                <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 10px; margin-bottom: 15px;">
+                    <script async src="https://telegram.org/js/telegram-widget.js?22" 
+                            data-telegram-post="{{ item.video_url.replace('https://t.me/', '') }}" 
+                            data-width="100%" data-height="100%"
+                            style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none;">
+                    </script>
+                </div>
+            {% else %}
+                <video controls autoplay>
+                    <source src="{{ item.video_url }}" type="video/mp4">
+                    Ваш браузер не поддерживает видео.
+                </video>
+            {% endif %}
+        {% else %}
+            <div class="alert alert-warning">У этого трейлера нет видео.</div>
+        {% endif %}
+    </div>
+    
+    <!-- Название -->
+    <h1 class="video-title">{{ item.title }}</h1>
+    
+    <!-- Реакции -->
+    <div class="video-reactions">
+        <button class="reaction-btn like" onclick="sendReaction('like')">
+            👍 <span id="likes-count">{{ reactions['like'] if reactions else 0 }}</span>
+        </button>
+        <button class="reaction-btn dislike" onclick="sendReaction('dislike')">
+            👎 <span id="dislikes-count">{{ reactions['dislike'] if reactions else 0 }}</span>
+        </button>
+        <button class="reaction-btn star" onclick="sendReaction('star')">
+            ⭐ <span id="stars-count">{{ reactions['star'] if reactions else 0 }}</span>
+        </button>
+        <button class="reaction-btn fire" onclick="sendReaction('fire')">
+            🔥 <span id="fires-count">{{ reactions['fire'] if reactions else 0 }}</span>
+        </button>
+    </div>
+    
+    <!-- Описание -->
+    <div class="video-description">
+        {% if item.description %}
+            {% if item.description|length > 300 %}
+                <div class="description-text" id="description-text">
+                    {{ item.description[:300] }}
+                    <span id="more-text" style="display:none;">{{ item.description[300:] }}</span>
+                    <button onclick="toggleDescription()" id="toggle-desc-btn" class="toggle-description-btn">...ещё</button>
+                </div>
+            {% else %}
+                <div class="description-text">{{ item.description }}</div>
+            {% endif %}
+        {% else %}
+            <div class="description-text">Нет описания</div>
+        {% endif %}
+    </div>
+    
+    <!-- Комментарии -->
+    <div class="comments-section">
+        <h3>Комментарии</h3>
+        
+        <!-- Форма добавления комментария -->
+        <form id="comment-form" class="comment-form">
+            <input type="text" id="comment-name" placeholder="Ваше имя" required>
+            <textarea id="comment-text" placeholder="Оставьте комментарий..." required></textarea>
+            <button type="submit">Отправить</button>
+        </form>
+        
+        <!-- Сортировка -->
+        <div class="comments-sort">
+            <button id="sort-popular" onclick="loadComments('popular')" class="sort-btn active">Популярные</button>
+            <button id="sort-latest" onclick="loadComments('latest')" class="sort-btn">Новые</button>
         </div>
-      {% else %}
-        <video controls preload="metadata" controlsList="nodownload" style="max-width: 100%; border-radius: 10px;" data-post-url="{{ item.video_url }}">
-          <source src="{{ item.video_url }}" type="video/mp4">
-          Ваш браузер не поддерживает видео.
-        </video>
-      {% endif %}
-    {% else %}
-      <div class="alert alert-warning">У этого трейлера нет видео.</div>
-    {% endif %}
-  </div>
-</div>
-
-<div class="row mb-3">
-  <div class="col-md-8">
-    <h5>Описание</h5>
-    <p>{{ item.description }}</p>
-  </div>
-  <div class="col-md-4">
-    <h5>Реакции</h5>
-    <div id="reactions">
-      👍 <span id="r-like">{{ reactions['like'] if reactions else 0 }}</span>
-      👎 <span id="r-dislike">{{ reactions['dislike'] if reactions else 0 }}</span>
-      ⭐ <span id="r-star">{{ reactions['star'] if reactions else 0 }}</span>
-      🔥 <span id="r-fire">{{ reactions['fire'] if reactions else 0 }}</span>
+        
+        <!-- Список комментариев -->
+        <div id="comments-list">
+            <!-- Будет заполняться через JS -->
+        </div>
+        
+        <button id="load-more-comments" onclick="loadAllComments()" style="display:none;">
+            Показать все комментарии
+        </button>
     </div>
-    <div class="mt-2">
-      <button class="btn btn-sm btn-outline-primary me-1" onclick="sendReaction('like')">👍</button>
-      <button class="btn btn-sm btn-outline-secondary me-1" onclick="sendReaction('dislike')">👎</button>
-      <button class="btn btn-sm btn-outline-warning me-1" onclick="sendReaction('star')">⭐</button>
-      <button class="btn btn-sm btn-outline-danger" onclick="sendReaction('fire')">🔥</button>
-    </div>
-  </div>
-</div>
-
-<hr>
-
-<div class="row">
-  <div class="col-12">
-    <h5>Комментарии (<span id="comments-count">{{ comments|length if comments else 0 }}</span>)</h5>
-    <div id="comments-list">
-      {% if comments %}
-        {% for c in comments %}
-          <div class="comment border rounded p-2">
-            <strong>{{ c[0] }}</strong> <small class="text-muted">{{ c[2] }}</small>
-            <div>{{ c[1] }}</div>
-          </div>
-        {% endfor %}
-      {% else %}
-        <div class="text-muted">Пока нет комментариев.</div>
-      {% endif %}
-    </div>
-
-    <hr>
-    <h6>Оставить комментарий</h6>
-    <form id="comment-form" onsubmit="event.preventDefault(); submitComment();">
-      <div class="mb-2">
-        <input id="comment-name" class="form-control" placeholder="Ваше имя (опционально)" />
-      </div>
-      <div class="mb-2">
-        <textarea id="comment-text" class="form-control" rows="3" placeholder="Текст комментария"></textarea>
-      </div>
-      <button class="btn btn-primary" type="submit">Отправить</button>
-    </form>
-  </div>
 </div>
 
 <script>
 const ITEM_TYPE = 'trailer';
 const ITEM_ID = {{ item.id|tojson }};
 
+// Переключение описания
+function toggleDescription() {
+    const moreText = document.getElementById('more-text');
+    const btn = document.getElementById('toggle-desc-btn');
+    
+    if (moreText.style.display === 'none') {
+        moreText.style.display = 'inline';
+        btn.textContent = 'скрыть';
+    } else {
+        moreText.style.display = 'none';
+        btn.textContent = '...ещё';
+    }
+}
+
+// Реакции на видео
 async function sendReaction(reaction) {
-  try {
-    const resp = await fetch('/api/reaction', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({item_type: ITEM_TYPE, item_id: ITEM_ID, user_id: 'anonymous', reaction: reaction})
-    });
-    const j = await resp.json();
-    if (j.success) {
-      // обновим счётчики локально
-      const countSpan = document.getElementById(`r-${reaction}`);
-      if (countSpan) {
-        const currentCount = parseInt(countSpan.textContent) || 0;
-        countSpan.textContent = currentCount + 1;
-      }
-    } else {
-      alert('Ошибка при отправке реакции');
-    }
-  } catch (e) {
-    console.error(e); alert('Ошибка сети');
-  }
-}
-
-async function submitComment(){
-  const name = document.getElementById('comment-name').value || 'Гость';
-  const text = document.getElementById('comment-text').value || '';
-  if (!text.trim()) { alert('Введите текст комментария'); return; }
-  try {
-    const resp = await fetch('/api/comment', {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({item_type: ITEM_TYPE, item_id: ITEM_ID, user_name: name, text: text})
-    });
-    const j = await resp.json();
-    if (j.success) {
-      const now = new Date().toLocaleString();
-      const container = document.getElementById('comments-list');
-      const div = document.createElement('div');
-      div.className = 'comment border rounded p-2';
-      div.innerHTML = `<strong>${escapeHtml(name)}</strong> <small class="text-muted">${now}</small><div>${escapeHtml(text)}</div>`;
-      container.firstChild
-        ? container.insertBefore(div, container.firstChild)
-        : container.appendChild(div);
-      document.getElementById('comment-text').value = '';
-      const countEl = document.getElementById('comments-count');
-      countEl.textContent = parseInt(countEl.textContent||'0') + 1;
-    } else {
-      alert('Ошибка при отправке комментария');
-    }
-  } catch(e){
-    console.error(e); alert('Ошибка сети');
-  }
-}
-
-function escapeHtml(s){
-  return String(s).replace(/[&<>"'`=\/]/g, function (c) {
-    return {
-      '&': '&amp;','<': '<','>': '>','"': '&quot;',"'": '&#39;','/':'&#x2F;','`':'&#x60;','=':'&#x3D;'
-    }[c];
-  });
-}
-
-// НОВАЯ ФУНКЦИЯ: Обработка ошибок воспроизведения видео
-document.addEventListener('DOMContentLoaded', function() {
-    const video = document.querySelector('video');
-    if (video) {
-        video.addEventListener('error', async function(e) {
-            console.log('Ошибка воспроизведения видео:', e);
-            
-            // Получаем родительский элемент с информацией о видео
-            const videoWrap = this.closest('.video-wrap');
-            if (!videoWrap) return;
-            
-            // Получаем ID трейлера
-            const trailerId = videoWrap.dataset.trailerId;
-            if (!trailerId) return;
-            
-            // Показываем уведомление пользователю
-            const errorNotice = document.createElement('div');
-            errorNotice.className = 'video-error-notice';
-            errorNotice.innerHTML = `
-                <div style="background: rgba(255, 0, 0, 0.2); padding: 15px; border-radius: 8px; margin: 10px 0;">
-                    <p style="margin: 0 0 10px 0;">🔄 Видео недоступно. Пытаемся обновить ссылку...</p>
-                    <div class="loading-spinner" style="width: 20px; height: 20px; border: 2px solid #fff; border-top: 2px solid #00f3ff; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                </div>
-            `;
-            errorNotice.style.cssText = 'position: relative; z-index: 10;';
-            
-            // Вставляем уведомление перед видео
-            this.parentNode.insertBefore(errorNotice, this);
-            
-            try {
-                // Отправляем запрос на обновление ссылки
-                const response = await fetch('/api/refresh_video_url', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        trailer_id: trailerId
-                    })
-                });
-                
-                const result = await response.json();
-                
-                if (result.success && result.new_url) {
-                    // Обновляем источник видео
-                    const source = this.querySelector('source');
-                    if (source) {
-                        source.src = result.new_url;
-                    } else {
-                        this.src = result.new_url;
-                    }
-                    
-                    // Перезагружаем видео
-                    this.load();
-                    
-                    // Удаляем уведомление об ошибке
-                    errorNotice.remove();
-                    
-                    console.log('Видео успешно обновлено');
-                } else {
-                    // Показываем ошибку
-                    errorNotice.innerHTML = `
-                        <div style="background: rgba(255, 0, 0, 0.3); padding: 15px; border-radius: 8px; margin: 10px 0;">
-                            <p style="margin: 0;">❌ Не удалось обновить видео. ${result.error || 'Попробуйте позже.'}</p>
-                        </div>
-                    `;
-                }
-            } catch (refreshError) {
-                console.error('Ошибка при обновлении видео:', refreshError);
-                errorNotice.innerHTML = `
-                    <div style="background: rgba(255, 0, 0, 0.3); padding: 15px; border-radius: 8px; margin: 10px 0;">
-                        <p style="margin: 0;">❌ Ошибка сети при обновлении видео. Попробуйте позже.</p>
-                    </div>
-                `;
-            }
+    try {
+        const response = await fetch('/api/reaction', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                item_type: ITEM_TYPE, 
+                item_id: ITEM_ID, 
+                user_id: 'anonymous', 
+                reaction: reaction
+            })
         });
+        const result = await response.json();
+        if (result.success) {
+            // Обновляем счетчики
+            document.getElementById(`${reaction}s-count`).textContent = 
+                (parseInt(document.getElementById(`${reaction}s-count`).textContent) || 0) + 1;
+        } else {
+            alert('Ошибка при отправке реакции');
+        }
+    } catch (e) {
+        console.error(e); 
+        alert('Ошибка сети');
+    }
+}
+
+// Добавление комментария
+document.getElementById('comment-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const name = document.getElementById('comment-name').value || 'Гость';
+    const text = document.getElementById('comment-text').value || '';
+    if (!text.trim()) { 
+        alert('Введите текст комментария'); 
+        return; 
+    }
+    
+    try {
+        const response = await fetch('/api/comment', {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({
+                item_type: ITEM_TYPE, 
+                item_id: ITEM_ID, 
+                user_name: name, 
+                text: text
+            })
+        });
+        const result = await response.json();
+        if (result.success) {
+            // Очищаем форму
+            document.getElementById('comment-text').value = '';
+            // Перезагружаем комментарии
+            loadComments('popular');
+        } else {
+            alert('Ошибка при отправке комментария');
+        }
+    } catch(e){
+        console.error(e); 
+        alert('Ошибка сети');
     }
 });
+
+// Загрузка комментариев
+async function loadComments(sortBy = 'popular') {
+    try {
+        // Активная кнопка сортировки
+        document.querySelectorAll('.sort-btn').forEach(btn => btn.classList.remove('active'));
+        document.getElementById(`sort-${sortBy}`).classList.add('active');
+        
+        const response = await fetch(`/api/comments/${ITEM_TYPE}/${ITEM_ID}?sort=${sortBy}&limit=3`);
+        const result = await response.json();
+        
+        if (result.comments) {
+            displayComments(result.comments);
+            document.getElementById('load-more-comments').style.display = 
+                result.comments.length >= 3 ? 'block' : 'none';
+        }
+    } catch (e) {
+        console.error(e);
+    }
+}
+
+// Загрузка всех комментариев
+async function loadAllComments() {
+    try {
+        const response = await fetch(`/api/comments/${ITEM_TYPE}/${ITEM_ID}?sort=popular`);
+        const result = await response.json();
+        
+        if (result.comments) {
+            displayComments(result.comments);
+            document.getElementById('load-more-comments').style.display = 'none';
+        }
+    } catch (e) {
+        console.error(e);
+    }
+}
+
+// Отображение комментариев
+function displayComments(comments) {
+    const container = document.getElementById('comments-list');
+    container.innerHTML = '';
+    
+    if (comments.length === 0) {
+        container.innerHTML = '<div class="no-comments">Пока нет комментариев</div>';
+        return;
+    }
+    
+    comments.forEach(comment => {
+        // Определяем ID комментария (предполагаем, что он есть в данных)
+        const commentId = comment.id || Math.random(); // Заглушка если ID нет
+        
+        const commentEl = document.createElement('div');
+        commentEl.className = 'comment';
+        commentEl.innerHTML = `
+            <div class="comment-header">
+                <strong class="comment-author">${comment[0] || 'Гость'}</strong>
+                <span class="comment-date">${formatDate(comment[2])}</span>
+            </div>
+            <div class="comment-text">${comment[1] || ''}</div>
+            <div class="comment-reactions">
+                <button class="comment-reaction-btn like" onclick="sendCommentReaction(${commentId}, 'like')">
+                    👍 <span>${comment.likes || 0}</span>
+                </button>
+                <button class="comment-reaction-btn dislike" onclick="sendCommentReaction(${commentId}, 'dislike')">
+                    👎 <span>${comment.dislikes || 0}</span>
+                </button>
+            </div>
+        `;
+        container.appendChild(commentEl);
+    });
+}
+
+// Реакции на комментарии (заглушка, нужно реализовать API)
+async function sendCommentReaction(commentId, reaction) {
+    alert('Функция реакций на комментарии будет реализована позже');
+    // TODO: реализовать API для реакций на комментарии
+}
+
+// Форматирование даты
+function formatDate(dateString) {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('ru-RU');
+}
+
+// Инициализация при загрузке страницы
+document.addEventListener('DOMContentLoaded', function() {
+    loadComments('popular');
+});
 </script>
+
+<style>
+.video-detail-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.video-player {
+    width: 100%;
+    margin-bottom: 20px;
+}
+
+.video-player video,
+.video-player iframe {
+    width: 100%;
+    border-radius: 8px;
+}
+
+.video-title {
+    font-size: 24px;
+    margin: 20px 0 15px 0;
+    font-weight: bold;
+}
+
+.video-reactions {
+    display: flex;
+    gap: 15px;
+    margin: 20px 0;
+    flex-wrap: wrap;
+}
+
+.reaction-btn {
+    background: #f0f0f0;
+    border: none;
+    padding: 8px 15px;
+    border-radius: 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.2s;
+}
+
+.reaction-btn:hover {
+    background: #e0e0e0;
+    transform: translateY(-2px);
+}
+
+.video-description {
+    margin: 25px 0;
+    padding: 15px;
+    background: #f9f9f9;
+    border-radius: 8px;
+}
+
+.description-text {
+    line-height: 1.6;
+    font-size: 16px;
+}
+
+.toggle-description-btn {
+    background: none;
+    border: none;
+    color: #007bff;
+    cursor: pointer;
+    font-size: 16px;
+    margin-left: 5px;
+}
+
+.comments-section {
+    margin-top: 40px;
+}
+
+.comment-form {
+    margin-bottom: 30px;
+}
+
+.comment-form input,
+.comment-form textarea {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-family: inherit;
+}
+
+.comment-form textarea {
+    height: 80px;
+    resize: vertical;
+}
+
+.comment-form button {
+    padding: 10px 20px;
+    background: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.comments-sort {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.sort-btn {
+    padding: 8px 15px;
+    background: #e9ecef;
+    border: none;
+    border-radius: 20px;
+    cursor: pointer;
+}
+
+.sort-btn.active {
+    background: #007bff;
+    color: white;
+}
+
+.comment {
+    padding: 15px;
+    border-bottom: 1px solid #eee;
+    margin-bottom: 15px;
+}
+
+.comment-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+.comment-author {
+    font-weight: bold;
+}
+
+.comment-date {
+    color: #6c757d;
+    font-size: 14px;
+}
+
+.comment-text {
+    margin-bottom: 15px;
+    line-height: 1.5;
+}
+
+.comment-reactions {
+    display: flex;
+    gap: 15px;
+}
+
+.comment-reaction-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    color: #6c757d;
+    font-size: 14px;
+}
+
+.comment-reaction-btn:hover {
+    color: #007bff;
+}
+
+.no-comments {
+    text-align: center;
+    color: #6c757d;
+    padding: 30px;
+}
+</style>
 {% endblock %}
