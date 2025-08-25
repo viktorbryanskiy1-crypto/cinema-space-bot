@@ -1377,4 +1377,3 @@ logger.info("Запуск Telegram бота...")
 start_bot()
 port = int(os.environ.get('PORT', 10000))
 logger.info(f"Запуск Flask приложения на порту {port}...")
-```
