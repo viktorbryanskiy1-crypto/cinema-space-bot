@@ -1,12 +1,12 @@
 // static/js/main.js — полный рабочий файл с оптимизацией Telegram WebApp, fullscreen и поддержкой превью
-// Обновлен для поддержки автоматического обновления ссылок на видео, улучшенного UX и РЕШЕНИЯ проблемы кэширования
+// Обновлен для поддержки автоматического обновления ссылок на видео, улучшенного UX и решения проблемы кэширования
 // --- ИЗМЕНЕНО: Уменьшено время кэширования ---
 const CACHE_CONFIG = {
     html_expire: 300,       // Было 1800 (30 минут), стало 5 минут
     api_expire: 120,        // Было 300 (5 минут), стало 2 минуты
     data_expire: 300,       // Было 600 (10 минут), стало 5 минут
     static_expire: 2592000, // 30 дней для статики (CSS, JS, изображения)
-    video_url_cache_time: 21600 // 6 часов для кэша ссылок Telegram
+    video_url_cache_time: 86400 // Было 21600 (6 часов), стало 24 часа
 };
 
 // Глобальные переменные
@@ -19,20 +19,6 @@ let formToggleHandlerAdded = false;
 
 // --- НОВОЕ: Кэш для вкладок ---
 let tabCache = {};
-
-// --- НОВАЯ ФУНКЦИЯ: Инвалидация клиентского кэша вкладок ---
-function invalidateTabCache(tabName) {
-    /** Удаляет кэш для заданной вкладки в браузере. */
-    if (tabName) {
-        delete tabCache[tabName];
-        console.log(`Клиентский кэш для вкладки '${tabName}' инвалидирован.`);
-    } else {
-        // Если tabName не указан, очищаем весь кэш
-        tabCache = {};
-        console.log("Весь клиентский кэш вкладок инвалидирован.");
-    }
-}
-// --- КОНЕЦ НОВОЙ ФУНКЦИИ ---
 
 // === УЛЬТРАСОВРЕМЕННЫЙ КОСМИЧЕСКИЙ PRELOADER LOGIC ===
 document.addEventListener('DOMContentLoaded', async function() {
@@ -54,14 +40,7 @@ document.addEventListener('DOMContentLoaded', async function() {
             webApp.MainButton.hide();
             console.log("Telegram WebApp инициализирован и расширен до полного экрана");
         } catch (error) {
-            // --- ИЗМЕНЕНО: Убрано критическое сообщение об ошибке для WebAppMethodUnsupported ---
-            // Это предупреждение, а не ошибка, и не мешает работе
-            if (error.message && error.message.includes('WebAppMethodUnsupported')) {
-                console.warn("Предупреждение инициализации Telegram WebApp (WebAppMethodUnsupported):", error.message);
-            } else {
-                console.error("Ошибка инициализации Telegram WebApp:", error);
-            }
-            // --- КОНЕЦ ИЗМЕНЕНИЯ ---
+            console.error("Ошибка инициализации Telegram WebApp:", error);
         }
     } else {
         console.warn("Telegram WebApp API недоступен");
@@ -120,15 +99,10 @@ document.addEventListener('DOMContentLoaded', async function() {
         const tabs = ['moments', 'trailers', 'news'];
         let loadedTabs = 0;
 
-        // --- ИЗМЕНЕНО: Предзагрузка вкладок с учетом инвалидации ---
         // Параллельная загрузка вкладок
         const tabPromises = tabs.map(async (tab) => {
             try {
-                // --- НОВОЕ: Добавляем заголовок Cache-Control: no-cache для предзагрузки ---
-                // Это гарантирует, что браузер НЕ будет использовать закэшированную версию
-                // при предзагрузке, а всегда будет делать запрос к серверу.
-                // Это помогает избежать ситуации, когда tabCache наполняется устаревшими данными.
-                const response = await fetch(`/${tab}`, { cache: 'no-cache' }); // <-- ВАЖНО
+                const response = await fetch(`/${tab}`);
                 if (response.ok) {
                     const html = await response.text();
                     tabCache[tab] = html;
@@ -145,7 +119,6 @@ document.addEventListener('DOMContentLoaded', async function() {
         });
 
         await Promise.all(tabPromises);
-        // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
         // 90% - Финальная подготовка
         updatePreloaderProgress(90, "Активация двигателей...");
@@ -197,7 +170,7 @@ function initializeApp() {
     // --- НОВОЕ: Асинхронная функция загрузки контента вкладки с кэшированием ---
     async function loadTabContent(tabName) {
         try {
-            // --- ИЗМЕНЕНО: Проверяем кэш первым делом, но с возможностью инвалидации ---
+            // Проверяем кэш первым делом
             if (tabCache[tabName]) {
                 console.log(`Загрузка вкладки ${tabName} из кэша`);
                 contentArea.innerHTML = tabCache[tabName];
@@ -214,10 +187,7 @@ function initializeApp() {
                 </div>
             `;
 
-            // --- ИЗМЕНЕНО: Добавляем заголовок Cache-Control: no-cache ---
-            // Это гарантирует, что браузер НЕ будет использовать закэшированную версию,
-            // если tabCache был очищен (например, после добавления контента).
-            const response = await fetch(`/${tabName}`, { cache: 'no-cache' }); // <-- ВАЖНО
+            const response = await fetch(`/${tabName}`);
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             const html = await response.text();
             
@@ -305,7 +275,7 @@ function initializeApp() {
         // Предзагружаем остальные вкладки в фоне
         const otherTabs = ['trailers', 'news'];
         otherTabs.forEach(tabName => {
-            fetch(`/${tabName}`, { cache: 'no-cache' }) // <-- ВАЖНО: no-cache для предзагрузки
+            fetch(`/${tabName}`)
                 .then(response => response.text())
                 .then(html => {
                     tabCache[tabName] = html;
@@ -357,7 +327,7 @@ function initializeApp() {
         } catch (error) {
             console.warn(`Ошибка при проверке обновлений для ${currentTab}:`, error);
         }
-    }, 30000); // Проверяем каждые 30 секунд
+    }, 300000); // Проверяем каждые 5 минут (300 секунд)
     // --- КОНЕЦ НОВОГО ---
 }
 
@@ -856,26 +826,6 @@ function setupContentForm(formId, typeName, apiUrl, modalId, alwaysFormData=fals
             const result = await response.json();
             if (result.success) {
                 closeModal(modalId);
-                // --- НОВОЕ: Инвалидация клиентского кэша ---
-                // Определяем, какую вкладку нужно обновить
-                let tabToInvalidate = null;
-                if (apiUrl.includes('add_moment')) {
-                    tabToInvalidate = 'moments';
-                } else if (apiUrl.includes('add_trailer')) {
-                    tabToInvalidate = 'trailers';
-                } else if (apiUrl.includes('add_news')) {
-                    tabToInvalidate = 'news';
-                }
-                if (tabToInvalidate) {
-                    invalidateTabCache(tabToInvalidate);
-                    console.log(`Клиентский кэш для вкладки '${tabToInvalidate}' инвалидирован после добавления контента.`);
-                    // Перезагружаем вкладку, чтобы показать новый контент
-                    const activeTabBtn = document.querySelector(`.tab-btn[data-tab="${tabToInvalidate}"]`);
-                    if (activeTabBtn) {
-                        activeTabBtn.click();
-                    }
-                }
-                // --- КОНЕЦ ИНВАЛИДАЦИИ ---
                 location.reload();
             } else {
                 alert('Ошибка: ' + (result.error || 'Не удалось добавить контент'));
