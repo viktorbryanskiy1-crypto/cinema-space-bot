@@ -3,6 +3,7 @@ import os
 import threading
 import logging
 import uuid
+import hashlib
 import requests
 import time
 import re
