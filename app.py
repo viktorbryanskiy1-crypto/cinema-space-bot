@@ -552,13 +552,39 @@ def build_extra_map(data, item_type_plural):
 @cache_control(CACHE_CONFIG['html_expire']) # Кэшируем главную страницу
 def index():
     return render_template('index.html')
-# --- НОВЫЙ МАРШРУТ ДЛЯ ПОИСКА ПО ССЫЛКЕ ---
-@app.route('/search_by_link')
-@cache_control(CACHE_CONFIG['html_expire']) # Кэшируем страницу поиска
-def search_by_link_page():
-    """Отображает страницу поиска фильма по ссылке."""
-    return render_template('search_by_link.html')
-# --- КОНЕЦ НОВОГО МАРШРУТА ---
+
+# --- НОВОЕ: Хелпер для добавления cache-busting к URL ---
+def add_cache_buster(url):
+    """Добавляет timestamp к URL для предотвращения кэширования."""
+    if not url:
+        return url
+    separator = '&' if '?' in url else '?'
+    return f"{url}{separator}t={int(time.time())}"
+
+# --- ИЗМЕНЕННЫЙ: Маршрут для отдачи статических файлов с кэшированием ---
+@app.route('/uploads/<filename>')
+# Убираем общий cache_control для видео, будем управлять индивидуально
+# @cache_control(CACHE_CONFIG['static_expire'])
+def uploaded_file(filename):
+    response = send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+    # Проверяем, является ли файл видео
+    if any(filename.lower().endswith(ext) for ext in ['.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm']):
+        # Для видео отключаем кэширование или делаем его очень коротким
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, private'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        # Альтернатива: очень короткий max-age
+        # response.headers['Cache-Control'] = f'public, max-age=60' # 1 минута
+    else:
+        # Для других файлов (изображений, документов) - долгое кэширование
+        response.headers['Cache-Control'] = f'public, max-age={CACHE_CONFIG["static_expire"]}'
+    return response
+
+@app.route('/static/<path:filename>')
+@cache_control(CACHE_CONFIG['static_expire']) # Кэшируем статические файлы надолго
+def static_files(filename):
+    return send_from_directory('static', filename)
+
 # --- ИЗМЕНЕННЫЕ: Кэшированные маршруты для вкладок с ETag ---
 # Функция для генерации ключа ETag для страницы списка
 def moments_page_key():
@@ -582,7 +608,7 @@ def moments():
                     'id': row[0],
                     'title': row[1] if len(row) > 1 else '',
                     'description': row[2] if len(row) > 2 else '',
-                    'video_url': row[3] if len(row) > 3 else '',
+                    'video_url': add_cache_buster(row[3]) if len(row) > 3 else '', # <-- Добавлен cache-busting
                     'preview_url': row[4] if len(row) > 4 else '', # Новое поле
                     'created_at': row[5] if len(row) > 5 else None # Обновлен индекс
                 }
@@ -622,7 +648,7 @@ def trailers():
                     'id': row[0],
                     'title': row[1] if len(row) > 1 else '',
                     'description': row[2] if len(row) > 2 else '',
-                    'video_url': row[3] if len(row) > 3 else '',
+                    'video_url': add_cache_buster(row[3]) if len(row) > 3 else '', # <-- Добавлен cache-busting
                     'preview_url': row[4] if len(row) > 4 else '', # Новое поле
                     'created_at': row[5] if len(row) > 5 else None # Обновлен индекс
                 }
@@ -711,7 +737,7 @@ def moment_detail(item_id):
         'id': item[0],
         'title': item[1] if len(item) > 1 else '',
         'description': item[2] if len(item) > 2 else '',
-        'video_url': item[3] if len(item) > 3 else '',
+        'video_url': add_cache_buster(item[3]) if len(item) > 3 else '', # <-- Добавлен cache-busting
         'preview_url': item[4] if len(item) > 4 else '', # Новое поле
         'created_at': item[5] if len(item) > 5 else None # Обновлен индекс
     }
@@ -746,7 +772,7 @@ def trailer_detail(item_id):
         'id': item[0],
         'title': item[1] if len(item) > 1 else '',
         'description': item[2] if len(item) > 2 else '',
-        'video_url': item[3] if len(item) > 3 else '',
+        'video_url': add_cache_buster(item[3]) if len(item) > 3 else '', # <-- Добавлен cache-busting
         'preview_url': item[4] if len(item) > 4 else '', # Новое поле
         'created_at': item[5] if len(item) > 5 else None # Обновлен индекс
     }
@@ -790,27 +816,21 @@ def api_get_comments():
     try:
         item_type = request.args.get('type')
         item_id = int(request.args.get('id'))
-        
         # Новые параметры
         sort_by = request.args.get('sort', 'latest')  # popular или latest
         limit = request.args.get('limit', type=int)   # ограничение количества
-        
         if not item_type or not item_id:
             return jsonify(comments=[], error="Не указаны type или id"), 400
-        
         # Ключ для кэширования
         cache_key = f"api_comments_{item_type}_{item_id}_{sort_by}_{limit}"
-        
         # Проверяем кэш
         cached_comments = cache_get(cache_key)
         if cached_comments is not None:
             logger.debug(f"Комментарии для {item_type}/{item_id} ({sort_by}, limit={limit}) получены из кэша")
             return jsonify(comments=cached_comments)
-        
         # Если нет в кэше, получаем из БД
         conn = get_db_connection()
         cursor = conn.cursor()
-        
         # Формируем SQL запрос в зависимости от сортировки
         if sort_by == 'latest':
             order_clause = "ORDER BY created_at DESC"
@@ -819,10 +839,8 @@ def api_get_comments():
             # Поскольку у нас нет отдельных полей likes/dislikes в таблице comments,
             # будем считать популярность по дате создания (новые выше)
             order_clause = "ORDER BY created_at DESC"
-        
         # Ограничиваем количество, если задано
         limit_clause = f"LIMIT {limit}" if limit else ""
-        
         # Выполняем запрос
         cursor.execute(f"""
             SELECT user_name, text, created_at 
@@ -831,21 +849,16 @@ def api_get_comments():
             {order_clause}
             {limit_clause}
         """, (item_type, item_id))
-        
         comments = cursor.fetchall()
-        
         # Преобразуем в список кортежей для совместимости
         comments_list = [tuple(c.values()) for c in comments]
-        
         # Сохраняем в кэш
         cache_set(cache_key, comments_list, expire=CACHE_CONFIG['api_expire'])
         logger.debug(f"Комментарии для {item_type}/{item_id} ({sort_by}, limit={limit}) получены из БД и закэшированы")
-        
         return jsonify(comments=comments_list)
     except Exception as e:
         logger.error(f"API get_comments error: {e}", exc_info=True)
         return jsonify(comments=[], error=str(e)), 500
-
 # Добавим GET для получения реакций по типу и ID
 @app.route('/api/reactions/<item_type>/<int:item_id>', methods=['GET'])
 def api_get_reactions(item_type, item_id):
@@ -865,7 +878,6 @@ def api_get_reactions(item_type, item_id):
     except Exception as e:
         logger.error(f"API get_reactions error: {e}", exc_info=True)
         return jsonify(reactions={}, error=str(e)), 500
-
 # --- НОВЫЙ ЭНДПОИНТ: Получение комментариев с сортировкой ---
 @app.route('/api/comments/<item_type>/<int:item_id>', methods=['GET'])
 def api_get_comments_sorted(item_type, item_id):
@@ -873,20 +885,16 @@ def api_get_comments_sorted(item_type, item_id):
         # Параметры запроса
         sort_by = request.args.get('sort', 'popular')  # popular или latest
         limit = request.args.get('limit', type=int)    # ограничение количества
-        
         # Ключ для кэширования
         cache_key = f"api_comments_{item_type}_{item_id}_{sort_by}_{limit}"
-        
         # Проверяем кэш
         cached_comments = cache_get(cache_key)
         if cached_comments is not None:
             logger.debug(f"Комментарии для {item_type}/{item_id} ({sort_by}, limit={limit}) получены из кэша")
             return jsonify(comments=cached_comments)
-        
         # Если нет в кэше, получаем из БД
         conn = get_db_connection()
         cursor = conn.cursor()
-        
         # Формируем SQL запрос в зависимости от сортировки
         if sort_by == 'latest':
             order_clause = "ORDER BY created_at DESC"
@@ -895,10 +903,8 @@ def api_get_comments_sorted(item_type, item_id):
             # Поскольку у нас нет отдельных полей likes/dislikes в таблице comments,
             # будем считать популярность по дате создания (новые выше)
             order_clause = "ORDER BY created_at DESC"
-        
         # Ограничиваем количество, если задано
         limit_clause = f"LIMIT {limit}" if limit else ""
-        
         # Выполняем запрос
         cursor.execute(f"""
             SELECT user_name, text, created_at 
@@ -907,30 +913,16 @@ def api_get_comments_sorted(item_type, item_id):
             {order_clause}
             {limit_clause}
         """, (item_type, item_id))
-        
         comments = cursor.fetchall()
-        
         # Преобразуем в список кортежей для совместимости
         comments_list = [tuple(c.values()) for c in comments]
-        
         # Сохраняем в кэш
         cache_set(cache_key, comments_list, expire=CACHE_CONFIG['api_expire'])
         logger.debug(f"Комментарии для {item_type}/{item_id} ({sort_by}, limit={limit}) получены из БД и закэшированы")
-        
         return jsonify(comments=comments_list)
     except Exception as e:
         logger.error(f"API get_comments_sorted error: {e}", exc_info=True)
         return jsonify(comments=[], error=str(e)), 500
-
-# --- ИЗМЕНЕННЫЙ: Маршрут для отдачи статических файлов с кэшированием ---
-@app.route('/uploads/<filename>')
-@cache_control(CACHE_CONFIG['static_expire']) # Кэшируем загруженные файлы надолго
-def uploaded_file(filename):
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
-@app.route('/static/<path:filename>')
-@cache_control(CACHE_CONFIG['static_expire']) # Кэшируем статические файлы (CSS, JS, изображения из static) надолго
-def static_files(filename):
-    return send_from_directory('static', filename)
 # --- Маршрут для Webhook от Telegram ---
 @app.route('/<string:token>', methods=['POST'])
 def telegram_webhook(token):
@@ -1123,7 +1115,6 @@ def api_add_reaction_post():
     except Exception as e:
         logger.error(f"API add_reaction error: {e}", exc_info=True)
         return jsonify(success=False, error=str(e)), 500
-
 # --- НОВЫЙ ЭНДПОИНТ: Реакции на комментарии ---
 @app.route('/api/comment/reaction', methods=['POST'])
 def api_add_comment_reaction():
@@ -1132,24 +1123,18 @@ def api_add_comment_reaction():
         comment_id = int(data.get('comment_id'))
         user_id = data.get('user_id', 'anonymous')
         reaction_type = data.get('reaction_type')  # 'like' или 'dislike'
-        
         if reaction_type not in ['like', 'dislike']:
             return jsonify(success=False, error="Неверный тип реакции"), 400
-        
         # Добавляем/удаляем реакцию
         toggled = add_comment_reaction(comment_id, user_id, reaction_type)
-        
         # Получаем обновленные счетчики
         reactions = get_comment_reactions_count(comment_id)
-        
         # Инвалидируем кэш комментариев
         cache_delete(f"api_comments_*_{comment_id}_*")
-        
         return jsonify(success=True, toggled=toggled, reactions=reactions)
     except Exception as e:
         logger.error(f"API add_comment_reaction error: {e}", exc_info=True)
         return jsonify(success=False, error=str(e)), 500
-
 @app.route('/admin/login', methods=['GET', 'POST'])
 def admin_login():
     if request.method == 'POST':
