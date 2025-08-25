@@ -12,6 +12,7 @@ const CACHE_CONFIG = {
 // Глобальные переменные
 let currentTab = 'moments';
 let userId = 'user_' + Math.random().toString(36).substr(2, 9);
+let lastContentHash = {}; // Для отслеживания изменений контента
 
 // Флаги для предотвращения множественных обработчиков
 let modalClickHandlerAdded = false;
@@ -735,7 +736,7 @@ function addModalHandlers() {
             }
         });
 
-        // Обработчик закрытия модалки при клике вне окна
+        // Обработчик закрытия модального окна при клике вне его
         document.addEventListener('click', function (e) {
             if (e.target.classList && e.target.classList.contains('modal')) {
                 e.target.style.display = 'none';
