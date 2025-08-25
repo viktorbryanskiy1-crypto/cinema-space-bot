@@ -6,406 +6,196 @@
 <div class="content-section">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
         <h2 style="background: linear-gradient(45deg, #00f3ff, #ff00c8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size: 2em;">🎬 Моменты из кино</h2>
+        {% if session.get('admin') %}
         <button id="add-moment-btn" class="tab-btn" style="padding: 12px 25px;">➕ Добавить момент</button>
-    </div>
-
-    <!-- Модальное окно для добавления момента -->
-    <div id="add-moment-modal" class="modal" style="display: none;">
-        <div class="modal-content">
-            <h3>🎬 Добавить момент из кино</h3>
-            <form id="add-moment-form" enctype="multipart/form-data">
-                <input type="text" name="title" placeholder="Название момента" required
-                    style="width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid var(--accent); border-radius: 10px; background: rgba(255,255,255,0.1); color: white;"><br>
-
-                <div style="margin-bottom: 15px;">
-                    <label style="display: block; margin-bottom: 10px;">Выберите способ добавления видео:</label>
-                    <div>
-                        <input type="radio" name="video_type" value="upload" id="moment_video_upload" checked>
-                        <label for="moment_video_upload">Загрузить файл</label>
-                    </div>
-                    <div>
-                        <input type="radio" name="video_type" value="url" id="moment_video_url">
-                        <label for="moment_video_url">Ссылка на видео</label>
-                    </div>
-                </div>
-
-                <div id="moment-file-section">
-                    <input type="file" name="video_file" accept="video/*"
-                        style="width: 100%; margin-bottom: 15px; color: white;">
-                    <small style="color: var(--text-secondary);">Макс. размер: 50MB. Форматы: MP4, AVI, MOV, WEBM</small>
-                </div>
-
-                <div id="moment-url-section" style="display: none;">
-                    <input type="text" name="video_url" placeholder="URL видео (YouTube, Vimeo, Telegram, прямая ссылка)"
-                        style="width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid var(--accent); border-radius: 10px; background: rgba(255,255,255,0.1); color: white;">
-                    <small style="color: var(--text-secondary);">Поддерживаются ссылки на YouTube, Vimeo, Telegram и прямые ссылки на видеофайлы.</small>
-                </div>
-
-                <textarea name="description" placeholder="Описание момента" required
-                    style="width: 100%; padding: 12px; margin-bottom: 15px; height: 100px; border: 1px solid var(--accent); border-radius: 10px; background: rgba(255,255,255,0.1); color: white;"></textarea><br>
-
-                <button type="submit" class="submit-btn" style="width: 100%;">Добавить момент</button>
-                <button type="button" onclick="closeModal('add-moment-modal')" class="tab-btn"
-                    style="width: 100%; margin-top: 10px;">Отмена</button>
-            </form>
-        </div>
+        {% endif %}
     </div>
 
     <div class="card-grid">
         {% if moments %}
         {% for moment in moments %}
         <div class="card" data-moment-id="{{ moment.id }}">
-            <h3 class="card-title">{{ moment.title }}</h3>
-            <p class="card-description">{{ moment.description }}</p>
-            
-            {% if moment.video_url %}
-            <!-- ВОЗВРАЩЕННАЯ СТРУКТУРА: Контейнер для превью и видео -->
-            <div class="video-container" data-video-url="{{ moment.video_url }}" style="position: relative; width: 100%;">
-                <!-- Отображение превью, если оно есть -->
-                {% if moment.preview_url %}
-                    <img src="{{ moment.preview_url }}" alt="Превью {{ moment.title }}" class="video-preview" style="width: 100%; border-radius: 10px; cursor: pointer; display: block;">
-                {% else %}
-                    <!-- Если превью нет, показываем заглушку -->
-                    <div class="video-placeholder" style="width: 100%; height: 200px; background: #333; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #aaa; cursor: pointer;">
-                        Превью недоступно. Нажмите для воспроизведения.
+            <!-- Превью с кнопкой воспроизведения -->
+            <a href="{{ url_for('moment_detail', item_id=moment.id) }}" class="video-preview-link">
+                <div class="video-preview-container">
+                    {% if moment.preview_url %}
+                        <img src="{{ moment.preview_url }}" alt="{{ moment.title }}" class="video-preview">
+                    {% else %}
+                        <div class="video-placeholder">
+                            <div class="play-icon">▶</div>
+                        </div>
+                    {% endif %}
+                    <div class="play-overlay">
+                        <div class="play-button">▶</div>
                     </div>
-                {% endif %}
-                <!-- Видео скрыто по умолчанию -->
-                <video class="card-media" controls preload="none" controlsList="nodownload" style="width: 100%; border-radius: 10px; display: none;">
-                    <source src="{{ moment.video_url }}" type="video/mp4">
-                    Ваш браузер не поддерживает видео.
-                </video>
-                <!-- ВОЗВРАЩЕНА КНОПКА PLAY поверх превью (опционально) -->
-                {% if moment.preview_url %}
-                <div class="play-button-overlay" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0, 0, 0, 0.7); border-radius: 50%; padding: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center;">
-                    <svg width="40" height="40" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M8 5V19L19 12L8 5Z" />
-                    </svg>
                 </div>
-                {% endif %}
-            </div>
-            <!-- КОНЕЦ ВОЗВРАЩЕННОЙ СТРУКТУРЫ -->
-            {% else %}
-                <p style="color: var(--text-secondary); text-align: center;">Видео недоступно</p>
-            {% endif %}
-
-            <div class="reactions">
-                <button class="reaction-btn" data-id="{{ moment.id }}" data-type="moment" data-reaction="like">
-                    👍 <span class="reaction-count">{{ moment.reactions.like }}</span>
-                </button>
-                <button class="reaction-btn" data-id="{{ moment.id }}" data-type="moment" data-reaction="dislike">
-                    👎 <span class="reaction-count">{{ moment.reactions.dislike }}</span>
-                </button>
-                <button class="reaction-btn" data-id="{{ moment.id }}" data-type="moment" data-reaction="star">
-                    ⭐ <span class="reaction-count">{{ moment.reactions.star }}</span>
-                </button>
-                <button class="reaction-btn" data-id="{{ moment.id }}" data-type="moment" data-reaction="fire">
-                    🔥 <span class="reaction-count">{{ moment.reactions.fire }}</span>
-                </button>
-            </div>
-
-            <div class="comments-section">
-                <button class="load-comments tab-btn" data-id="{{ moment.id }}" data-type="moment" style="margin-bottom: 15px; padding: 8px 15px;">
-                    💬 Показать комментарии ({{ moment.comments_count }})
-                </button>
-                <div class="comments-list"></div>
-                <form class="comment-form" data-id="{{ moment.id }}" data-type="moment">
-                    <textarea class="comment-input" placeholder="Написать комментарий..."></textarea>
-                    <button type="submit" class="submit-btn">Отправить</button>
-                </form>
-            </div>
+            </a>
+            
+            <!-- Название -->
+            <h3 class="card-title">
+                <a href="{{ url_for('moment_detail', item_id=moment.id) }}" class="title-link">{{ moment.title }}</a>
+            </h3>
         </div>
         {% endfor %}
         {% else %}
         <div style="text-align: center; padding: 50px; color: var(--accent);">
             <h2>🎬 Моменты из кино</h2>
             <p>Пока нет добавленных моментов из фильмов</p>
+            {% if session.get('admin') %}
             <button id="add-moment-btn-alt" class="tab-btn" style="margin-top: 20px;">➕ Добавить первый момент</button>
+            {% endif %}
         </div>
         {% endif %}
     </div>
 </div>
 
-<!-- Глобальные функции для этой страницы, если main.js еще не загрузился -->
+<style>
+.card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 25px;
+    padding: 20px;
+}
+
+.card {
+    background: #1a1a2e;
+    border-radius: 12px;
+    overflow: hidden;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+.card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 25px rgba(0, 243, 255, 0.2);
+}
+
+.video-preview-link {
+    display: block;
+    position: relative;
+    text-decoration: none;
+}
+
+.video-preview-container {
+    position: relative;
+    width: 100%;
+    padding-top: 56.25%; /* 16:9 Aspect Ratio */
+    overflow: hidden;
+}
+
+.video-preview {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s ease;
+}
+
+.video-placeholder {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(45deg, #0f0c29, #302b63, #24243e);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.play-icon {
+    font-size: 3rem;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.play-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.card:hover .play-overlay {
+    opacity: 1;
+}
+
+.play-button {
+    width: 60px;
+    height: 60px;
+    background: rgba(0, 243, 255, 0.9);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    color: white;
+    box-shadow: 0 0 20px rgba(0, 243, 255, 0.5);
+}
+
+.card-title {
+    padding: 15px;
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.title-link {
+    color: white;
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
+
+.title-link:hover {
+    color: #00f3ff;
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+    .card-grid {
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+        gap: 20px;
+        padding: 15px;
+    }
+    
+    .card-title {
+        font-size: 16px;
+        padding: 12px;
+    }
+    
+    .play-button {
+        width: 50px;
+        height: 50px;
+        font-size: 20px;
+    }
+}
+</style>
+
 <script>
-    // Эти функции будут заменены на функции из main.js, если он загрузится
-    if (typeof showAddMomentModal === 'undefined') {
-        function showModal(id) {
-            const modal = document.getElementById(id);
-            if (modal) modal.style.display = 'flex';
-        }
-        function closeModal(id) {
-            const modal = document.getElementById(id);
-            if (modal) modal.style.display = 'none';
-        }
-        function showAddMomentModal() {
-            showModal('add-moment-modal');
-        }
-        
-        // Простой обработчик для кнопок на этой странице
-        document.addEventListener('DOMContentLoaded', function() {
-            const addBtn = document.getElementById('add-moment-btn');
-            const addBtnAlt = document.getElementById('add-moment-btn-alt');
-            if (addBtn) addBtn.addEventListener('click', showAddMomentModal);
-            if (addBtnAlt) addBtnAlt.addEventListener('click', showAddMomentModal);
-            
-            // Переключатель загрузки файла / URL видео
-            document.addEventListener('change', function(e) {
-                if (e.target.name === 'video_type' && e.target.closest('#add-moment-modal')) {
-                    if (e.target.value === 'upload') {
-                        document.getElementById('moment-file-section').style.display = 'block';
-                        document.getElementById('moment-url-section').style.display = 'none';
-                    } else {
-                        document.getElementById('moment-file-section').style.display = 'none';
-                        document.getElementById('moment-url-section').style.display = 'block';
-                    }
-                }
-            });
-            
-            // Обработчик формы добавления момента
-            const form = document.getElementById('add-moment-form');
-            if (form) {
-                form.addEventListener('submit', async function(e) {
-                    e.preventDefault();
-                    const formData = new FormData(this);
-                    const videoType = this.querySelector('input[name="video_type"]:checked').value;
-                    
-                    try {
-                        let response;
-                        if (videoType === 'upload' && this.querySelector('input[name="video_file"]').files[0]) {
-                            // Загрузка файла
-                            response = await fetch('/api/add_moment', {
-                                method: 'POST',
-                                body: formData
-                            });
-                        } else {
-                            // Отправка URL
-                            const jsonData = {
-                                title: formData.get('title'),
-                                description: formData.get('description'),
-                                video_url: formData.get('video_url') || ''
-                            };
-                            response = await fetch('/api/add_moment', {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                },
-                                body: JSON.stringify(jsonData)
-                            });
-                        }
-                        
-                        const result = await response.json();
-                        if (result.success) {
-                            closeModal('add-moment-modal');
-                            location.reload();
-                        } else {
-                            alert('Ошибка: ' + (result.error || 'Не удалось добавить момент'));
-                        }
-                    } catch (error) {
-                        alert('Ошибка загрузки: ' + error.message);
-                    }
-                });
-            }
-            
-            // Закрытие модального окна при клике вне его
-            window.addEventListener('click', function(e) {
-                const modals = document.querySelectorAll('.modal');
-                modals.forEach(modal => {
-                    if (e.target === modal) {
-                        modal.style.display = 'none';
-                    }
-                });
-            });
+// Обработчики для модальных окон (если админ)
+document.addEventListener('DOMContentLoaded', function() {
+    const addBtn = document.getElementById('add-moment-btn');
+    const addBtnAlt = document.getElementById('add-moment-btn-alt');
+    
+    if (addBtn) {
+        addBtn.addEventListener('click', function() {
+            window.location.href = '/admin/add_content';
         });
     }
     
-    // ВОЗВРАЩЕННАЯ ФУНКЦИЯ: Обработка кликов по превью для запуска видео
-    document.addEventListener('DOMContentLoaded', function() {
-        // Обработчик для контейнеров видео
-        document.querySelectorAll('.video-container').forEach(container => {
-            const previewImg = container.querySelector('.video-preview');
-            const placeholder = container.querySelector('.video-placeholder');
-            const videoElement = container.querySelector('video');
-            const sourceElement = videoElement.querySelector('source');
-            const playButton = container.querySelector('.play-button-overlay');
-            const videoUrl = container.dataset.videoUrl;
-
-            // Функция для запуска видео
-            function playVideo() {
-                // Скрываем превью/заглушку и кнопку Play
-                if (previewImg) previewImg.style.display = 'none';
-                if (placeholder) placeholder.style.display = 'none';
-                if (playButton) playButton.style.display = 'none';
-                
-                // Показываем и запускаем видео
-                videoElement.style.display = 'block';
-                sourceElement.src = videoUrl; // Устанавливаем источник
-                videoElement.load(); // Перезагружаем видео
-                // Добавляем autoplay после загрузки
-                videoElement.onloadeddata = function() {
-                    videoElement.play().catch(e => console.error("Autoplay failed:", e));
-                };
-            }
-
-            // Назначаем обработчики клика
-            if (previewImg) {
-                previewImg.addEventListener('click', playVideo);
-            }
-            if (placeholder) {
-                placeholder.addEventListener('click', playVideo);
-            }
-            if (playButton) {
-                playButton.addEventListener('click', playVideo);
-            }
+    if (addBtnAlt) {
+        addBtnAlt.addEventListener('click', function() {
+            window.location.href = '/admin/add_content';
         });
-    });
-    
-    // ВОЗВРАЩЕННАЯ ФУНКЦИЯ: Обработка ошибок воспроизведения видео
-    document.addEventListener('DOMContentLoaded', function() {
-        document.querySelectorAll('video').forEach(video => {
-            video.addEventListener('error', async function(e) {
-                console.log('Ошибка воспроизведения видео:', e);
-                
-                // Получаем родительский элемент
-                const parent = this.parentNode;
-                
-                // Создаем элемент прелоадера
-                const loader = document.createElement('div');
-                loader.className = 'video-loader';
-                loader.innerHTML = `
-                    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 300px; background: rgba(15, 12, 41, 0.8); border-radius: 10px; margin: 10px 0;">
-                        <div class="ultra-modern-spinner"></div>
-                        <div style="margin-top: 15px; color: #00f3ff;">🔄 Обновление видео...</div>
-                    </div>
-                `;
-                
-                // Заменяем видео на прелоадер
-                parent.replaceChild(loader, this);
-                
-                try {
-                    // Получаем источник видео
-                    const videoSrc = this.querySelector('source')?.src || this.src;
-                    if (videoSrc && videoSrc.includes('api.telegram.org/file')) {
-                        // Отправляем запрос на обновление ссылки
-                        // Определяем тип элемента и его ID из родительского контейнера
-                        const card = this.closest('.card, .video-wrap');
-                        let itemType = 'unknown';
-                        let itemId = null;
-                        if (card) {
-                            if (card.dataset.momentId) {
-                                itemType = 'moment';
-                                itemId = card.dataset.momentId;
-                            } else if (card.dataset.trailerId) {
-                                itemType = 'trailer';
-                                itemId = card.dataset.trailerId;
-                            } else if (card.dataset.newsId) {
-                                itemType = 'news';
-                                itemId = card.dataset.newsId;
-                            }
-                        }
-                        
-                        if (itemId && itemType !== 'unknown') {
-                            const response = await fetch('/api/refresh_video_url', {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                },
-                                body: JSON.stringify({
-                                    [`${itemType}_id`]: parseInt(itemId) // Например, moment_id: 123
-                                })
-                            });
-                            
-                            const result = await response.json();
-                            
-                            if (result.success && result.new_url) {
-                                // Создаем новый видеоэлемент с обновленной ссылкой
-                                const newVideo = document.createElement('video');
-                                newVideo.controls = true;
-                                newVideo.preload = 'metadata';
-                                newVideo.style.cssText = 'max-width: 100%; border-radius: 10px; width: 100%; height: auto;';
-                                
-                                const source = document.createElement('source');
-                                source.src = result.new_url;
-                                source.type = 'video/mp4';
-                                
-                                newVideo.appendChild(source);
-                                
-                                // Добавляем обработчик ошибок для нового видео
-                                newVideo.addEventListener('error', function(e) {
-                                    console.log('Ошибка воспроизведения обновленного видео:', e);
-                                    const errorNotice = document.createElement('div');
-                                    errorNotice.className = 'video-error-notice';
-                                    errorNotice.innerHTML = `
-                                        <div style="background: rgba(255, 0, 0, 0.2); padding: 15px; border-radius: 8px; margin: 10px 0; color: #ff4444; text-align: center;">
-                                            <div style="font-size: 24px; margin-bottom: 10px;">❌</div>
-                                            <div>Не удалось воспроизвести видео</div>
-                                            <div style="font-size: 12px; margin-top: 5px;">Попробуйте обновить страницу или попробовать позже</div>
-                                        </div>
-                                    `;
-                                    parent.replaceChild(errorNotice, newVideo);
-                                });
-                                
-                                // Заменяем прелоадер на новое видео
-                                parent.replaceChild(newVideo, loader);
-                                
-                                // Загружаем и воспроизводим видео
-                                newVideo.load();
-                                
-                                console.log('Видео успешно обновлено');
-                            } else {
-                                // Показываем ошибку
-                                const errorNotice = document.createElement('div');
-                                errorNotice.className = 'video-error-notice';
-                                errorNotice.innerHTML = `
-                                    <div style="background: rgba(255, 0, 0, 0.2); padding: 15px; border-radius: 8px; margin: 10px 0; color: #ff4444; text-align: center;">
-                                        <div style="font-size: 24px; margin-bottom: 10px;">❌</div>
-                                        <div>Не удалось обновить видео</div>
-                                        <div style="font-size: 12px; margin-top: 5px;">${result.error || 'Попробуйте позже'}</div>
-                                    </div>
-                                `;
-                                parent.replaceChild(errorNotice, loader);
-                            }
-                        } else {
-                             // Не удалось определить тип/ID, показываем общую ошибку
-                            const errorNotice = document.createElement('div');
-                            errorNotice.className = 'video-error-notice';
-                            errorNotice.innerHTML = `
-                                <div style="background: rgba(255, 0, 0, 0.2); padding: 15px; border-radius: 8px; margin: 10px 0; color: #ff4444; text-align: center;">
-                                    <div style="font-size: 24px; margin-bottom: 10px;">❌</div>
-                                    <div>Не удалось обновить видео</div>
-                                    <div style="font-size: 12px; margin-top: 5px;">Неверные данные для обновления</div>
-                                </div>
-                            `;
-                            parent.replaceChild(errorNotice, loader);
-                        }
-                    } else {
-                        // Если это не Telegram ссылка, показываем общую ошибку
-                        const errorNotice = document.createElement('div');
-                        errorNotice.className = 'video-error-notice';
-                        errorNotice.innerHTML = `
-                            <div style="background: rgba(255, 0, 0, 0.2); padding: 15px; border-radius: 8px; margin: 10px 0; color: #ff4444; text-align: center;">
-                                <div style="font-size: 24px; margin-bottom: 10px;">❌</div>
-                                <div>Ошибка воспроизведения видео</div>
-                                <div style="font-size: 12px; margin-top: 5px;">Неподдерживаемый формат или файл недоступен</div>
-                            </div>
-                        `;
-                        parent.replaceChild(errorNotice, loader);
-                    }
-                } catch (refreshError) {
-                    console.error('Ошибка при обновлении видео:', refreshError);
-                    const errorNotice = document.createElement('div');
-                    errorNotice.className = 'video-error-notice';
-                    errorNotice.innerHTML = `
-                        <div style="background: rgba(255, 0, 0, 0.2); padding: 15px; border-radius: 8px; margin: 10px 0; color: #ff4444; text-align: center;">
-                            <div style="font-size: 24px; margin-bottom: 10px;">🌐</div>
-                            <div>Ошибка сети при обновлении</div>
-                            <div style="font-size: 12px; margin-top: 5px;">Проверьте подключение и попробуйте позже</div>
-                        </div>
-                    `;
-                    parent.replaceChild(errorNotice, loader);
-                }
-            });
-        });
-    });
+    }
+});
 </script>
 {% endblock %}
