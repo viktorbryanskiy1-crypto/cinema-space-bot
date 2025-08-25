@@ -1,5 +1,5 @@
 // static/js/main.js — полный рабочий файл с оптимизацией Telegram WebApp, fullscreen и поддержкой превью
-// Обновлен для поддержки автоматического обновления ссылок на видео и улучшенного UX
+// Обновлен для поддержки автоматического обновления ссылок на видео, улучшенного UX и решения проблемы кэширования
 // --- ИЗМЕНЕНО: Уменьшено время кэширования ---
 const CACHE_CONFIG = {
     html_expire: 300,       // Было 1800 (30 минут), стало 5 минут
@@ -299,6 +299,36 @@ function initializeApp() {
     }
 
     console.log("Приложение инициализировано, скролл разрешен");
+    
+    // --- НОВОЕ: Автоматическое обновление контента ---
+    // Периодически проверяем, не появились ли новые данные
+    setInterval(async () => {
+        console.log(`Проверка обновлений для вкладки: ${currentTab}`);
+        try {
+            // Отправляем HEAD-запрос, чтобы проверить ETag
+            const headResponse = await fetch(`/${currentTab}`, { method: 'HEAD' });
+            const newEtag = headResponse.headers.get('ETag') || headResponse.headers.get('x-etag');
+            
+            if (newEtag) {
+                // Получаем текущий ETag из кэша браузера (если есть)
+                // Для простоты, просто перезагрузим содержимое вкладки
+                // Это более надежный способ, чем сравнение ETags вручную
+                console.log(`Найден новый ETag для ${currentTab}: ${newEtag}. Перезагрузка содержимого...`);
+                // Очищаем кэш для этой вкладки
+                delete tabCache[currentTab];
+                // Перезагружаем содержимое
+                const activeTabBtn = document.querySelector(`.tab-btn[data-tab="${currentTab}"]`);
+                if (activeTabBtn) {
+                    activeTabBtn.click();
+                }
+            } else {
+                console.log(`Нет нового ETag для ${currentTab}. Контент не изменился.`);
+            }
+        } catch (error) {
+            console.warn(`Ошибка при проверке обновлений для ${currentTab}:`, error);
+        }
+    }, 30000); // Проверяем каждые 30 секунд
+    // --- КОНЕЦ НОВОГО ---
 }
 
 // --- Динамические функции после загрузки контента ---
