@@ -1228,7 +1228,7 @@ def admin_add_video_json():
     """API endpoint для добавления видео через форму add_video.html"""
     try:
         data = request.get_json()
-        if not 
+        if not data:
             return jsonify(success=False, error="Неверный формат данных (ожидается JSON)"), 400
         title = data.get('title', '').strip()
         description = data.get('description', '').strip()
